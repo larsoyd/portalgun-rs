@@ -1,24 +1,22 @@
 # portalgun-rs
 
-This is Portal's handheld portal device, written in Rust on [Bevy](https://bevyengine.org) 0.19.
+A sandbox that recreates Portal's (2007) handheld portal device, written in
+Rust on [Bevy](https://bevyengine.org) 0.19.
 
-Nobody tuned it by eye. The numbers come out of Portal's own binaries and
-files, and where we couldn't find one, we didn't invent one. The gun, the
-portals and the trip through them should behave the way they did in 2007.
-That's the job.
+The gun, the portals and moving through them are read from Portal's own
+binaries and files rather than tuned by eye. Where a value could not be found
+in the game, it is marked as an estimate instead of being made up.
 
-You need your own copy of Portal. The program reads it at startup, and none of
-it ends up in this repository. Not a texture, not a sound, not a line of the
-game's code.
-
-This is a fan project. Valve didn't make it and hasn't endorsed it.
+This is a fan project for study. It is not affiliated with or endorsed by
+Valve. Nothing from the game is in this repository, only code: to run it you
+need your own copy of Portal, which the program reads at startup.
 
 ## What is in it
 
 ### The gun
 
 TODO: the view model with its draw, idle, fire and pickup animations, the
-glow sprites and beams, the fire rate, and what happens when a shot can't
+glow sprites and beams, the fire rate, and what happens when a shot cannot
 land.
 
 ### The portals
@@ -46,8 +44,8 @@ stand-in.
 
 ### The portal crate
 
-The `portal` crate does the work and doesn't know Bevy exists. It has no
-dependencies.
+The `portal` crate holds everything that does not need an engine. It has no
+dependencies and does not use Bevy.
 
 **It reads Portal's files:**
 
@@ -58,10 +56,10 @@ dependencies.
 - KeyValues text and sound scripts
 - binary DMX particle files (`.pcf`)
 
-**It runs the particles the gun and the portals use.** That means every
-initializer, emitter, operator, force and constraint Portal's particle files
-ask for, plus child systems, sub-stepped simulation, sprite, trail and rope
-renderers, and SpriteCard sheets. The random numbers come from the game's own
+**It runs the particles the gun and the portals use:** every initializer,
+emitter, operator, force and constraint Portal's particle files ask for, with
+child systems, sub-stepped simulation, sprite, trail and rope renderers, and
+SpriteCard sheets. The random numbers come from the game's own
 4096-entry table, read in the order the game reads it.
 
 **It draws the portal surface** the way Portal's shader does: the view
@@ -76,10 +74,10 @@ exists.
 - rays that pass through a pair
 - fitting a portal onto a wall, including nudging a shot off an edge and
   snapping it down to the floor
-- which side of a portal you're on, and how fast you come out the other one
+- which side of a portal you are on, and how fast you come out of the other one
 
-Everything is in Portal's own units: Source units, z up. If you want metres,
-convert at the door. The app does it in one place.
+Everything is in Portal's own units (Source units, z up). The app converts to
+Bevy's metres in one place, `src/units.rs`.
 
 ## How faithful it is
 
@@ -99,9 +97,9 @@ The program looks for Portal in this order:
 2. the `PORTAL_DIR` environment variable
 3. Steam's default library, `~/.local/share/Steam/steamapps/common/Portal`
 
-It checks the files it reads against known hashes. If they differ, it refuses
-to start and tells you which file and why. A different build of the game means
-different numbers, and we'd rather stop than guess.
+It checks the files it reads against known hashes. If one differs, it refuses
+to start and names the file and both hashes, because the numbers were read
+from that exact build of the game.
 
 ```
 cargo run --release
@@ -136,7 +134,8 @@ they land.
 
 Nothing derived from Portal is committed or generated into the repository.
 Everything is read from your install each time the program starts. Please keep
-it that way in forks.
+it that way in forks: share the code, and let each person read the data from
+the copy of the game they own.
 
 ## License
 
