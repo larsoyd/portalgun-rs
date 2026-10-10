@@ -103,7 +103,7 @@ fn hitting_a_wall_in_the_air_is_not_standing() {
         forward: 1.0,
         ..Input::default()
     };
-    for _ in 0..10 {
+    for _ in 0..40 {
         w.step(&input, 0.01, &c, None);
     }
     assert!(
@@ -124,7 +124,7 @@ fn strafing_right_moves_to_the_right_of_the_view() {
         ..Input::default()
     };
     run(&mut w, &c, input, 0.5);
-    assert!(w.feet[0] > 80.0, "{:?}", w.feet);
+    assert!(w.feet[0] > 60.0, "{:?}", w.feet);
     assert!(w.feet[1].abs() < 1e-3, "{:?}", w.feet);
 }
 

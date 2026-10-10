@@ -60,7 +60,29 @@ cheaper culling the game uses for nested views.
 
 - Walk into a linked portal and you come out of the other with your position,
   speed and view carried over. Exit speed is capped at 1000 and a floor exit
-  pushes you up at least 300.
+  pushes you up at least 300, as `CProp_Portal::TeleportTouchingEntity` does.
+  A portal counts as a floor when its normal points up by more than 0.7071.
+
+### Moving
+
+Walking, falling and jumping follow `CGameMovement` and `CPortalGameMovement`
+in `server.so`, one 15 ms tick at a time:
+
+- On the ground: friction 4 with a stop speed of 100, acceleration 10 toward
+  where you are heading, and a walking speed of 150, `hl2_walkspeed`.
+- Gravity 600, applied half before and half after each move.
+- A jump of 160 plus Half-Life 2's single player forward boost. Holding the
+  key does not jump again when you land.
+- You stand on the ground when it is within 2 units below your feet and you
+  are not rising faster than 140. Walking off a drop of up to 18 units keeps
+  you on the ground.
+- In the air Portal caps how much you can steer at 60 and accelerates with a
+  fixed 15.
+- Once you move faster than 300 across the ground, keys that push against
+  your motion are ignored. A fling out of a portal keeps its speed whatever
+  you press, until you land and friction slows you down.
+- Falling onto a floor portal while looking down nudges you toward its
+  middle, as `sv_player_funnel_into_portals` does.
 
 TODO: Portal's own crossing rules and collision behind a portal, the view roll
 recovery, and objects that follow you.
@@ -93,10 +115,9 @@ Sizes, places, colours and fade speeds are the game's.
 ### The test chamber
 
 A room of 768 by 512 by 384 units built from Portal's own wall, floor and
-ceiling materials, with a non-portalable metal strip, a ledge and a cube. Until
-Portal's own player movement is ported, you walk it with a simple stand-in:
-fixed walking speed, gravity, a jump, box collision with each portal's opening
-cut out of its wall, and steps up to 18 units.
+ceiling materials, with a non-portalable metal strip, a ledge and a cube. You
+collide with it as boxes, with each portal's opening cut out of its wall, and
+step up onto ledges of up to 18 units.
 
 ### The portal crate
 
@@ -158,7 +179,12 @@ Read from Portal's binaries and files:
 
 Still stand-ins or estimates:
 
-- Walking, jumping and collision. Portal's player movement comes next.
+- Collision. The game sweeps your hull through the world, this sandbox moves
+  you one axis at a time and pushes you out of the boxes you run into.
+- The walking speed. 150 is what `CHL2_Player` gives a player without the
+  suit. That Portal's player never gets the suit is read from its game rules
+  and maps, not yet measured in the game.
+- Surfaces. Friction and jump height do not change with the surface yet.
 - Walking through the wall behind a portal. The game builds its collision
   behind each portal, this sandbox cuts the opening out of the wall's box.
 - Where a portal fits: the fitting rules are ported but not yet checked against
@@ -231,12 +257,12 @@ cargo run -p portal --example portal_inspect -- "/path/to/Steam/steamapps/common
 
 | Path | What it is |
 |---|---|
-| `crates/portal/` | The engine-free crate: file readers, particles, portal maths. |
+| `crates/portal/` | The engine-free crate: file readers, particles, portal maths, player movement. |
 | `src/main.rs` | Startup. Finds and checks the install, then opens the window. |
 | `src/args.rs`, `src/settings.rs`, `src/script.rs` | Flags, the settings file and timed scripts. |
 | `src/units.rs` | Source units to Bevy metres, the only place that converts. |
 | `src/chamber.rs`, `src/scene.rs` | The test chamber and its drawing. |
-| `src/walker.rs`, `src/player.rs` | The stand-in walker, mouse look and crossing portals. |
+| `src/walker.rs`, `src/player.rs` | Moving through the chamber, mouse look and crossing portals. |
 | `src/gun.rs`, `src/firing.rs` | The gun's shots and what happens when they land. |
 | `src/portals.rs`, `src/faces.rs`, `src/views.rs`, `src/shaders/` | The portal pair, the drawn faces and the views through them. |
 | `src/hud.rs` | The crosshair. |

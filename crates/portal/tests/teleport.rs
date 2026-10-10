@@ -45,6 +45,22 @@ fn objects_get_less_out_of_a_floor_portal() {
     assert!((from_floor[2] - 225.0).abs() < 1e-3, "{from_floor:?}");
 }
 
+/// An exit tipped up so its normal's height is exactly z.
+fn tipped(z: f32) -> Portal {
+    let h = (1.0 - z * z).sqrt();
+    Portal::new([0.0; 3], [h, 0.0, z], [-z, 0.0, h], HALF)
+}
+
+#[test]
+#[allow(clippy::approx_constant)]
+fn an_exit_counts_as_a_floor_above_0_7071() {
+    let slow = [-10.0, 0.0, 0.0];
+    let above = exit_velocity(&wall(), &tipped(0.707103), slow, Mover::Player);
+    assert!((above[2] - MIN_FLOOR_EXIT_PLAYER).abs() < 1e-3, "{above:?}");
+    let at = exit_velocity(&wall(), &tipped(0.7071), slow, Mover::Player);
+    assert!(at[2] < 10.0, "{at:?}");
+}
+
 #[test]
 fn speed_is_carried_and_capped() {
     let v = exit_velocity(&floor(), &wall(), [0.0, 0.0, -900.0], Mover::Player);

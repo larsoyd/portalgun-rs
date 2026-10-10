@@ -4,8 +4,9 @@ pub const MIN_FLOOR_EXIT_PLAYER: f32 = 300.0;
 const MIN_FLOOR_TO_FLOOR_OBJECT: f32 = 225.0;
 const MIN_FLOOR_EXIT_OBJECT: f32 = 50.0;
 pub const MAX_EXIT_SPEED: f32 = 1000.0;
-/// where a portal starts counting as a floor
-const FLOORISH: f32 = std::f32::consts::FRAC_1_SQRT_2;
+/// where a portal starts counting as a floor, the float 0.7071 rather than one over root two
+#[allow(clippy::approx_constant)]
+const FLOORISH: f32 = 0.7071;
 const HOLE_NEAR: f32 = 0.5;
 const HOLE_FAR: f32 = 500.0;
 const HOLE_SHRINK: f32 = 0.98;
@@ -20,7 +21,8 @@ pub enum Mover {
     Object,
 }
 
-/// Velocity carried through. The original's floor exit pushes and speed cap come along.
+/// Velocity carried through, with the floor exit pushes and the speed cap.
+/// Translated from 0x912ff0 (decompiled, server.so)
 pub fn exit_velocity(from: &Portal, to: &Portal, v: Vec3, who: Mover) -> Vec3 {
     let mut out = through_dir(from, to, v);
     if to.forward[2] > FLOORISH {

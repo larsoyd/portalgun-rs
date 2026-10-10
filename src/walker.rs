@@ -1,3 +1,8 @@
+use portal::movement::{
+    accelerate, air_accelerate, check_velocity, command, finish_gravity, fling_guard, flinging,
+    friction, funnel, jump, leaves_ground, start_gravity, wish, Funnel, ACCELERATE, AIR_ACCELERATE,
+    MAX_SPEED, WALK_SPEED,
+};
 use portal::pair::{through_point, Portal, Vec3};
 use portal::teleport::{entered, exit_velocity, touching, view_through, Mover};
 
@@ -10,12 +15,12 @@ pub const EYE: f32 = 64.0;
 /// the client's m_yaw and m_pitch defaults
 const MOUSE_FACTOR: f32 = 0.022;
 const PITCH_LIMIT: f32 = 89.0;
-/// stand-in movement until Portal's own is ported
-const SPEED: f32 = 175.0;
-const GRAVITY: f32 = 600.0;
-const JUMP_SPEED: f32 = 268.3;
 /// sv_stepsize's default
 const STEP: f32 = 18.0;
+/// how far below the feet the ground check looks
+const GROUND_REACH: f32 = 2.0;
+/// a walk slower than this stops dead
+const MIN_WALK: f32 = 1.0;
 /// below this an opening's right axis counts as lined up with the world
 const TURNED: f32 = 1e-4;
 /// how far a box may already sink into a solid and still count as resting on it
@@ -42,6 +47,8 @@ pub struct Walker {
     pub jumped: bool,
     /// the fall speed, for the step the walker landed on
     pub landed: Option<f32>,
+    /// jump held since the last jump or since leaving the ground, so holding it never repeats
+    jump_held: bool,
 }
 
 impl Walker {
@@ -56,6 +63,7 @@ impl Walker {
             fall: 0.0,
             jumped: false,
             landed: None,
+            jump_held: false,
         }
     }
 
@@ -88,6 +96,8 @@ impl Walker {
             (self.pitch + dy * sensitivity * MOUSE_FACTOR).clamp(-PITCH_LIMIT, PITCH_LIMIT);
     }
 
+    /// One tick of FullWalkMove, then the portal touch.
+    /// Translated from 0x275d90 (decompiled, server.so)
     pub fn step(
         &mut self,
         input: &Input,
@@ -101,26 +111,27 @@ impl Walker {
         if !self.grounded {
             self.fall = -self.velocity[2];
         }
-        let (sin, cos) = self.yaw.to_radians().sin_cos();
-        let wish = [
-            cos * input.forward + sin * input.side,
-            sin * input.forward - cos * input.side,
-        ];
-        let len = wish[0].hypot(wish[1]);
-        let scale = if len > 0.0 { SPEED / len } else { 0.0 };
-        self.velocity[0] = wish[0] * scale;
-        self.velocity[1] = wish[1] * scale;
-        if input.jump && self.grounded {
-            self.velocity[2] = JUMP_SPEED;
-            self.jumped = true;
+        let max = MAX_SPEED.min(WALK_SPEED);
+        let (fmove, smove) = command(input.forward, input.side, max);
+        self.velocity[2] = start_gravity(self.velocity[2], dt);
+        match input.jump {
+            true => self.check_jump(fmove, max, dt),
+            false => self.jump_held = false,
         }
-        self.velocity[2] -= GRAVITY * dt;
-        self.grounded = false;
-        self.ground = None;
-        for axis in 0..3 {
-            let was = self.feet[axis];
-            self.feet[axis] += self.velocity[axis] * dt;
-            self.push_out(axis, was, chamber, linked.as_ref());
+        if self.grounded {
+            self.velocity[2] = 0.0;
+            self.velocity = friction(self.velocity, dt);
+        }
+        self.velocity = check_velocity(self.velocity);
+        match self.grounded {
+            true => self.walk_move(fmove, smove, max, dt, chamber, linked.as_ref()),
+            false => self.air_move(fmove, smove, max, dt, chamber, linked.as_ref()),
+        }
+        self.categorize(chamber, linked.as_ref());
+        self.velocity = check_velocity(self.velocity);
+        self.velocity[2] = finish_gravity(self.velocity[2], dt);
+        if self.grounded {
+            self.velocity[2] = 0.0;
         }
         if self.grounded && self.fall > 0.0 {
             self.landed = Some(self.fall);
@@ -132,6 +143,121 @@ impl Walker {
             .find(|&i| entered(&pair[i], before, self.centre(), self.half()))?;
         self.carry(&pair[i], &pair[1 - i]);
         Some(i)
+    }
+
+    /// Translated from 0x2750e0 (decompiled, server.so)
+    fn check_jump(&mut self, fmove: f32, max: f32, dt: f32) {
+        if self.grounded && !self.jump_held {
+            self.velocity = jump(self.velocity, self.yaw, fmove, max);
+            self.velocity[2] = finish_gravity(self.velocity[2], dt);
+            self.grounded = false;
+            self.ground = None;
+            self.jumped = true;
+        }
+        self.jump_held = true;
+    }
+
+    /// Translated from 0x274230 (decompiled, server.so)
+    fn walk_move(
+        &mut self,
+        fmove: f32,
+        smove: f32,
+        max: f32,
+        dt: f32,
+        chamber: &Chamber,
+        linked: Option<&[Portal; 2]>,
+    ) {
+        let (dir, speed) = direction(wish(self.yaw, fmove, smove));
+        self.velocity[2] = 0.0;
+        self.velocity = accelerate(self.velocity, dir, speed.min(max), ACCELERATE, dt);
+        self.velocity[2] = 0.0;
+        if self.velocity[0].hypot(self.velocity[1]) < MIN_WALK {
+            self.velocity = [0.0; 3];
+            return;
+        }
+        self.travel(&[0, 1], dt, true, chamber, linked);
+        if let Some((n, top)) = self.ground_below(STEP, chamber, linked) {
+            self.feet[2] = top;
+            self.ground = Some(n);
+        }
+    }
+
+    /// Translated from 0x2cf2a0 (decompiled, server.so)
+    fn air_move(
+        &mut self,
+        fmove: f32,
+        smove: f32,
+        max: f32,
+        dt: f32,
+        chamber: &Chamber,
+        linked: Option<&[Portal; 2]>,
+    ) {
+        let flat = [self.velocity[0], self.velocity[1]];
+        let mut want = wish(self.yaw, fmove, smove);
+        if flinging(flat) {
+            want = fling_guard(flat, want);
+        } else {
+            for p in linked.into_iter().flatten() {
+                match funnel(self.velocity, want, self.feet, self.forward(), p) {
+                    Funnel::Wish(w) => want = w,
+                    Funnel::Stop => (self.velocity[0], self.velocity[1]) = (0.0, 0.0),
+                    Funnel::Off => {}
+                }
+            }
+        }
+        let (dir, speed) = direction(want);
+        self.velocity = air_accelerate(self.velocity, dir, speed.min(max), AIR_ACCELERATE, dt);
+        self.travel(&[0, 1, 2], dt, false, chamber, linked);
+    }
+
+    /// Moves along each axis in turn and backs out of what it runs into, a stand-in for the
+    /// swept hull trace.
+    fn travel(
+        &mut self,
+        axes: &[usize],
+        dt: f32,
+        walking: bool,
+        chamber: &Chamber,
+        linked: Option<&[Portal; 2]>,
+    ) {
+        for &axis in axes {
+            let was = self.feet[axis];
+            self.feet[axis] += self.velocity[axis] * dt;
+            self.push_out(axis, was, walking, chamber, linked);
+        }
+    }
+
+    /// On the ground unless rising faster than the ground holds or nothing is 2 units below.
+    /// Translated from 0x2d06d0 (decompiled, server.so)
+    fn categorize(&mut self, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
+        let below = match leaves_ground(self.velocity[2]) {
+            true => None,
+            false => self.ground_below(GROUND_REACH, chamber, linked),
+        };
+        self.grounded = below.is_some();
+        self.ground = below.map(|(n, _)| n);
+        if let Some((_, top)) = below {
+            self.feet[2] = top;
+        }
+    }
+
+    /// The highest block top under the hull within reach below the feet.
+    fn ground_below(
+        &self,
+        reach: f32,
+        chamber: &Chamber,
+        linked: Option<&[Portal; 2]>,
+    ) -> Option<(usize, f32)> {
+        let (lo, hi) = self.bounds();
+        solids(chamber, linked)
+            .into_iter()
+            .filter(|(_, min, max)| {
+                (0..2).all(|i| lo[i] < max[i] - CONTACT && hi[i] > min[i] + CONTACT)
+                    && max[2] <= self.feet[2] + CONTACT
+                    && max[2] >= self.feet[2] - reach
+            })
+            .map(|(n, _, max)| (n, max[2]))
+            .max_by(|a, b| a.1.total_cmp(&b.1))
     }
 
     pub fn centre(&self) -> Vec3 {
@@ -146,6 +272,8 @@ impl Walker {
         let c = through_point(from, to, self.centre());
         self.feet = [c[0], c[1], c[2] - HEIGHT / 2.0];
         self.velocity = exit_velocity(from, to, self.velocity, Mover::Player);
+        self.grounded = false;
+        self.ground = None;
         let (f, _) = view_through(from, to, self.forward(), self.up());
         self.yaw = f[1].atan2(f[0]).to_degrees();
         self.pitch = -f[2].clamp(-1.0, 1.0).asin().to_degrees();
@@ -159,33 +287,24 @@ impl Walker {
         )
     }
 
-    /// A linked portal carves its opening through the block it sits on, a stand-in for the
-    /// collision the game builds behind each portal.
     /// Back out of each solid on the side the walker came from along the axis, or the nearer
-    /// side when it was already inside.
-    fn push_out(&mut self, axis: usize, was: f32, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
-        let solids = chamber.blocks.iter().enumerate().flat_map(|(n, block)| {
-            let on = linked.into_iter().flatten().filter(|p| {
-                let q = [0, 1, 2].map(|i| p.origin[i] - p.forward[i]);
-                (0..3).all(|i| q[i] >= block.min[i] && q[i] <= block.max[i])
-            });
-            on.fold(vec![(block.min, block.max)], |pieces, p| {
-                pieces
-                    .into_iter()
-                    .flat_map(|(lo, hi)| carve(lo, hi, p))
-                    .collect::<Vec<_>>()
-            })
-            .into_iter()
-            .map(move |(lo, hi)| (n, lo, hi))
-        });
-        for (n, min, max) in solids {
+    /// side when it was already inside. Only a walk steps up onto what it meets.
+    fn push_out(
+        &mut self,
+        axis: usize,
+        was: f32,
+        walking: bool,
+        chamber: &Chamber,
+        linked: Option<&[Portal; 2]>,
+    ) {
+        for (_, min, max) in solids(chamber, linked) {
             let (lo, hi) = self.bounds();
             let overlaps = (0..3).all(|i| lo[i] < max[i] - CONTACT && hi[i] > min[i] + CONTACT);
             if !overlaps {
                 continue;
             }
             let rise = max[2] - self.feet[2];
-            if axis != 2 && rise > 0.0 && rise <= STEP && self.velocity[2] <= 0.0 {
+            if walking && axis != 2 && rise > 0.0 && rise <= STEP {
                 self.feet[2] = max[2];
                 continue;
             }
@@ -206,14 +325,43 @@ impl Walker {
                 self.feet[a] -= down;
             } else {
                 self.feet[a] += up;
-                if a == 2 {
-                    self.grounded = true;
-                    self.ground = Some(n);
-                }
             }
             self.velocity[a] = 0.0;
         }
     }
+}
+
+/// A wish split into its direction and speed.
+fn direction(w: [f32; 2]) -> (Vec3, f32) {
+    let speed = w[0].hypot(w[1]);
+    match speed > 0.0 {
+        true => ([w[0] / speed, w[1] / speed, 0.0], speed),
+        false => ([0.0; 3], 0.0),
+    }
+}
+
+/// The chamber's blocks by index. A linked portal carves its opening through the block it sits
+/// on, a stand-in for the collision the game builds behind each portal.
+fn solids(chamber: &Chamber, linked: Option<&[Portal; 2]>) -> Vec<(usize, Vec3, Vec3)> {
+    chamber
+        .blocks
+        .iter()
+        .enumerate()
+        .flat_map(|(n, block)| {
+            let on = linked.into_iter().flatten().filter(|p| {
+                let q = [0, 1, 2].map(|i| p.origin[i] - p.forward[i]);
+                (0..3).all(|i| q[i] >= block.min[i] && q[i] <= block.max[i])
+            });
+            on.fold(vec![(block.min, block.max)], |pieces, p| {
+                pieces
+                    .into_iter()
+                    .flat_map(|(lo, hi)| carve(lo, hi, p))
+                    .collect::<Vec<_>>()
+            })
+            .into_iter()
+            .map(move |(lo, hi)| (n, lo, hi))
+        })
+        .collect()
 }
 
 /// A block less a box of a portal's opening cut right through it along the portal's normal.

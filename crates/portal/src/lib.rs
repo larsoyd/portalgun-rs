@@ -11,6 +11,7 @@ pub mod install;
 pub mod keyvalues;
 pub mod mdl;
 pub mod model;
+pub mod movement;
 pub mod pair;
 pub mod particles;
 pub mod pcf;
