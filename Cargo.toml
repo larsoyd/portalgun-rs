@@ -10,6 +10,7 @@ rust-version.workspace = true
 bevy = { version = "=0.19.1", features = ["wav", "dds"] }
 image = { version = "=0.25.10", default-features = false, features = ["png"] }
 portal = { path = "crates/portal" }
+ttf-parser = "=0.25.1"
 winit = { version = "=0.30.13", default-features = false }
 
 [workspace]

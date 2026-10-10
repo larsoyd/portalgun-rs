@@ -91,10 +91,7 @@ pub struct OverlayLook {
 
 pub fn overlay_look(search: &SearchPath, c: Colour) -> Result<OverlayLook, String> {
     let path = format!("materials/{}.vmt", OVERLAYS[c.index()]);
-    let text = search.read(&path).map_err(|e| format!("{path}: {e}"))?;
-    let root =
-        keyvalues::parse(&String::from_utf8_lossy(&text)).map_err(|e| format!("{path}: {e}"))?;
-    let shader = root.first().ok_or_else(|| format!("{path}: empty"))?;
+    let shader = material(search, &path)?;
     let get = |k: &str| {
         shader
             .get(k)
@@ -116,4 +113,35 @@ pub fn overlay_look(search: &SearchPath, c: Colour) -> Result<OverlayLook, Strin
 pub fn face_quad(portal: &Portal) -> ([[f32; 3]; 4], [[f32; 2]; 4]) {
     let uvs = [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]];
     (uvs.map(|uv| portal.world(portal_face::corner(uv))), uvs)
+}
+
+/// The depth doubler's material, drawn by 0x557110 (client.so).
+const DOUBLER: &str = "materials/models/portals/portal_depthdoubler.vmt";
+/// the screen copy the doubler samples, made at 0x565a40 (client.so)
+const DOUBLER_TARGET: &str = "_rt_DepthDoubler";
+
+fn material(search: &SearchPath, path: &str) -> Result<keyvalues::Kv, String> {
+    let text = search.read(path).map_err(|e| format!("{path}: {e}"))?;
+    keyvalues::parse(&String::from_utf8_lossy(&text))
+        .map_err(|e| format!("{path}: {e}"))?
+        .into_iter()
+        .next()
+        .ok_or_else(|| format!("{path}: empty"))
+}
+
+/// The depth doubler's alpha mask. Its base texture must be the screen copy.
+pub fn doubler_mask(search: &SearchPath) -> Result<String, String> {
+    let shader = material(search, DOUBLER)?;
+    let get = |k: &str| {
+        shader
+            .get(k)
+            .map(|v| v.trim().to_string())
+            .ok_or_else(|| format!("{DOUBLER}: no {k}"))
+    };
+    match get("$basetexture")? {
+        t if t.eq_ignore_ascii_case(DOUBLER_TARGET) => get("$alphamasktexture"),
+        t => Err(format!(
+            "{DOUBLER}: $basetexture {t}, expected {DOUBLER_TARGET}"
+        )),
+    }
 }

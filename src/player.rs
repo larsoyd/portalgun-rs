@@ -1,8 +1,9 @@
+use bevy::camera::visibility::RenderLayers;
 use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
-use crate::faces::Portals;
+use crate::faces::{Portals, MAIN_FACES};
 use crate::portals::Colour;
 use crate::scene::Level;
 use crate::script::{Action, Script};
@@ -71,6 +72,7 @@ fn spawn_camera(mut commands: Commands, config: Res<Config>) {
         Camera3d::default(),
         PlayerCamera,
         msaa,
+        RenderLayers::from_layers(&[0, MAIN_FACES]),
         Projection::Perspective(PerspectiveProjection {
             fov: config.0.vertical_fov(),
             ..default()

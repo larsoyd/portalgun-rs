@@ -7,6 +7,7 @@ use portalgun::args::Args;
 use portalgun::chamber::Chamber;
 use portalgun::faces::FacesPlugin;
 use portalgun::firing::FiringPlugin;
+use portalgun::hud::{HudPlugin, InstallRoot};
 use portalgun::icon::{self, GameIcon, APP_ID};
 use portalgun::player::{Config, PlayerPlugin, Scripted};
 use portalgun::run::RunPlugin;
@@ -87,6 +88,7 @@ fn main() -> ExitCode {
             quit_after: args.quit_after,
             shot_dir: args.shot_dir,
         })
+        .insert_resource(InstallRoot(install.root.clone()))
         .insert_resource(Files(install.search))
         .insert_resource(sounds)
         .insert_resource(Level(chamber))
@@ -99,6 +101,7 @@ fn main() -> ExitCode {
         .add_plugins(ViewPlugin)
         .add_plugins(FacesPlugin)
         .add_plugins(FiringPlugin)
+        .add_plugins(HudPlugin)
         .run();
     if exit.is_success() {
         ExitCode::SUCCESS

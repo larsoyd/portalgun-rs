@@ -4257,6 +4257,7 @@ dependencies = [
  "bevy",
  "image",
  "portal",
+ "ttf-parser",
  "winit",
 ]
 

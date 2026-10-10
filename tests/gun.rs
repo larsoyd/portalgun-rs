@@ -3,7 +3,7 @@ use std::path::Path;
 use portal::install::{root, Install};
 use portal::placement::Placement;
 use portalgun::chamber::Chamber;
-use portalgun::gun::{flight_time, stream_at, tracer_origin, Gun, REFIRE};
+use portalgun::gun::{flight_time, stream_at, test_shot, tracer_origin, Gun, REFIRE};
 use portalgun::portals::{Colour, Pair};
 use portalgun::walker::Walker;
 
@@ -121,4 +121,37 @@ fn a_shot_near_the_floor_streams_to_the_bumped_portal_but_times_by_the_hit() {
     );
     assert_eq!(shot.ends, portal.origin);
     assert!((shot.arrives - flight_time(shot.from, shot.landed)).abs() < 1e-6);
+}
+
+#[test]
+fn the_gun_remembers_which_colour_it_fired_last() {
+    let c = chamber();
+    let pair = Pair::default();
+    let w = Walker::at([-200.0, 0.0, 0.0]);
+    let mut gun = Gun::default();
+    assert_eq!(gun.last_fired, 0);
+    gun.fire(Colour::Orange, 0.0, &w, &c, &pair);
+    assert_eq!(gun.last_fired, 2);
+    gun.fire(Colour::Blue, 0.1, &w, &c, &pair);
+    assert_eq!(
+        gun.last_fired, 2,
+        "a shot held back by the refire changes nothing"
+    );
+    gun.fire(Colour::Blue, 1.0, &w, &c, &pair);
+    assert_eq!(gun.last_fired, 1);
+}
+
+#[test]
+fn the_test_shot_scores_a_fit_by_its_quality_and_a_failure_as_nothing() {
+    let c = chamber();
+    let pair = Pair::default();
+    let mut w = Walker::at([-200.0, 0.0, 0.0]);
+    assert_eq!(test_shot(Colour::Blue, &w, &c, &pair), 1.0);
+    w.yaw = 90.0;
+    w.feet = [0.0, 0.0, 0.0];
+    assert_eq!(
+        test_shot(Colour::Blue, &w, &c, &pair),
+        0.0,
+        "the metal strip takes no portal"
+    );
 }

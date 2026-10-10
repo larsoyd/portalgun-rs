@@ -119,3 +119,12 @@ fn the_moved_portal_decides_the_doubler_and_its_partner_always_may() {
     q.place(Colour::Orange, askew);
     assert_eq!(q.usable, [true, false], "blue is not in front of orange");
 }
+
+#[test]
+fn the_depth_doubler_masks_the_copied_screen_with_the_portal_mask() {
+    use portalgun::portals::doubler_mask;
+    assert_eq!(
+        doubler_mask(&install().search).unwrap(),
+        "models/portals/portal_mask"
+    );
+}

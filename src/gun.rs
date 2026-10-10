@@ -32,6 +32,8 @@ pub struct Shot {
 #[derive(Default)]
 pub struct Gun {
     next_attack: f32,
+    /// m_iLastFiredPortal, 1 blue 2 orange 0 none yet
+    pub last_fired: u8,
     flying: Vec<Shot>,
 }
 
@@ -54,6 +56,7 @@ impl Gun {
             return None;
         }
         self.next_attack = now + REFIRE;
+        self.last_fired = colour.index() as u8 + 1;
         let (eye, dir) = (w.eye(), w.forward());
         let (placement, landed) = place(world, eye, dir, RANGE, pair.get(colour.other()));
         let from = tracer_origin(w);
@@ -107,4 +110,13 @@ pub fn flight_time(from: Vec3, to: Vec3) -> f32 {
 // Translated from 0x560a00 (disassembly, client.so)
 pub fn stream_at(start: Vec3, aim: Vec3, end: Vec3, t: f32) -> Vec3 {
     [0, 1, 2].map(|i| start[i] * (1.0 - t) + aim[i] * t * (1.0 - t) + end[i] * t * t)
+}
+
+/// how well a shot of this colour would fit now, failures score nothing
+// Translated from 0x9268a0 (disassembly, server.so)
+pub fn test_shot(colour: Colour, w: &Walker, world: &impl World, pair: &Pair) -> f32 {
+    match place(world, w.eye(), w.forward(), RANGE, pair.get(colour.other())).0 {
+        Placement::Placed { quality, .. } => quality,
+        Placement::Failed(_) => 0.0,
+    }
 }
