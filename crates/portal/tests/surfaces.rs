@@ -1,0 +1,50 @@
+use std::path::Path;
+
+use portal::install::{root, Install};
+use portal::keyvalues;
+use portal::surfaces::{Surface, Surfaces};
+
+fn install() -> Install {
+    let dir = root(None, None, Path::new(&std::env::var("HOME").unwrap()));
+    Install::open(&dir).unwrap_or_else(|e| panic!("install at {dir:?}: {e}"))
+}
+
+#[test]
+fn concrete_and_metal_step_on_their_own_sounds() {
+    let s = Surfaces::read(&install().search).unwrap();
+    let concrete = s.get("concrete");
+    assert_eq!(concrete.step_left, "Concrete.StepLeft");
+    assert_eq!(concrete.step_right, "Concrete.StepRight");
+    assert_eq!(concrete.material, b'C');
+    let metal = s.get("metal");
+    assert_eq!(
+        metal.step_left, "SolidMetal.StepLeft",
+        "metal takes solidmetal's steps"
+    );
+    assert_eq!(metal.material, b'M');
+}
+
+#[test]
+fn an_unknown_surface_is_the_default() {
+    let s = Surfaces::read(&install().search).unwrap();
+    assert_eq!(s.get("no_such_surface"), s.get("default"));
+    assert_eq!(s.get("CONCRETE"), s.get("concrete"));
+}
+
+#[test]
+fn a_surface_starts_from_its_base_or_the_default() {
+    let text = r#""default" { "stepleft" "D.L" "stepright" "D.R" "gamematerial" "C" }
+        "plain" { "stepleft" "P.L" }
+        "child" { "base" "plain" "gamematerial" "T" }"#;
+    let s = Surfaces::from_files(&[keyvalues::parse(text).unwrap()]);
+    assert_eq!(
+        s.get("plain"),
+        &Surface {
+            step_left: "P.L".into(),
+            step_right: "D.R".into(),
+            material: b'C'
+        }
+    );
+    assert_eq!(s.get("child").step_left, "P.L");
+    assert_eq!(s.get("child").material, b'T');
+}

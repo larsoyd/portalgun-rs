@@ -17,8 +17,11 @@ pub mod pcf;
 pub mod placement;
 pub mod portal_face;
 pub mod soundscript;
+pub mod steps;
+pub mod surfaces;
 pub mod teleport;
 pub mod view;
+pub mod viewbob;
 pub mod vpk;
 pub mod vtf;
 
