@@ -120,3 +120,23 @@ fn refuses_offsets_past_the_end() {
     bytes[160..164].copy_from_slice(&(1_000_000i32).to_le_bytes());
     assert!(Mdl::parse(bytes).is_err());
 }
+
+fn with_anim_field(at: usize, value: i32) -> Vec<u8> {
+    let mut bytes = mdl(&gun());
+    let anims = i32::from_le_bytes(bytes[184..188].try_into().unwrap()) as usize;
+    bytes[anims + at..anims + at + 4].copy_from_slice(&value.to_le_bytes());
+    bytes
+}
+
+#[test]
+fn sectioned_animations_are_refused_by_their_section_frames() {
+    let e = Mdl::parse(with_anim_field(84, 30)).err().expect("sectionframes 30 refused");
+    assert!(e.to_string().contains("sectioned"), "{e}");
+    assert!(Mdl::parse(with_anim_field(52, 1)).is_err());
+}
+
+#[test]
+fn zero_frame_data_after_the_section_fields_is_no_reason_to_refuse() {
+    let m = Mdl::parse(with_anim_field(88, 0x0002_0004)).unwrap();
+    assert_eq!(m.anims[1].frames, 16);
+}

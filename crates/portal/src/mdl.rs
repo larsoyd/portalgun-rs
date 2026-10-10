@@ -116,8 +116,9 @@ impl Mdl {
                 flags: r.i32(o + 160)? as u32,
             })
         })?;
+        // Translated from 0x2f5f07 (disassembly, client.so): sectionframes at +84, animblock at +52
         m.anims = r.table(180, 100, |o| {
-            if r.i32(o + 88)? != 0 || r.i32(o + 52)? != 0 {
+            if r.i32(o + 84)? != 0 || r.i32(o + 52)? != 0 {
                 return Err(Error::Unsupported("sectioned or block animations".into()));
             }
             Ok(AnimDesc {
