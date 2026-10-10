@@ -285,3 +285,36 @@ fn a_block_higher_than_a_step_still_stops_the_walker() {
         w.feet
     );
 }
+
+#[test]
+fn a_walker_dropped_into_the_ledge_top_leaves_by_the_ledge_side() {
+    let c = chamber();
+    let top = Portal::new(
+        [240.0, -194.0, 128.0],
+        [0.0, 0.0, 1.0],
+        [1.0, 0.0, 0.0],
+        (32.0, 54.0),
+    );
+    let side = Portal::new(
+        [192.0, -160.0, 74.0],
+        [-1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        (32.0, 54.0),
+    );
+    let mut w = Walker::at([240.0, -194.0, 200.0]);
+    let mut crossed = None;
+    for _ in 0..200 {
+        crossed = crossed.or(w.step(&Input::default(), 0.01, &c, Some([top, side])));
+    }
+    assert_eq!(
+        crossed,
+        Some(0),
+        "taken by the portal it fell into, at {:?}",
+        w.feet
+    );
+    assert!(
+        w.feet[0] < 192.0,
+        "out in front of the side portal: {:?}",
+        w.feet
+    );
+}

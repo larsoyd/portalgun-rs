@@ -1,5 +1,5 @@
 use portal::pair::{through_point, Portal, Vec3};
-use portal::teleport::{entered, exit_velocity, view_through, Mover};
+use portal::teleport::{entered, exit_velocity, touching, view_through, Mover};
 
 use crate::chamber::Chamber;
 
@@ -16,6 +16,10 @@ const GRAVITY: f32 = 600.0;
 const JUMP_SPEED: f32 = 268.3;
 /// sv_stepsize's default
 const STEP: f32 = 18.0;
+/// below this an opening's right axis counts as lined up with the world
+const TURNED: f32 = 1e-4;
+/// how far a box may already sink into a solid and still count as resting on it
+const CONTACT: f32 = 0.01;
 
 #[derive(Default)]
 pub struct Input {
@@ -95,11 +99,14 @@ impl Walker {
         self.velocity[2] -= GRAVITY * dt;
         self.grounded = false;
         for axis in 0..3 {
+            let was = self.feet[axis];
             self.feet[axis] += self.velocity[axis] * dt;
-            self.push_out(axis, chamber, linked.as_ref());
+            self.push_out(axis, was, chamber, linked.as_ref());
         }
         let pair = linked?;
-        let i = (0..2).find(|&i| entered(&pair[i], before, self.centre(), self.half()))?;
+        let i = (0..2)
+            .filter(|&i| touching(&pair[i], before, self.half()))
+            .find(|&i| entered(&pair[i], before, self.centre(), self.half()))?;
         self.carry(&pair[i], &pair[1 - i]);
         Some(i)
     }
@@ -131,20 +138,24 @@ impl Walker {
 
     /// A linked portal carves its opening through the block it sits on, a stand-in for the
     /// collision the game builds behind each portal.
-    fn push_out(&mut self, axis: usize, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
+    /// Back out of each solid on the side the walker came from along the axis, or the nearer
+    /// side when it was already inside.
+    fn push_out(&mut self, axis: usize, was: f32, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
         let solids = chamber.blocks.iter().flat_map(|block| {
-            let on = linked.into_iter().flatten().find(|p| {
+            let on = linked.into_iter().flatten().filter(|p| {
                 let q = [0, 1, 2].map(|i| p.origin[i] - p.forward[i]);
                 (0..3).all(|i| q[i] >= block.min[i] && q[i] <= block.max[i])
             });
-            match on {
-                Some(p) => carve(block.min, block.max, p),
-                None => vec![(block.min, block.max)],
-            }
+            on.fold(vec![(block.min, block.max)], |pieces, p| {
+                pieces
+                    .into_iter()
+                    .flat_map(|(lo, hi)| carve(lo, hi, p))
+                    .collect()
+            })
         });
         for (min, max) in solids {
             let (lo, hi) = self.bounds();
-            let overlaps = (0..3).all(|i| lo[i] < max[i] && hi[i] > min[i]);
+            let overlaps = (0..3).all(|i| lo[i] < max[i] - CONTACT && hi[i] > min[i] + CONTACT);
             if !overlaps {
                 continue;
             }
@@ -153,30 +164,46 @@ impl Walker {
                 self.feet[2] = max[2];
                 continue;
             }
-            if self.velocity[axis] > 0.0 {
-                self.feet[axis] -= hi[axis] - min[axis];
+            let moved = self.feet[axis] - was;
+            let from_below = hi[axis] - moved <= min[axis] + CONTACT;
+            let from_above = lo[axis] - moved >= max[axis] - CONTACT;
+            let a = match (from_below, from_above) {
+                (false, false) => (0..3)
+                    .min_by(|&a, &b| {
+                        let depth = |i: usize| (hi[i] - min[i]).min(max[i] - lo[i]);
+                        depth(a).total_cmp(&depth(b))
+                    })
+                    .unwrap_or(axis),
+                _ => axis,
+            };
+            let (down, up) = (hi[a] - min[a], max[a] - lo[a]);
+            if from_below || (!from_above && down < up) {
+                self.feet[a] -= down;
             } else {
-                self.feet[axis] += max[axis] - lo[axis];
-                self.grounded |= axis == 2;
+                self.feet[a] += up;
+                self.grounded |= a == 2;
             }
-            self.velocity[axis] = 0.0;
+            self.velocity[a] = 0.0;
         }
     }
 }
 
-/// A block less the box of a portal's opening, cut right through it along the portal's normal.
+/// A block less a box of a portal's opening cut right through it along the portal's normal.
+/// An opening turned in its plane gets the largest square that fits inside it.
 fn carve(min: Vec3, max: Vec3, p: &Portal) -> Vec<(Vec3, Vec3)> {
-    let corners = [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)]
-        .map(|(r, u)| p.world([0.0, r * p.half.0, u * p.half.1]));
     let normal = (0..3)
         .max_by(|&a, &b| p.forward[a].abs().total_cmp(&p.forward[b].abs()))
         .unwrap_or(0);
-    let mut cut_lo = corners
-        .iter()
-        .fold([f32::MAX; 3], |m, c| [0, 1, 2].map(|i| m[i].min(c[i])));
-    let mut cut_hi = corners
-        .iter()
-        .fold([f32::MIN; 3], |m, c| [0, 1, 2].map(|i| m[i].max(c[i])));
+    let turn: Vec<f32> = (0..3)
+        .filter(|&i| i != normal)
+        .map(|i| p.right[i].abs())
+        .collect();
+    let reach = match turn.iter().copied().fold(1.0, f32::min) < TURNED {
+        true => [0, 1, 2].map(|i| p.right[i].abs() * p.half.0 + p.up[i].abs() * p.half.1),
+        false => [p.half.0.min(p.half.1) / turn.iter().sum::<f32>(); 3],
+    };
+    let mut cut_lo = [0, 1, 2].map(|i| p.origin[i] - reach[i]);
+    let mut cut_hi = [0, 1, 2].map(|i| p.origin[i] + reach[i]);
     (cut_lo[normal], cut_hi[normal]) = (min[normal], max[normal]);
     let (mut lo, mut hi) = (min, max);
     let mut pieces = Vec::new();
