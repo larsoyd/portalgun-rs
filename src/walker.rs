@@ -141,7 +141,7 @@ impl Walker {
                 let q = [0, 1, 2].map(|i| p.origin[i] - p.forward[i]);
                 (0..3).all(|i| q[i] >= block.min[i] && q[i] <= block.max[i])
             };
-            if open.iter().any(|p| behind(p)) {
+            if open.iter().any(behind) {
                 continue;
             }
             let (lo, hi) = self.bounds();
