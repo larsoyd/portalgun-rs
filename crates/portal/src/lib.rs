@@ -3,6 +3,7 @@
 
 pub mod anim;
 pub mod bmp;
+pub mod crosshair;
 pub mod dmx;
 mod error;
 pub mod gun_fx;
