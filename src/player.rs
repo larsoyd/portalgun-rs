@@ -15,6 +15,8 @@ use crate::walker::{Input, Walker};
 /// Portal's server runs at 0.015 seconds a tick
 const TICK_HZ: f64 = 1.0 / 0.015;
 const SPAWN: [f32; 3] = [-320.0, -120.0, 0.0];
+/// seconds between walker position lines
+const WALK_LOG: f32 = 0.05;
 
 #[derive(Resource, Deref, DerefMut)]
 pub struct Player(pub Walker);
@@ -134,7 +136,20 @@ fn walk(
     mut sounds: ResMut<Sounds>,
     files: Res<Files>,
     mut audio: ResMut<Assets<AudioSource>>,
+    mut logged: Local<f32>,
 ) {
+    if time.elapsed_secs() >= *logged + WALK_LOG {
+        *logged = time.elapsed_secs();
+        info!(
+            "[walk] at={:.2} feet={:?} yaw={:.1} pitch={:.1} velocity={:?} grounded={}",
+            *logged,
+            player.feet.map(|v| (v * 10.0).round() / 10.0),
+            player.yaw,
+            player.pitch,
+            player.velocity.map(|v| v.round()),
+            player.grounded
+        );
+    }
     let input = Input {
         forward: controls.forward,
         side: controls.side,

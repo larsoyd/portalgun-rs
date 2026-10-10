@@ -7,9 +7,14 @@ use bevy::camera::{CameraProjection, Hdr, RenderTarget, SubCameraView};
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::image::{ImageAddressMode, ImageSampler};
 use bevy::math::Vec3A;
+use bevy::mesh::MeshVertexBufferLayoutRef;
 use bevy::mesh::{Indices, PrimitiveTopology};
+use bevy::pbr::{MaterialPipeline, MaterialPipelineKey};
 use bevy::prelude::*;
-use bevy::render::render_resource::{AsBindGroup, ShaderType, TextureFormat};
+use bevy::render::render_resource::{
+    AsBindGroup, CompareFunction, RenderPipelineDescriptor, ShaderType,
+    SpecializedMeshPipelineError, TextureFormat,
+};
 use bevy::shader::{load_shader_library, ShaderRef};
 use portal::portal_face::{near, shader_time};
 use portal::view::{
@@ -43,6 +48,7 @@ fn face_layer(c: Colour, level: usize) -> usize {
 pub struct Portals(pub Pair);
 
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+#[bind_group_data(PortalKey)]
 pub struct PortalMaterial {
     #[uniform(0)]
     pub params: PortalParams,
@@ -58,6 +64,20 @@ pub struct PortalMaterial {
     #[texture(7)]
     #[sampler(8)]
     pub mask: Handle<Image>,
+    /// drawn over whatever is there, as the stencil lets the view overwrite it
+    pub on_top: bool,
+}
+
+#[repr(C)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone)]
+pub struct PortalKey {
+    on_top: bool,
+}
+
+impl From<&PortalMaterial> for PortalKey {
+    fn from(m: &PortalMaterial) -> Self {
+        PortalKey { on_top: m.on_top }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, ShaderType)]
@@ -87,6 +107,22 @@ impl Material for PortalMaterial {
 
     fn enable_shadows() -> bool {
         false
+    }
+
+    fn specialize(
+        _pipeline: &MaterialPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        _layout: &MeshVertexBufferLayoutRef,
+        key: MaterialPipelineKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        if key.bind_group_data.on_top {
+            descriptor.primitive.cull_mode = None;
+            if let Some(depth) = descriptor.depth_stencil.as_mut() {
+                depth.depth_compare = Some(CompareFunction::Always);
+                depth.depth_write_enabled = Some(false);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -266,32 +302,12 @@ fn spawn_faces(
         let noise = images.add(overlay_texture(&files, &look.noise)?);
         let ramp = images.add(overlay_texture(&files, &look.ramp)?);
         let mesh = meshes.add(face_mesh(&portals, c));
-        let fix_mesh = meshes.add(fix_mesh(&[]));
-        let fix_material = materials.add(PortalMaterial {
-            params: PortalParams {
-                fix: 1.0,
-                ..default()
-            },
-            noise: noise.clone(),
-            ramp: ramp.clone(),
-            view: blank.clone(),
-            mask: mask.clone(),
-        });
-        let fix = commands
-            .spawn((
-                Mesh3d(fix_mesh.clone()),
-                MeshMaterial3d(fix_material.clone()),
-                Visibility::Hidden,
-                RenderLayers::layer(MAIN_FACES),
-                NoFrustumCulling,
-            ))
-            .id();
         let mut chain = Chain {
             faces: Vec::new(),
             cameras: Vec::new(),
             images: Vec::new(),
             saved: None,
-            fix: (fix, fix_mesh, fix_material),
+            fix: (Entity::PLACEHOLDER, Handle::default(), Handle::default()),
         };
         for level in 0..=depth {
             let material = materials.add(PortalMaterial {
@@ -303,6 +319,7 @@ fn spawn_faces(
                 ramp: ramp.clone(),
                 view: blank.clone(),
                 mask: mask.clone(),
+                on_top: false,
             });
             let layer = match level {
                 0 => MAIN_FACES,
@@ -328,6 +345,27 @@ fn spawn_faces(
                 chain.images.push(image);
             }
         }
+        let fix_mesh = meshes.add(fix_mesh(&[[0.0; 3]; 3]));
+        let fix_material = materials.add(PortalMaterial {
+            params: PortalParams {
+                fix: 1.0,
+                ..default()
+            },
+            noise: noise.clone(),
+            ramp: ramp.clone(),
+            view: chain.images[0].clone(),
+            mask: mask.clone(),
+            on_top: true,
+        });
+        let fix = commands
+            .spawn((
+                Mesh3d(fix_mesh.clone()),
+                MeshMaterial3d(fix_material.clone()),
+                RenderLayers::layer(MAIN_FACES),
+                NoFrustumCulling,
+            ))
+            .id();
+        chain.fix = (fix, fix_mesh, fix_material);
         Ok((mesh, chain))
     };
     match (make(Colour::Blue), make(Colour::Orange)) {
@@ -508,25 +546,13 @@ fn draw_views(
             ),
             _ => Vec::new(),
         };
-        let (fix_entity, fix_mesh_handle, fix_material) = &chain.fix;
-        if let Ok(mut v) = visibility.get_mut(*fix_entity) {
-            let want = match fix.is_empty() {
-                true => Visibility::Hidden,
-                false => Visibility::Inherited,
-            };
-            if *v != want {
-                *v = want;
-            }
-        }
-        if !fix.is_empty() {
-            if let Some(mut mesh) = meshes.get_mut(fix_mesh_handle) {
-                *mesh = fix_mesh(&fix);
-            }
-            if let Some(mut m) = materials.get_mut(fix_material) {
-                if m.view != chain.images[0] {
-                    m.view = chain.images[0].clone();
-                }
-            }
+        // kept drawn as a point when unused, so its pipeline is ready the frame it is needed
+        let fix = match fix.is_empty() {
+            true => vec![[0.0; 3]; 3],
+            false => fix,
+        };
+        if let Some(mut mesh) = meshes.get_mut(&chain.fix.1) {
+            *mesh = fix_mesh(&fix);
         }
         let levels: String = shown[1..]
             .iter()
