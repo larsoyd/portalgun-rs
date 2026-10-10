@@ -45,3 +45,29 @@ fn a_wall_texture_loads_at_its_own_size_tiling_and_in_srgb() {
     assert_eq!(s.address_mode_u, ImageAddressMode::Repeat);
     assert_eq!(s.address_mode_v, ImageAddressMode::Repeat);
 }
+
+#[test]
+fn a_one_texel_high_ramp_stays_a_2d_texture_with_its_mips() {
+    use bevy::render::render_resource::TextureDimension;
+    let i = install();
+    let ramp = load(&i.search, "models/portals/portal-blue-color").unwrap();
+    assert_eq!((ramp.width(), ramp.height()), (256, 1));
+    assert_eq!(ramp.texture_descriptor.dimension, TextureDimension::D2);
+    assert_eq!(ramp.texture_descriptor.mip_level_count, 9);
+}
+
+#[test]
+fn the_blue_ramp_comes_out_blue() {
+    let i = install();
+    let ramp = load(&i.search, "models/portals/portal-blue-color").unwrap();
+    let data = ramp.data.as_ref().unwrap();
+    let [r, _, b, a] = [0, 1, 2, 3].map(|k| data[200 * 4 + k]);
+    assert!(b > r, "texel 200 rgb has red {r} over blue {b}");
+    assert_eq!(a, 255);
+    let orange = load(&i.search, "models/portals/portal-orange-color").unwrap();
+    let data = orange.data.as_ref().unwrap();
+    assert!(
+        data[200 * 4] > data[200 * 4 + 2],
+        "orange keeps red over blue"
+    );
+}
