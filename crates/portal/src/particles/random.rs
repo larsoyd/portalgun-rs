@@ -35,7 +35,7 @@ pub fn sha256(data: &[u8]) -> [u8; 32] {
         msg.push(0);
     }
     msg.extend(((data.len() as u64) * 8).to_be_bytes());
-    for chunk in msg.chunks_exact(64) {
+    for chunk in msg.as_chunks::<64>().0 {
         let mut w = [0u32; 64];
         for i in 0..16 {
             w[i] = u32::from_be_bytes(chunk[4 * i..4 * i + 4].try_into().unwrap());
@@ -103,8 +103,10 @@ impl RandomTable {
             ));
         }
         Ok(RandomTable(
-            raw.chunks_exact(4)
-                .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
+            raw.as_chunks::<4>()
+                .0
+                .iter()
+                .map(|&c| f32::from_le_bytes(c))
                 .collect(),
         ))
     }

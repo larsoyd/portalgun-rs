@@ -1,3 +1,15 @@
+[package]
+name = "portalgun"
+version = "0.1.0"
+description = "Portal's portal gun in a Bevy test chamber, read from your own Portal install"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bevy = "=0.19.1"
+portal = { path = "crates/portal" }
+
 [workspace]
 members = ["crates/*"]
 resolver = "2"
@@ -5,7 +17,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "MIT OR Apache-2.0"
-rust-version = "1.75"
+rust-version = "1.95"
 
 [profile.dev]
 opt-level = 1
