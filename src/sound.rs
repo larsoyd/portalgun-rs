@@ -41,6 +41,20 @@ impl Sounds {
         audio: &mut Assets<AudioSource>,
         name: &str,
     ) -> Option<Entity> {
+        self.play_as(commands, files, audio, name, None, None)
+    }
+
+    /// Plays with the volume or pitch the caller sets in place of the script's, as the game's
+    /// footsteps and landings do.
+    pub fn play_as(
+        &mut self,
+        commands: &mut Commands,
+        files: &Files,
+        audio: &mut Assets<AudioSource>,
+        name: &str,
+        volume: Option<f32>,
+        pitch: Option<f32>,
+    ) -> Option<Entity> {
         let draws = [self.draw(), self.draw(), self.draw()];
         let entry = match self.bank.get(name) {
             Ok(e) => e,
@@ -49,7 +63,9 @@ impl Sounds {
                 return None;
             }
         };
-        let pick = entry.pick(draws);
+        let mut pick = entry.pick(draws);
+        pick.volume = volume.unwrap_or(pick.volume);
+        pick.pitch = pitch.unwrap_or(pick.pitch);
         let path = &entry.waves[pick.wave];
         let wave = match self.waves.get(path) {
             Some(h) => h.clone(),

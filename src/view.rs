@@ -9,7 +9,11 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use portal::mdl::Mdl;
 use portal::model::MeshData;
 
-use crate::player::{Config, PlayerCamera};
+use portal::teleport::touching;
+use portal::viewbob::{add_bob, angle_vectors, look_down, Angles, Bob, Lag};
+
+use crate::faces::Portals;
+use crate::player::{Config, Player, PlayerCamera};
 use crate::settings::horizontal_to_vertical;
 use crate::sound::Files;
 use crate::texture;
@@ -20,12 +24,17 @@ use crate::viewmodel::{bindposes, look, skin, Blend};
 pub const VIEW_LAYER: usize = 1;
 /// viewmodel_fov's default in the client
 const VIEWMODEL_FOV: f32 = 54.0;
+/// g_fMaxViewModelLag away from portals
+const MAX_LAG: f32 = 1.5;
 
 #[derive(Resource)]
 pub struct Gun {
     pub mdl: Mdl,
     pub anim: GunAnim,
     joints: Vec<Entity>,
+    root: Entity,
+    bob: Bob,
+    lag: Lag,
 }
 
 #[derive(Resource, Default)]
@@ -36,7 +45,56 @@ pub struct ViewPlugin;
 impl Plugin for ViewPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(PostStartup, spawn_view)
-            .add_systems(Update, (settle_to_idle, pose_view).chain());
+            .add_systems(Update, (settle_to_idle, pose_view).chain())
+            .add_systems(PostUpdate, sway.before(TransformSystems::Propagate));
+    }
+}
+
+/// The view model's place and turn relative to the eye, in Source's view space.
+pub fn eye_relative(eye: [f32; 3], angles: Angles, at: [f32; 3], turned: Angles) -> Mat4 {
+    let basis = |a: Angles| {
+        let (f, r, u) = angle_vectors(a);
+        Mat3::from_cols(Vec3::from(f), -Vec3::from(r), Vec3::from(u))
+    };
+    let e = basis(angles);
+    let local = e.transpose() * (Vec3::from(at) - Vec3::from(eye));
+    Mat4::from_mat3_translation(e.transpose() * basis(turned), local)
+}
+
+/// Translated from 0x53cca0 and 0x20e9d0 (disassembled, client.so). The gun bobs with speed and
+/// trails the view, with no trailing while the player touches a portal.
+fn sway(
+    gun: Option<ResMut<Gun>>,
+    time: Res<Time>,
+    player: Res<Player>,
+    portals: Res<Portals>,
+    mut transforms: Query<&mut Transform>,
+) {
+    let Some(mut gun) = gun else { return };
+    let gun = &mut *gun;
+    let angles = Angles {
+        pitch: player.pitch,
+        yaw: player.yaw,
+        roll: 0.0,
+    };
+    let eye = player.eye();
+    let touching = portals.linked().is_some_and(|l| {
+        l.iter()
+            .any(|p| touching(p, player.centre(), player.half()))
+    });
+    let max_lag = if touching { 0.0 } else { MAX_LAG };
+    let dt = time.delta_secs();
+    gun.bob.calc(player.velocity, time.elapsed_secs(), dt);
+    let (mut at, mut turned) = add_bob(
+        look_down(eye, angles),
+        angles,
+        gun.bob.vertical,
+        gun.bob.lateral,
+    );
+    gun.lag.apply(&mut at, &mut turned, angles, max_lag, dt);
+    if let Ok(mut root) = transforms.get_mut(gun.root) {
+        let local = eye_relative(eye, angles, at, turned);
+        *root = Transform::from_matrix(source_to_camera().to_matrix() * local);
     }
 }
 
@@ -212,7 +270,14 @@ fn spawn_view(
         VIEWMODEL_FOV,
         config.0.msaa
     );
-    commands.insert_resource(Gun { mdl, anim, joints });
+    commands.insert_resource(Gun {
+        mdl,
+        anim,
+        joints,
+        root,
+        bob: Bob::default(),
+        lag: Lag::default(),
+    });
     commands.remove_resource::<GunMeshes>();
 }
 

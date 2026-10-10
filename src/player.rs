@@ -3,6 +3,9 @@ use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
+use portal::steps::{Step, Steps};
+use portal::surfaces::{Surface, Surfaces};
+
 use crate::faces::{Portals, MAIN_FACES};
 use crate::portals::Colour;
 use crate::scene::Level;
@@ -48,7 +51,7 @@ impl Plugin for PlayerPlugin {
         walker.yaw = 20.0;
         app.insert_resource(Player(walker))
             .insert_resource(Time::<Fixed>::from_hz(TICK_HZ))
-            .add_systems(Startup, (spawn_camera, grab_cursor))
+            .add_systems(Startup, (spawn_camera, grab_cursor, read_footing))
             .init_resource::<Controls>()
             .add_systems(FixedUpdate, walk)
             .add_systems(
@@ -137,7 +140,9 @@ fn walk(
     files: Res<Files>,
     mut audio: ResMut<Assets<AudioSource>>,
     mut logged: Local<f32>,
+    footing: Option<ResMut<Footing>>,
 ) {
+    let Some(mut footing) = footing else { return };
     if time.elapsed_secs() >= *logged + WALK_LOG {
         *logged = time.elapsed_secs();
         info!(
@@ -155,7 +160,51 @@ fn walk(
         side: controls.side,
         jump: std::mem::take(&mut controls.jump),
     };
-    let Some(i) = player.step(&input, time.delta_secs(), &level, portals.linked()) else {
+    let crossed = player.step(&input, time.delta_secs(), &level, portals.linked());
+    if let Some(n) = player.ground {
+        footing.last = n;
+    }
+    let surface = footing.surfaces[footing.last].clone();
+    let mut heard = |what: &str, step: Step| {
+        let name = match step.left {
+            true => &surface.step_left,
+            false => &surface.step_right,
+        };
+        info!("[step] what={what} name={name} volume={:.2}", step.volume);
+        sounds.play_as(
+            &mut commands,
+            &files,
+            &mut audio,
+            name,
+            Some(step.volume),
+            None,
+        );
+    };
+    if player.jumped {
+        heard("jump", footing.steps.jump());
+    }
+    let landing = player.landed.and_then(|fall| footing.steps.land(fall));
+    if let Some(l) = landing {
+        heard("land", l.step);
+    }
+    let moved = (player.velocity, player.grounded);
+    if let Some(s) = footing
+        .steps
+        .update(time.delta_secs(), moved.0, moved.1, surface.material)
+    {
+        heard("step", s);
+    }
+    if let Some((pitch, volume)) = landing.and_then(|l| l.recover) {
+        sounds.play_as(
+            &mut commands,
+            &files,
+            &mut audio,
+            "PortalPlayer.FallRecover",
+            Some(volume),
+            Some(pitch as f32),
+        );
+    }
+    let Some(i) = crossed else {
         return;
     };
     let from = Colour::ALL[i];
@@ -168,6 +217,46 @@ fn walk(
     );
     for name in ["PortalPlayer.EnterPortal", "PortalPlayer.ExitPortal"] {
         sounds.play(&mut commands, &files, &mut audio, name);
+    }
+}
+
+/// What each chamber block sounds like underfoot, and the footstep state.
+#[derive(Resource)]
+pub struct Footing {
+    surfaces: Vec<Surface>,
+    steps: Steps,
+    /// the block last stood on, the surface a jump pushes off
+    last: usize,
+}
+
+fn read_footing(
+    mut commands: Commands,
+    files: Res<Files>,
+    level: Res<Level>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    match Surfaces::read(&files) {
+        Ok(s) => {
+            let surfaces: Vec<Surface> = level
+                .blocks
+                .iter()
+                .map(|b| s.get(&b.surfaceprop).clone())
+                .collect();
+            info!(
+                "[step] surfaces blocks={} floor={}",
+                surfaces.len(),
+                surfaces[0].step_left
+            );
+            commands.insert_resource(Footing {
+                surfaces,
+                steps: Steps::default(),
+                last: 0,
+            });
+        }
+        Err(e) => {
+            error!("[step] refused: surfaces reason={e}");
+            exit.write(AppExit::error());
+        }
     }
 }
 

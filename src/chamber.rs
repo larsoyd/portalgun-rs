@@ -13,6 +13,8 @@ pub struct Block {
     pub max: Vec3,
     pub material: &'static str,
     pub surface: Surface,
+    /// the material's $surfaceprop, default when it names none
+    pub surfaceprop: String,
 }
 
 pub struct Face {
@@ -33,6 +35,16 @@ pub fn noportal(vmt: &str) -> portal::Result<bool> {
         .first()
         .and_then(|shader| shader.get("%noportal"))
         .is_some_and(|v| v.trim() == "1"))
+}
+
+/// what the material walks and sounds like, the default surface when it names none
+pub fn surfaceprop(vmt: &str) -> portal::Result<String> {
+    let root = keyvalues::parse(vmt)?;
+    Ok(root
+        .first()
+        .and_then(|shader| shader.get("$surfaceprop"))
+        .map_or("default", str::trim)
+        .to_ascii_lowercase())
 }
 
 /// Interior 768 by 512 by 384 units, z up, a metal strip on the north wall and a ledge in the east.
@@ -66,6 +78,7 @@ impl Chamber {
                     max,
                     material,
                     surface,
+                    surfaceprop: surfaceprop(&text)?,
                 })
             })
             .collect::<portal::Result<_>>()?;

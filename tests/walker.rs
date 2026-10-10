@@ -318,3 +318,43 @@ fn a_walker_dropped_into_the_ledge_top_leaves_by_the_ledge_side() {
         w.feet
     );
 }
+
+#[test]
+fn the_walker_reports_its_jump_landing_speed_and_ground() {
+    let c = chamber();
+    let mut w = Walker::at([0.0, 0.0, 100.0]);
+    let mut landed = None;
+    for _ in 0..200 {
+        w.step(&Input::default(), 0.015, &c, None);
+        landed = landed.or(w.landed);
+    }
+    let fall = landed.expect("a landing after the drop");
+    assert!(
+        fall > 300.0 && fall < 400.0,
+        "a 100 unit drop lands near 346: {fall}"
+    );
+    assert_eq!(w.landed, None, "only on the landing tick");
+    let floor = w.ground.expect("standing on a block");
+    assert_eq!(c.blocks[floor].min[2], -16.0, "the floor block");
+    w.step(
+        &Input {
+            jump: true,
+            ..Input::default()
+        },
+        0.015,
+        &c,
+        None,
+    );
+    assert!(w.jumped);
+    w.step(
+        &Input {
+            jump: true,
+            ..Input::default()
+        },
+        0.015,
+        &c,
+        None,
+    );
+    assert!(!w.jumped, "no jump from the air");
+    assert_eq!(w.ground, None);
+}

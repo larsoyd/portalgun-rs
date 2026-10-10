@@ -134,3 +134,15 @@ fn every_face_winds_outward_with_world_aligned_texture_axes() {
         assert_eq!(uv, [p[0], -p[2]]);
     }
 }
+
+#[test]
+fn each_block_knows_its_materials_surface() {
+    let c = chamber();
+    assert_eq!(c.blocks[0].surfaceprop, "concrete", "the floor");
+    let metal = c
+        .blocks
+        .iter()
+        .find(|b| b.material.starts_with("metal/"))
+        .unwrap();
+    assert_eq!(metal.surfaceprop, "metal");
+}

@@ -34,6 +34,14 @@ pub struct Walker {
     pub yaw: f32,
     pub pitch: f32,
     pub grounded: bool,
+    /// the block stood on, by its index in the chamber
+    pub ground: Option<usize>,
+    /// m_flFallVelocity, the speed downward before the last landing
+    pub fall: f32,
+    /// set for the step a jump left the ground on
+    pub jumped: bool,
+    /// the fall speed, for the step the walker landed on
+    pub landed: Option<f32>,
 }
 
 impl Walker {
@@ -44,6 +52,10 @@ impl Walker {
             yaw: 0.0,
             pitch: 0.0,
             grounded: false,
+            ground: None,
+            fall: 0.0,
+            jumped: false,
+            landed: None,
         }
     }
 
@@ -84,6 +96,11 @@ impl Walker {
         linked: Option<[Portal; 2]>,
     ) -> Option<usize> {
         let before = self.centre();
+        self.jumped = false;
+        self.landed = None;
+        if !self.grounded {
+            self.fall = -self.velocity[2];
+        }
         let (sin, cos) = self.yaw.to_radians().sin_cos();
         let wish = [
             cos * input.forward + sin * input.side,
@@ -95,13 +112,19 @@ impl Walker {
         self.velocity[1] = wish[1] * scale;
         if input.jump && self.grounded {
             self.velocity[2] = JUMP_SPEED;
+            self.jumped = true;
         }
         self.velocity[2] -= GRAVITY * dt;
         self.grounded = false;
+        self.ground = None;
         for axis in 0..3 {
             let was = self.feet[axis];
             self.feet[axis] += self.velocity[axis] * dt;
             self.push_out(axis, was, chamber, linked.as_ref());
+        }
+        if self.grounded && self.fall > 0.0 {
+            self.landed = Some(self.fall);
+            self.fall = 0.0;
         }
         let pair = linked?;
         let i = (0..2)
@@ -111,11 +134,11 @@ impl Walker {
         Some(i)
     }
 
-    fn centre(&self) -> Vec3 {
+    pub fn centre(&self) -> Vec3 {
         [self.feet[0], self.feet[1], self.feet[2] + HEIGHT / 2.0]
     }
 
-    fn half(&self) -> Vec3 {
+    pub fn half(&self) -> Vec3 {
         [HALF_WIDTH, HALF_WIDTH, HEIGHT / 2.0]
     }
 
@@ -141,7 +164,7 @@ impl Walker {
     /// Back out of each solid on the side the walker came from along the axis, or the nearer
     /// side when it was already inside.
     fn push_out(&mut self, axis: usize, was: f32, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
-        let solids = chamber.blocks.iter().flat_map(|block| {
+        let solids = chamber.blocks.iter().enumerate().flat_map(|(n, block)| {
             let on = linked.into_iter().flatten().filter(|p| {
                 let q = [0, 1, 2].map(|i| p.origin[i] - p.forward[i]);
                 (0..3).all(|i| q[i] >= block.min[i] && q[i] <= block.max[i])
@@ -150,10 +173,12 @@ impl Walker {
                 pieces
                     .into_iter()
                     .flat_map(|(lo, hi)| carve(lo, hi, p))
-                    .collect()
+                    .collect::<Vec<_>>()
             })
+            .into_iter()
+            .map(move |(lo, hi)| (n, lo, hi))
         });
-        for (min, max) in solids {
+        for (n, min, max) in solids {
             let (lo, hi) = self.bounds();
             let overlaps = (0..3).all(|i| lo[i] < max[i] - CONTACT && hi[i] > min[i] + CONTACT);
             if !overlaps {
@@ -181,7 +206,10 @@ impl Walker {
                 self.feet[a] -= down;
             } else {
                 self.feet[a] += up;
-                self.grounded |= a == 2;
+                if a == 2 {
+                    self.grounded = true;
+                    self.ground = Some(n);
+                }
             }
             self.velocity[a] = 0.0;
         }
