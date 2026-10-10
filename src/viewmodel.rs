@@ -63,7 +63,9 @@ pub fn skin(mesh: &MeshData) -> Skin {
         // Source's front faces wind clockwise
         indices: mesh
             .indices
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .flat_map(|t| [t[0], t[2], t[1]])
             .collect(),
     }
