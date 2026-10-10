@@ -1,6 +1,6 @@
 // a portal's rim and static from PortalRefract stage 2, premultiplied
 #import bevy_pbr::forward_io::VertexOutput
-#import portalgun::face::{ellipse, noise_coords, overlay, overlay_rgb, coverage}
+#import portalgun::face::{ellipse, noise_coords, overlay, coverage}
 
 struct PortalParams {
     open: f32,
@@ -24,5 +24,6 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let o = overlay(params.open, params.keep, t0, t5, noise_texture, noise_sampler);
     let ramp = textureSampleLevel(ramp_texture, ramp_sampler, vec2<f32>(o.u, o.u), 0.0).rgb;
     let a = coverage(o.alpha);
-    return vec4<f32>(overlay_rgb(ramp, params.scale) * a, a);
+    // stage 2 writes linear through hardware srgb, as the output here does
+    return vec4<f32>(saturate(ramp * params.scale) * a, a);
 }

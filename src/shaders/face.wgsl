@@ -56,11 +56,3 @@ fn overlay(open: f32, keep_in: f32, t0: vec2<f32>, t5: vec4<f32>, noise: texture
 fn coverage(alpha: f32) -> f32 {
     return select(0.0, min(alpha, 1.0), alpha > 1.0 / 255.0);
 }
-
-fn srgb_encode(x: vec3<f32>) -> vec3<f32> {
-    return select(1.055 * pow(x, vec3<f32>(1.0 / 2.4)) - 0.055, x * 12.92, x <= vec3<f32>(0.0031308));
-}
-
-fn overlay_rgb(ramp: vec3<f32>, scale: f32) -> vec3<f32> {
-    return srgb_encode(saturate(ramp * scale));
-}
