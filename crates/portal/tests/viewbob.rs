@@ -21,28 +21,16 @@ fn bob_at(speed: f32, last: f32, now: f32) -> Bob {
 fn bob_time_runs_with_speed_over_320() {
     let b = bob_at(100.0, 0.0, 0.5);
     assert_eq!(b.time, 0.15625);
-    assert!(
-        close(b.vertical, 0.4367032051086426, 2e-6),
-        "{}",
-        b.vertical
-    );
-    assert!(close(b.lateral, 0.4604537785053253, 2e-6), "{}", b.lateral);
+    assert!(close(b.vertical, 0.4367032, 2e-6), "{}", b.vertical);
+    assert!(close(b.lateral, 0.46045378, 2e-6), "{}", b.lateral);
     let later = bob_at(200.0, 1.0, 1.1);
+    assert!(close(later.time, 0.062500015, 1e-7), "{}", later.time);
     assert!(
-        close(later.time, 0.0625000149011612, 1e-7),
-        "{}",
-        later.time
-    );
-    assert!(
-        close(later.vertical, 0.8362312316894531, 2e-6),
+        close(later.vertical, 0.83623123, 2e-6),
         "{}",
         later.vertical
     );
-    assert!(
-        close(later.lateral, 0.5958328247070312, 2e-6),
-        "{}",
-        later.lateral
-    );
+    assert!(close(later.lateral, 0.5958328, 2e-6), "{}", later.lateral);
 }
 
 #[test]
@@ -51,45 +39,17 @@ fn bob_speed_is_held_to_320() {
     let cap = bob_at(320.0, 0.0, 0.5);
     assert_eq!(fast.time, cap.time);
     assert_eq!(fast.vertical, cap.vertical);
-    assert!(
-        close(cap.vertical, 1.1999222040176392, 2e-6),
-        "{}",
-        cap.vertical
-    );
-    assert!(
-        close(cap.lateral, 0.09693752229213715, 2e-6),
-        "{}",
-        cap.lateral
-    );
+    assert!(close(cap.vertical, 1.1999222, 2e-6), "{}", cap.vertical);
+    assert!(close(cap.lateral, 0.09693752, 2e-6), "{}", cap.lateral);
 }
 
 #[test]
 fn the_vertical_bob_turns_down_after_a_quarter_cycle() {
-    assert!(close(
-        bob_at(320.0, 0.0, 0.224).vertical,
-        0.4956373870372772,
-        2e-6
-    ));
-    assert!(close(
-        bob_at(320.0, 0.0, 0.226).vertical,
-        0.46436184644699097,
-        2e-6
-    ));
-    assert!(close(
-        bob_at(320.0, 0.0, 0.449).lateral,
-        0.4878188669681549,
-        2e-6
-    ));
-    assert!(close(
-        bob_at(320.0, 0.0, 0.451).lateral,
-        0.4721814692020416,
-        2e-6
-    ));
-    assert!(close(
-        bob_at(320.0, 0.0, 0.451).vertical,
-        0.4956378638744354,
-        2e-6
-    ));
+    assert!(close(bob_at(320.0, 0.0, 0.224).vertical, 0.4956374, 2e-6));
+    assert!(close(bob_at(320.0, 0.0, 0.226).vertical, 0.46436185, 2e-6));
+    assert!(close(bob_at(320.0, 0.0, 0.449).lateral, 0.48781887, 2e-6));
+    assert!(close(bob_at(320.0, 0.0, 0.451).lateral, 0.47218147, 2e-6));
+    assert!(close(bob_at(320.0, 0.0, 0.451).vertical, 0.49563786, 2e-6));
 }
 
 #[test]
