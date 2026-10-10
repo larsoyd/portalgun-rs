@@ -1,5 +1,5 @@
 use portal::pair::{through_point, Portal, Vec3};
-use portal::teleport::{entered, exit_velocity, meets_opening, view_through, Mover};
+use portal::teleport::{entered, exit_velocity, view_through, Mover};
 
 use crate::chamber::Chamber;
 
@@ -14,6 +14,8 @@ const PITCH_LIMIT: f32 = 89.0;
 const SPEED: f32 = 175.0;
 const GRAVITY: f32 = 600.0;
 const JUMP_SPEED: f32 = 268.3;
+/// sv_stepsize's default
+const STEP: f32 = 18.0;
 
 #[derive(Default)]
 pub struct Input {
@@ -127,35 +129,70 @@ impl Walker {
         )
     }
 
-    /// The surface a portal sits on lets the walker into the opening, a stand-in for the carved
+    /// A linked portal carves its opening through the block it sits on, a stand-in for the
     /// collision the game builds behind each portal.
     fn push_out(&mut self, axis: usize, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
-        let (centre, half) = (self.centre(), self.half());
-        let open: Vec<&Portal> = linked
-            .into_iter()
-            .flatten()
-            .filter(|p| meets_opening(p, centre, half))
-            .collect();
-        for block in &chamber.blocks {
-            let behind = |p: &&Portal| {
+        let solids = chamber.blocks.iter().flat_map(|block| {
+            let on = linked.into_iter().flatten().find(|p| {
                 let q = [0, 1, 2].map(|i| p.origin[i] - p.forward[i]);
                 (0..3).all(|i| q[i] >= block.min[i] && q[i] <= block.max[i])
-            };
-            if open.iter().any(behind) {
-                continue;
+            });
+            match on {
+                Some(p) => carve(block.min, block.max, p),
+                None => vec![(block.min, block.max)],
             }
+        });
+        for (min, max) in solids {
             let (lo, hi) = self.bounds();
-            let overlaps = (0..3).all(|i| lo[i] < block.max[i] && hi[i] > block.min[i]);
+            let overlaps = (0..3).all(|i| lo[i] < max[i] && hi[i] > min[i]);
             if !overlaps {
                 continue;
             }
+            let rise = max[2] - self.feet[2];
+            if axis != 2 && rise > 0.0 && rise <= STEP && self.velocity[2] <= 0.0 {
+                self.feet[2] = max[2];
+                continue;
+            }
             if self.velocity[axis] > 0.0 {
-                self.feet[axis] -= hi[axis] - block.min[axis];
+                self.feet[axis] -= hi[axis] - min[axis];
             } else {
-                self.feet[axis] += block.max[axis] - lo[axis];
+                self.feet[axis] += max[axis] - lo[axis];
                 self.grounded |= axis == 2;
             }
             self.velocity[axis] = 0.0;
         }
     }
+}
+
+/// A block less the box of a portal's opening, cut right through it along the portal's normal.
+fn carve(min: Vec3, max: Vec3, p: &Portal) -> Vec<(Vec3, Vec3)> {
+    let corners = [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)]
+        .map(|(r, u)| p.world([0.0, r * p.half.0, u * p.half.1]));
+    let normal = (0..3)
+        .max_by(|&a, &b| p.forward[a].abs().total_cmp(&p.forward[b].abs()))
+        .unwrap_or(0);
+    let mut cut_lo = corners
+        .iter()
+        .fold([f32::MAX; 3], |m, c| [0, 1, 2].map(|i| m[i].min(c[i])));
+    let mut cut_hi = corners
+        .iter()
+        .fold([f32::MIN; 3], |m, c| [0, 1, 2].map(|i| m[i].max(c[i])));
+    (cut_lo[normal], cut_hi[normal]) = (min[normal], max[normal]);
+    let (mut lo, mut hi) = (min, max);
+    let mut pieces = Vec::new();
+    for a in 0..3 {
+        if cut_lo[a] > lo[a] {
+            let mut top = hi;
+            top[a] = cut_lo[a].min(hi[a]);
+            pieces.push((lo, top));
+            lo[a] = top[a];
+        }
+        if cut_hi[a] < hi[a] {
+            let mut bottom = lo;
+            bottom[a] = cut_hi[a].max(lo[a]);
+            pieces.push((bottom, hi));
+            hi[a] = bottom[a];
+        }
+    }
+    pieces
 }

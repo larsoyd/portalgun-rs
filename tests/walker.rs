@@ -239,3 +239,49 @@ fn the_crossing_keeps_height_and_pitch_between_upright_portals() {
     }
     panic!("never crossed, feet {:?}", w.feet);
 }
+
+#[test]
+fn a_walker_in_the_opening_cannot_slide_into_the_wall_beside_it() {
+    let c = chamber();
+    let mut w = Walker::at([-380.0, 0.0, 0.0]);
+    w.yaw = 180.0;
+    let strafe = Input {
+        side: 1.0,
+        ..Input::default()
+    };
+    for _ in 0..300 {
+        assert_eq!(w.step(&strafe, 0.01, &c, Some(pair())), None);
+    }
+    assert!(
+        (w.feet[1] - (32.0 - HALF_WIDTH)).abs() < 1e-3,
+        "stopped by the side of the opening: {:?}",
+        w.feet
+    );
+    assert!((w.feet[0] - -380.0).abs() < 1e-3, "{:?}", w.feet);
+}
+
+#[test]
+fn the_walker_steps_over_the_sill_under_a_raised_portal() {
+    let c = chamber();
+    let [mut blue, orange] = pair();
+    blue.origin[2] = 64.0;
+    let mut w = Walker::at([-340.0, 0.0, 0.0]);
+    w.yaw = 180.0;
+    assert_eq!(walk_west(&mut w, &c, Some([blue, orange])), Some(0));
+}
+
+#[test]
+fn a_block_higher_than_a_step_still_stops_the_walker() {
+    let c = chamber();
+    let mut w = Walker::at([-200.0, 112.0, 0.0]);
+    let input = Input {
+        forward: 1.0,
+        ..Input::default()
+    };
+    run(&mut w, &c, input, 1.0);
+    assert!(
+        (w.feet[0] - (-160.0 - HALF_WIDTH)).abs() < 1e-3,
+        "the 32 unit block stops it: {:?}",
+        w.feet
+    );
+}
