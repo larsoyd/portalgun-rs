@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use portal::install::{root, Install};
 use portalgun::args::Args;
 use portalgun::chamber::Chamber;
+use portalgun::faces::FacesPlugin;
 use portalgun::icon::{self, GameIcon, APP_ID};
 use portalgun::player::{Config, PlayerPlugin, Scripted};
 use portalgun::run::RunPlugin;
@@ -95,6 +96,7 @@ fn main() -> ExitCode {
         .add_plugins(PlayerPlugin)
         .insert_resource(GunMeshes(mdl, pieces))
         .add_plugins(ViewPlugin)
+        .add_plugins(FacesPlugin)
         .run();
     if exit.is_success() {
         ExitCode::SUCCESS

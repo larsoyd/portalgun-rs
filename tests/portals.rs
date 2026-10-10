@@ -10,7 +10,12 @@ fn install() -> Install {
 }
 
 fn wall(x: f32) -> Portal {
-    Portal::new([x, 0.0, 64.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0], (32.0, 54.0))
+    Portal::new(
+        [x, 0.0, 64.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        (32.0, 54.0),
+    )
 }
 
 #[test]
@@ -28,7 +33,10 @@ fn each_colour_reads_its_static_overlay_material() {
 fn colours_pair_up_and_the_scripts_call_orange_red() {
     assert_eq!(Colour::Blue.other(), Colour::Orange);
     assert_eq!(Colour::Orange.other(), Colour::Blue);
-    assert_eq!((Colour::Blue.sound(), Colour::Orange.sound()), ("blue", "red"));
+    assert_eq!(
+        (Colour::Blue.sound(), Colour::Orange.sound()),
+        ("blue", "red")
+    );
 }
 
 #[test]
@@ -50,4 +58,32 @@ fn a_pair_links_once_both_are_open_and_moving_one_restarts_its_opening() {
     assert_eq!(p.fade[0].open, 0.0);
     assert_eq!(p.changes, before + 1);
     assert_eq!(p.get(Colour::Blue).unwrap().origin[0], -300.0);
+}
+
+#[test]
+fn the_face_sits_a_quarter_unit_out_and_winds_toward_the_viewer() {
+    use portalgun::portals::face_quad;
+    let p = wall(-384.0);
+    let (corners, uvs) = face_quad(&p);
+    for c in &corners {
+        assert!((c[0] - (-383.75)).abs() < 1e-4, "{c:?}");
+    }
+    let [a, d, c] = [0, 1, 2].map(|i| corners[i]);
+    let e1 = [0, 1, 2].map(|k| d[k] - a[k]);
+    let e2 = [0, 1, 2].map(|k| c[k] - a[k]);
+    let n = [
+        e1[1] * e2[2] - e1[2] * e2[1],
+        e1[2] * e2[0] - e1[0] * e2[2],
+        e1[0] * e2[1] - e1[1] * e2[0],
+    ];
+    assert!(
+        n[0] > 0.0 && n[1].abs() < 1e-3 && n[2].abs() < 1e-3,
+        "{n:?}"
+    );
+    assert_eq!(uvs[0], [0.0, 0.0]);
+    assert!(corners[0][2] > p.origin[2], "uv 0,0 is the top");
+    assert!(
+        corners[3][1] > corners[0][1],
+        "u grows to the viewer's right"
+    );
 }

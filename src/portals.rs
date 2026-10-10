@@ -1,6 +1,6 @@
 use portal::keyvalues;
 use portal::pair::Portal;
-use portal::portal_face::Fade;
+use portal::portal_face::{self, Fade};
 use portal::vpk::SearchPath;
 
 /// PortalRefract's stage 2 materials, blue then orange
@@ -100,4 +100,11 @@ pub fn overlay_look(search: &SearchPath, c: Colour) -> Result<OverlayLook, Strin
             .parse()
             .map_err(|_| format!("{path}: $PortalColorScale {scale}"))?,
     })
+}
+
+/// The drawn face's corners in world units and their texture coordinates, counter-clockwise seen
+/// from in front.
+pub fn face_quad(portal: &Portal) -> ([[f32; 3]; 4], [[f32; 2]; 4]) {
+    let uvs = [[0.0, 0.0], [0.0, 1.0], [1.0, 1.0], [1.0, 0.0]];
+    (uvs.map(|uv| portal.world(portal_face::corner(uv))), uvs)
 }

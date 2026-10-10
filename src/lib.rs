@@ -1,5 +1,6 @@
 pub mod args;
 pub mod chamber;
+pub mod faces;
 pub mod icon;
 pub mod player;
 pub mod portals;
