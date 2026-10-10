@@ -2,6 +2,7 @@ pub mod args;
 pub mod chamber;
 pub mod icon;
 pub mod player;
+pub mod portals;
 pub mod run;
 pub mod scene;
 pub mod script;
