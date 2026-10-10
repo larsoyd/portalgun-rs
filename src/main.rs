@@ -11,6 +11,8 @@ use portalgun::run::RunPlugin;
 use portalgun::scene::{Level, ScenePlugin};
 use portalgun::settings::Settings;
 use portalgun::sound::{Files, Sounds};
+use portalgun::view::{GunMeshes, ViewPlugin};
+use portalgun::viewmodel::read_gun;
 
 fn main() -> ExitCode {
     let args = match Args::parse(std::env::args().skip(1)) {
@@ -39,6 +41,10 @@ fn main() -> ExitCode {
     let chamber = match Chamber::test_chamber(&install.search) {
         Ok(c) => c,
         Err(e) => return refuse(&e.to_string()),
+    };
+    let (mdl, pieces) = match read_gun(&install.search) {
+        Ok(g) => g,
+        Err(e) => return refuse(&e),
     };
     let game_icon = match icon::read(&install.root) {
         Ok(i) => i,
@@ -72,6 +78,8 @@ fn main() -> ExitCode {
         .insert_resource(GameIcon(game_icon))
         .add_systems(Update, icon::set_window_icon)
         .add_plugins(PlayerPlugin)
+        .insert_resource(GunMeshes(mdl, pieces))
+        .add_plugins(ViewPlugin)
         .run();
     if exit.is_success() {
         ExitCode::SUCCESS

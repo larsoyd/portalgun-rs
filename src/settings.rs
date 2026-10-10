@@ -37,8 +37,12 @@ impl Settings {
         Ok(s)
     }
 
-    /// The fov is horizontal on a 4:3 screen, so wider screens keep the height and see more.
     pub fn vertical_fov(&self) -> f32 {
-        2.0 * ((self.fov.to_radians() / 2.0).tan() * 0.75).atan()
+        horizontal_to_vertical(self.fov)
     }
+}
+
+/// Source fovs are horizontal on a 4:3 screen, so wider screens keep the height and see more.
+pub fn horizontal_to_vertical(degrees: f32) -> f32 {
+    2.0 * ((degrees.to_radians() / 2.0).tan() * 0.75).atan()
 }

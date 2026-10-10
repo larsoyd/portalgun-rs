@@ -4,10 +4,13 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
+use bevy::camera::visibility::RenderLayers;
+
 use crate::chamber::{Block, Chamber};
 use crate::sound::Files;
 use crate::texture;
 use crate::units::{to_bevy, to_bevy_dir};
+use crate::view::VIEW_LAYER;
 
 /// Hammer's default, a texel is a quarter unit
 const TEXEL_UNITS: f32 = 0.25;
@@ -93,6 +96,7 @@ fn spawn_chamber(
                 ..default()
             },
             Transform::from_translation(to_bevy(at)),
+            RenderLayers::from_layers(&[0, VIEW_LAYER]),
         ));
     }
     info!(
