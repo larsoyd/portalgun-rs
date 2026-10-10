@@ -105,6 +105,12 @@ from that exact build of the game.
 cargo run --release
 ```
 
+The window uses Portal's own icon, read from `portal/resource/game-icon.bmp` in
+your install. On Linux, Wayland compositors take a window's icon from a desktop
+entry rather than from the window, so the program also writes a hidden
+`portalgun.desktop` and its icon under `$XDG_DATA_HOME` (by default
+`~/.local/share`). Delete both to remove them.
+
 The tests:
 
 ```

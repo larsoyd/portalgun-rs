@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use portal::install::{root, Install};
 use portalgun::args::Args;
 use portalgun::chamber::Chamber;
+use portalgun::icon::{self, GameIcon, APP_ID};
 use portalgun::player::{Config, PlayerPlugin};
 use portalgun::run::RunPlugin;
 use portalgun::scene::{Level, ScenePlugin};
@@ -39,6 +40,11 @@ fn main() -> ExitCode {
         Ok(c) => c,
         Err(e) => return refuse(&e.to_string()),
     };
+    let game_icon = match icon::read(&install.root) {
+        Ok(i) => i,
+        Err(e) => return refuse(&e),
+    };
+    desktop_entry(&game_icon);
     println!(
         "[startup] install={} checked_ms={}",
         install.root.display(),
@@ -48,6 +54,7 @@ fn main() -> ExitCode {
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "portalgun".into(),
+                name: Some(APP_ID.into()),
                 ..default()
             }),
             ..default()
@@ -62,6 +69,8 @@ fn main() -> ExitCode {
         .insert_resource(Level(chamber))
         .add_plugins(ScenePlugin)
         .insert_resource(Config(settings))
+        .insert_resource(GameIcon(game_icon))
+        .add_systems(Update, icon::set_window_icon)
         .add_plugins(PlayerPlugin)
         .run();
     if exit.is_success() {
@@ -87,3 +96,24 @@ fn settings(path: &Path) -> Result<Settings, String> {
         Err(e) => Err(format!("{}: {e}", path.display())),
     }
 }
+
+#[cfg(target_os = "linux")]
+fn desktop_entry(bmp: &portal::bmp::Bmp) {
+    let data_home = std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| Path::new(&h).join(".local/share")));
+    let (Some(data_home), Ok(exe)) = (data_home, std::env::current_exe()) else {
+        println!("[icon] desktop_entry=skipped reason=no data home or executable path");
+        return;
+    };
+    match icon::write_desktop_entry(&data_home, bmp, &exe) {
+        Ok(changed) => println!(
+            "[icon] desktop_entry={} changed={changed}",
+            data_home.display()
+        ),
+        Err(e) => println!("[icon] desktop_entry=failed reason={e}"),
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn desktop_entry(_bmp: &portal::bmp::Bmp) {}

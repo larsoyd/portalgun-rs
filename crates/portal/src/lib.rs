@@ -2,6 +2,7 @@
 //! Nothing from the install gets copied into the repo. Not one byte.
 
 pub mod anim;
+pub mod bmp;
 pub mod dmx;
 mod error;
 pub mod gun_fx;

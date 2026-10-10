@@ -1,5 +1,6 @@
 pub mod args;
 pub mod chamber;
+pub mod icon;
 pub mod player;
 pub mod run;
 pub mod scene;
