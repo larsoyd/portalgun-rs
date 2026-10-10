@@ -1,50 +1,64 @@
 # portalgun-rs
 
-Portal's handheld portal device, rebuilt in Rust for [Bevy](https://bevyengine.org).
+This is Portal's handheld portal device. In Rust, on [Bevy](https://bevyengine.org).
 
-The aim is a sandbox where the gun, the portals and moving through them behave
-as they do in Portal (2007). Behaviour comes from the game's own files and
-binaries rather than from tuning by eye.
+Nobody tuned it by eye. The numbers come out of Portal's own binaries and
+files, and where we couldn't find one, we didn't invent one. The gun, the
+portals and the trip through them should behave the way they did in 2007.
+That's the job.
 
-This is a fan project for study. It is not affiliated with or endorsed by
-Valve. Nothing from the game is in this repository, only code. To run it you
-need your own copy of Portal, which it reads at startup.
+You need your own copy of Portal. The program reads it at startup, and none of
+it ends up in this repository. Not a texture, not a sound, not a line of the
+game's code.
 
-## What is in it
+Fan project. Valve didn't make it and hasn't endorsed it.
 
-The `portal` crate has no dependencies. It contains:
+## What's in the box
 
-- **Readers for Portal's files**:
-  - VPK archives
-  - MDL models with their vertex and strip files, plus animations sampled into
-    bone poses
-  - VTF textures, converted to DDS, with sprite sheet resources
-  - KeyValues text and sound scripts
-  - binary DMX particle files (`.pcf`)
-- **The particle runtime the gun and portals use**:
-  - every initializer, emitter, operator, force and constraint that Portal's
-    particle files call for
-  - system start-up, sub-stepped simulation and child systems
-  - sprite, trail and rope renderers, with sprite sheets and SpriteCard cards
-  - the game's own 4096-entry random table, in the order the game reads it
-- **The portal surface**: how the Portal shader blends the view through the
-  portal, the edge and the static overlay.
-- **The gun's effects**: the glow sprites and how they fade as the gun's
-  state changes.
-- **Portal maths**:
-  - the pair transform
-  - rays passing through a pair
-  - fitting a portal onto a surface, including bumping a shot away from edges
-    and snapping it to the floor
-  - which side of a portal a mover is on, and its exit speed
+The `portal` crate. Zero dependencies. It does the following.
 
-## Running the tests
+**It reads Portal's files:**
+
+- VPK archives
+- MDL models with their vertex and strip files. Animation tracks are decoded
+  the way Source decodes them and come out as bone poses.
+- VTF textures, converted to DDS, sprite sheets included
+- KeyValues text and sound scripts
+- binary DMX particle files (`.pcf`)
+
+**It runs the particles the gun and the portals use.** Every initializer,
+emitter, operator, force and constraint Portal's particle files ask for. Child
+systems, sub-stepped simulation, sprite, trail and rope renderers,
+SpriteCard sheets.
+The random numbers come from the game's own 4096-entry table, read in the
+order the game reads it.
+
+**It draws the portal surface** the way Portal's shader does: the view
+through the hole, the edge, and the static you see before the other end
+exists.
+
+**It runs the gun's glow sprites** and the fade between the gun's states.
+
+**It does the portal maths:**
+
+- the transform from one portal to its partner
+- rays that pass through a pair
+- fitting a portal onto a wall, including nudging a shot off an edge and
+  snapping it down to the floor
+- which side of a portal you're on, and how fast you come out the other one
+
+Everything is in Portal's own units: Source units, z up. If you want metres,
+convert at the door.
+
+## Running it
+
+The tests:
 
 ```
 cargo test --workspace
 ```
 
-To see what the crate reads from your install:
+To see what the crate pulls out of your install:
 
 ```
 cargo run -p portal --example portal_inspect -- "/path/to/Steam/steamapps/common/Portal"

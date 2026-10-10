@@ -86,7 +86,7 @@ pub fn sha256(data: &[u8]) -> [u8; 32] {
 pub struct RandomTable(Vec<f32>);
 
 impl RandomTable {
-    /// Read from Portal's own client.so, refusing any other build.
+    /// Read out of Portal's own client.so. Any other build gets refused.
     pub fn from_client(bytes: &[u8]) -> Result<Self> {
         let raw = bytes
             .get(TABLE_OFFSET..TABLE_OFFSET + 4 * TABLE_LEN)

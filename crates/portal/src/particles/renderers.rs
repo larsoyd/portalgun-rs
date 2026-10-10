@@ -90,7 +90,7 @@ pub fn byte(x: f32) -> u8 {
 }
 
 impl Renderer {
-    /// Only screen aligned sprites without a visibility proxy are ported, as Portal's files use.
+    /// Screen aligned sprites, no visibility proxy. Portal's files use nothing else, so neither do we.
     pub fn from_function(f: &Function) -> Option<Renderer> {
         let visible = f.int_or("Visibility Proxy Input Control Point Number", -1) < 0;
         Some(match f.name.to_ascii_lowercase().as_str() {

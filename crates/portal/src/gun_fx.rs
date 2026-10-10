@@ -1,4 +1,4 @@
-//! The portal gun's own glows and sprites on its view model, as C_WeaponPortalgun runs them.
+//! The gun's own glows and sprites on its view model. C_WeaponPortalgun runs them, so do we.
 
 pub const SPRITE_SCALE: f32 = 128.0;
 const EFFECTS_MIN_ALPHA: f32 = 96.0;

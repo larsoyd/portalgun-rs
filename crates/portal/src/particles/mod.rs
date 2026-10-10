@@ -1,4 +1,4 @@
-//! Source's particle system as Portal shipped it, rebuilt from its particle runtime in client.so.
+//! Source's particle system, the one Portal shipped. Rebuilt from its runtime in client.so.
 
 pub mod collection;
 pub mod emitters;

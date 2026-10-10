@@ -1,5 +1,5 @@
-//! Reads the portal gun's assets out of a Portal install and does the math
-//! for a linked portal pair. Nothing from the install is copied into the repo.
+//! Reads the portal gun out of your own Portal install and does the maths for a linked pair.
+//! Nothing from the install gets copied into the repo. Not one byte.
 
 pub mod anim;
 pub mod dmx;

@@ -20,7 +20,7 @@ pub enum Mover {
     Object,
 }
 
-/// Velocity carried through, with the floor exit pushes and speed cap of the original.
+/// Velocity carried through. The original's floor exit pushes and speed cap come along.
 pub fn exit_velocity(from: &Portal, to: &Portal, v: Vec3, who: Mover) -> Vec3 {
     let mut out = through_dir(from, to, v);
     if to.forward[2] > FLOORISH {

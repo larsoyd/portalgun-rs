@@ -52,7 +52,7 @@ fn ported<T>(
 }
 
 impl Definition {
-    /// Every function must be ported, or the system is refused with the first that is not.
+    /// Every function ported or the whole system gets refused, naming the first one missing.
     pub fn new(d: &SystemDef) -> Result<Definition, String> {
         let template = Particle {
             life: 1.0,
