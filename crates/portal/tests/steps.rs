@@ -126,3 +126,19 @@ fn hard_landings_add_the_long_fall_boots_sound() {
     let (_, top) = s.land(2000.0).unwrap().recover.unwrap();
     assert_eq!(top, 1.0);
 }
+
+#[test]
+fn crouching_uses_quieter_steps_with_a_longer_interval_and_lower_run_threshold() {
+    let mut steps = portal::steps::Steps::default();
+    let walking = steps
+        .update_duck(0.015, [50.0, 0.0, 0.0], true, b'C', true)
+        .unwrap();
+    assert!((walking.volume - 0.13).abs() < 0.00001);
+    assert_eq!(steps.time, 500.0);
+    steps.time = 0.0;
+    let running = steps
+        .update_duck(0.015, [60.0, 0.0, 0.0], true, b'C', true)
+        .unwrap();
+    assert!((running.volume - 0.325).abs() < 0.00001);
+    assert_eq!(steps.time, 400.0);
+}

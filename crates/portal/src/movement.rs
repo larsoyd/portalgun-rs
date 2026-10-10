@@ -10,7 +10,7 @@ pub const MAX_VELOCITY: f32 = 3500.0;
 /// Portal's air move passes a literal instead of sv_airaccelerate
 pub const AIR_ACCELERATE: f32 = 15.0;
 pub const AIR_SPEED_CAP: f32 = 60.0;
-/// hl2_walkspeed, what a player without the suit gets
+/// hl2_walkspeed, also measured on the pinned Portal player
 pub const WALK_SPEED: f32 = 150.0;
 /// cl_forwardspeed, cl_backspeed and cl_sidespeed
 pub const KEY_SPEED: f32 = 450.0;
@@ -60,11 +60,15 @@ pub fn wish(yaw: f32, fmove: f32, smove: f32) -> [f32; 2] {
 
 /// Ground friction. Translated from 0x273eb0 (decompiled, server.so)
 pub fn friction(v: Vec3, dt: f32) -> Vec3 {
+    surface_friction(v, dt, 1.0)
+}
+
+pub fn surface_friction(v: Vec3, dt: f32, factor: f32) -> Vec3 {
     let speed = dot(v, v).sqrt();
     if speed < STOP_EPSILON {
         return v;
     }
-    let drop = speed.max(STOP_SPEED) * FRICTION * dt;
+    let drop = speed.max(STOP_SPEED) * factor * FRICTION * dt;
     let new = (speed - drop).max(0.0);
     match new != speed {
         true => v.map(|c| c * (new / speed)),
@@ -152,9 +156,14 @@ pub fn finish_gravity(vz: f32, dt: f32) -> f32 {
 /// The jump and the single player forward boost, which brakes above one and a half times the
 /// max speed and speeds up a backwards jump. Translated from 0x2750e0 (decompiled, server.so)
 pub fn jump(v: Vec3, yaw: f32, fmove: f32, max: f32) -> Vec3 {
+    jump_on_surface(v, yaw, fmove, max, false, 1.0)
+}
+
+pub fn jump_on_surface(v: Vec3, yaw: f32, fmove: f32, max: f32, ducked: bool, factor: f32) -> Vec3 {
+    let boost = if ducked { 0.1 } else { JUMP_BOOST };
     let (sy, cy) = yaw.to_radians().sin_cos();
-    let top = max + max * JUMP_BOOST;
-    let mut add = (fmove * JUMP_BOOST).abs();
+    let top = max + max * boost;
+    let mut add = (fmove * boost).abs();
     let new = add + v[0].hypot(v[1]);
     if new > top {
         add -= new - top;
@@ -162,7 +171,15 @@ pub fn jump(v: Vec3, yaw: f32, fmove: f32, max: f32) -> Vec3 {
     if fmove < 0.0 {
         add = -add;
     }
-    [v[0] + cy * add, v[1] + sy * add, v[2] + JUMP_SPEED]
+    [
+        v[0] + cy * add,
+        v[1] + sy * add,
+        if ducked {
+            factor * JUMP_SPEED
+        } else {
+            v[2] + factor * JUMP_SPEED
+        },
+    ]
 }
 
 /// Translated from 0x2d06d0 (decompiled, server.so)

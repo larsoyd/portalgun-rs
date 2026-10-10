@@ -65,6 +65,7 @@ fn wandering_through_a_corner_pair_never_leaves_the_room() {
                 forward: rng.next() * 2.0 - 1.0,
                 side: rng.next() * 2.0 - 1.0,
                 jump: rng.next() < 0.02,
+                ..Input::default()
             };
             let crossed = w.step(&input, 0.015, &c, Some(pair));
             trail.push((step, w.feet.map(|v| v.round()), crossed));
@@ -138,6 +139,7 @@ fn wandering_between_random_portal_pairs_never_leaves_the_walls() {
                 forward: rng.next() * 2.0 - 1.0,
                 side: rng.next() * 2.0 - 1.0,
                 jump: rng.next() < 0.02,
+                ..Input::default()
             };
             let crossed = w.step(&input, 0.015, &c, Some(pair));
             trail.push((step, w.feet.map(|v| v.round()), crossed));

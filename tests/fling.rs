@@ -383,7 +383,7 @@ fn the_ground_is_found_up_to_2_units_below_the_feet() {
     let c = chamber();
     let mut near = Walker::at([0.0, 0.0, 2.06]);
     near.step(&Input::default(), TICK, &c, None);
-    assert!(near.grounded && near.feet[2] == 0.0, "{:?}", near.feet);
+    assert!(near.grounded && near.feet[2] == 0.03125, "{:?}", near.feet);
     let mut far = Walker::at([0.0, 0.0, 2.1]);
     far.step(&Input::default(), TICK, &c, None);
     assert!(!far.grounded, "{:?}", far.feet);
@@ -414,12 +414,13 @@ fn walks_off(height: f32) -> bool {
         w.step(&forward(), TICK, &c, None);
         airborne |= !w.grounded;
     }
-    assert!(w.feet[0] > 50.0 && w.feet[2] == 0.0, "{:?}", w.feet);
+    assert!(w.feet[0] > 50.0 && w.feet[2] == 0.03125, "{:?}", w.feet);
     airborne
 }
 
 #[test]
 fn walking_off_a_drop_of_a_step_keeps_to_the_ground() {
-    assert!(!walks_off(18.0));
+    assert!(!walks_off(18.0 - 0.03125));
+    assert!(walks_off(18.0));
     assert!(walks_off(18.5));
 }

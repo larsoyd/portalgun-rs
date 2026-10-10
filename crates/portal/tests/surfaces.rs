@@ -42,9 +42,37 @@ fn a_surface_starts_from_its_base_or_the_default() {
         &Surface {
             step_left: "P.L".into(),
             step_right: "D.R".into(),
-            material: b'C'
+            material: b'C',
+            ..Surface::default()
         }
     );
     assert_eq!(s.get("child").step_left, "P.L");
     assert_eq!(s.get("child").material, b'T');
+}
+
+#[test]
+fn physics_properties_inherit_and_override_independently() {
+    let text = r#""default" { "friction" "0.8" "jumpfactor" "1.25" "maxspeedfactor" "0.75" }
+        "ice" { "friction" "0.1" }
+        "child" { "base" "ice" "jumpfactor" "0.5" }"#;
+    let s = Surfaces::from_files(&[keyvalues::parse(text).unwrap()]);
+    assert_eq!(s.get("child").friction, 0.1);
+    assert_eq!(s.get("child").jump_factor, 0.5);
+    assert_eq!(s.get("child").max_speed_factor, 0.75);
+    assert_eq!(Surfaces::from_files(&[]).get("missing").friction, 1.0);
+}
+
+#[test]
+fn repeated_surface_definitions_retain_properties_and_apply_base_in_order() {
+    let first =
+        keyvalues::parse(r#""default" { "friction" "0.8" } "custom" { "jumpfactor" "1.5" }"#)
+            .unwrap();
+    let second = keyvalues::parse(
+        r#""custom" { "maxspeedfactor" "0.5" } "ordered" { "friction" "0.2" "base" "custom" }"#,
+    )
+    .unwrap();
+    let s = Surfaces::from_files(&[first, second]);
+    assert_eq!(s.get("custom").jump_factor, 1.5);
+    assert_eq!(s.get("ordered").friction, 0.8);
+    assert_eq!(s.get("ordered").max_speed_factor, 0.5);
 }

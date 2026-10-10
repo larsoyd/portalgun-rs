@@ -70,12 +70,16 @@ in `server.so`, one 15 ms tick at a time:
 
 - On the ground: friction 4 with a stop speed of 100, acceleration 10 toward
   where you are heading, and a walking speed of 150, `hl2_walkspeed`.
-- Gravity 600, applied half before and half after each move.
+- Gravity 600, applied half before and half after each move. Jumping also
+  applies the original extra gravity half-step.
+- Ctrl crouches with the original hull change, eye-height curve, clearance
+  checks and ground movement reduction. Surfaces affect friction, speed and jumping.
 - A jump of 160 plus Half-Life 2's single player forward boost. Holding the
-  key does not jump again when you land.
+  key does not jump again when you land. The complete duck-jump sequence,
+  including the automatic airborne hull change, is reconstructed.
 - You stand on the ground when it is within 2 units below your feet and you
-  are not rising faster than 140. Walking off a drop of up to 18 units keeps
-  you on the ground.
+  are not rising faster than 140. Step movement uses swept hull traces, an
+  18-unit step height and Source's 1/32-unit collision margin.
 - In the air Portal caps how much you can steer at 60 and accelerates with a
   fixed 15.
 - Once you move faster than 300 across the ground, keys that push against
@@ -84,8 +88,9 @@ in `server.so`, one 15 ms tick at a time:
 - Falling onto a floor portal while looking down nudges you toward its
   middle, as `sv_player_funnel_into_portals` does.
 
-TODO: Portal's own crossing rules and collision behind a portal, the view roll
-recovery, and objects that follow you.
+The 150-unit speed and several complete movement sequences have been measured
+in the pinned installed game. See [movement evidence and validation](docs/movement/README.md)
+for the audit, recorded references and remaining differences.
 
 ### Sound
 
@@ -179,14 +184,13 @@ Read from Portal's binaries and files:
 
 Still stand-ins or estimates:
 
-- Collision. The game sweeps your hull through the world, this sandbox moves
-  you one axis at a time and pushes you out of the boxes you run into.
-- The walking speed. 150 is what `CHL2_Player` gives a player without the
-  suit. That Portal's player never gets the suit is read from its game rules
-  and maps, not yet measured in the game.
-- Surfaces. Friction and jump height do not change with the surface yet.
+- World geometry remains an AABB chamber. Swept collision supports walls,
+  corners, ceilings and steps; slopes, moving platforms, water and ladders
+  are not represented.
 - Walking through the wall behind a portal. The game builds its collision
-  behind each portal, this sandbox cuts the opening out of the wall's box.
+  behind each portal, this sandbox carves the wall and sweeps the remaining
+  movement against the exit geometry. Full linked-world collision, tilted
+  portal rims and portal camera interpolation remain incomplete.
 - Where a portal fits: the fitting rules are ported but not yet checked against
   `VerifyPortalPlacement`.
 - Sound is not positional yet.
@@ -206,6 +210,7 @@ Deliberate deviations:
 | Mouse | Look |
 | W A S D | Walk |
 | Space | Jump |
+| Ctrl | Crouch |
 | Left mouse button | Fire blue |
 | Right mouse button | Fire orange |
 
@@ -216,6 +221,7 @@ defaults, an unknown key or bad value stops the program with the line number.
 
 `--script <file>` plays timed actions instead of the keyboard and mouse, one
 per line as seconds, action and arguments: `fire1`, `fire2`, `jump`,
+`jump-held 1` / `jump-held 0`, `crouch 1` / `crouch 0`,
 `look <yaw> <pitch>` and `move <forward> <side>`. With `--shot-at <seconds>`
 and `--quit-after <seconds>` it takes screenshots and exits on its own.
 

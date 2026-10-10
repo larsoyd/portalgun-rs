@@ -3,6 +3,8 @@ pub enum Action {
     Fire1,
     Fire2,
     Jump,
+    JumpHeld(bool),
+    Crouch(bool),
     /// degrees of yaw and pitch, added at once
     Look(f32, f32),
     /// forward and side input, held until the next move
@@ -37,6 +39,8 @@ impl Script {
                 Some("fire1") => Action::Fire1,
                 Some("fire2") => Action::Fire2,
                 Some("jump") => Action::Jump,
+                Some("jump-held") => Action::JumpHeld(number(2)? != 0.0),
+                Some("crouch") => Action::Crouch(number(2)? != 0.0),
                 Some("look") => Action::Look(number(2)?, number(3)?),
                 Some("move") => Action::Move(number(2)?, number(3)?),
                 _ => return Err(format!("{}, unknown action", at())),

@@ -22,10 +22,10 @@ fn a_walker_dropped_above_the_floor_lands_on_it() {
     let c = chamber();
     let mut w = Walker::at([0.0, 0.0, 100.0]);
     run(&mut w, &c, Input::default(), 2.0);
-    assert!(w.feet[2].abs() < 1e-3, "{:?}", w.feet);
+    assert!((w.feet[2] - 0.03125).abs() < 1e-3, "{:?}", w.feet);
     assert!(w.grounded);
     assert_eq!(w.velocity[2], 0.0);
-    assert_eq!(w.eye()[2], EYE);
+    assert_eq!(w.eye()[2], EYE + 0.03125);
 }
 
 #[test]
@@ -40,7 +40,7 @@ fn walking_into_a_wall_stops_at_the_hull_and_slides_along_it() {
     };
     run(&mut w, &c, input, 3.0);
     assert!(
-        (w.feet[0] - (-384.0 + HALF_WIDTH)).abs() < 1e-3,
+        (w.feet[0] - (-384.0 + HALF_WIDTH + 0.03125)).abs() < 1e-3,
         "{:?}",
         w.feet
     );
@@ -57,13 +57,13 @@ fn the_walker_can_stand_on_the_ledge_but_not_walk_through_it() {
     };
     run(&mut w, &c, input, 3.0);
     assert!(
-        (w.feet[0] - (192.0 - HALF_WIDTH)).abs() < 1e-3,
+        (w.feet[0] - (192.0 - HALF_WIDTH - 0.03125)).abs() < 1e-3,
         "{:?}",
         w.feet
     );
     let mut up = Walker::at([250.0, -160.0, 200.0]);
     run(&mut up, &c, Input::default(), 2.0);
-    assert!((up.feet[2] - 128.0).abs() < 1e-3, "{:?}", up.feet);
+    assert!((up.feet[2] - 128.03125).abs() < 1e-3, "{:?}", up.feet);
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn hitting_a_wall_in_the_air_is_not_standing() {
         w.step(&input, 0.01, &c, None);
     }
     assert!(
-        (w.feet[0] - (-384.0 + HALF_WIDTH)).abs() < 1e-3,
+        (w.feet[0] - (-384.0 + HALF_WIDTH + 0.03125)).abs() < 1e-3,
         "{:?}",
         w.feet
     );
@@ -190,7 +190,7 @@ fn walking_into_a_linked_wall_portal_comes_out_of_its_partner() {
         "faces out of orange: {}",
         w.yaw
     );
-    assert!(w.feet[2].abs() < 1e-3, "{:?}", w.feet);
+    assert!((w.feet[2] - 0.03125).abs() < 1e-3, "{:?}", w.feet);
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn the_wall_beside_a_portal_still_stops_the_walker() {
     w.yaw = 180.0;
     assert_eq!(walk_west(&mut w, &c, Some(pair())), None);
     assert!(
-        (w.feet[0] - (-384.0 + HALF_WIDTH)).abs() < 1e-3,
+        (w.feet[0] - (-384.0 + HALF_WIDTH + 0.03125)).abs() < 1e-3,
         "{:?}",
         w.feet
     );
@@ -213,7 +213,7 @@ fn an_unlinked_portal_is_just_wall() {
     w.yaw = 180.0;
     assert_eq!(walk_west(&mut w, &c, None), None);
     assert!(
-        (w.feet[0] - (-384.0 + HALF_WIDTH)).abs() < 1e-3,
+        (w.feet[0] - (-384.0 + HALF_WIDTH + 0.03125)).abs() < 1e-3,
         "{:?}",
         w.feet
     );
@@ -253,7 +253,7 @@ fn a_walker_in_the_opening_cannot_slide_into_the_wall_beside_it() {
         assert_eq!(w.step(&strafe, 0.01, &c, Some(pair())), None);
     }
     assert!(
-        (w.feet[1] - (32.0 - HALF_WIDTH)).abs() < 1e-3,
+        (w.feet[1] - (32.0 - HALF_WIDTH - 0.03125)).abs() < 1e-3,
         "stopped by the side of the opening: {:?}",
         w.feet
     );
@@ -280,7 +280,7 @@ fn a_block_higher_than_a_step_still_stops_the_walker() {
     };
     run(&mut w, &c, input, 1.0);
     assert!(
-        (w.feet[0] - (-160.0 - HALF_WIDTH)).abs() < 1e-3,
+        (-160.0 - HALF_WIDTH - 0.03125..=-160.0 - HALF_WIDTH).contains(&w.feet[0]),
         "the 32 unit block stops it: {:?}",
         w.feet
     );

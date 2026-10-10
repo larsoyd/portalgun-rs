@@ -1,5 +1,6 @@
 pub mod args;
 pub mod chamber;
+pub mod collision;
 pub mod faces;
 pub mod firing;
 pub mod gun;

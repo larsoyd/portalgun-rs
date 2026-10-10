@@ -36,6 +36,8 @@ pub struct Controls {
     pub forward: f32,
     pub side: f32,
     pub jump: bool,
+    pub crouch: bool,
+    pub jump_pressed: bool,
     pub fire1: bool,
     pub fire2: bool,
 }
@@ -43,26 +45,46 @@ pub struct Controls {
 #[derive(Resource)]
 pub struct Scripted(pub Script);
 
-pub struct PlayerPlugin;
+#[derive(Resource, Default)]
+pub struct MovementResult(pub Option<usize>);
 
-impl Plugin for PlayerPlugin {
+pub struct MovementPlugin;
+
+impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
         let mut walker = Walker::at(SPAWN);
         walker.yaw = 20.0;
         app.insert_resource(Player(walker))
             .insert_resource(Time::<Fixed>::from_hz(TICK_HZ))
-            .add_systems(Startup, (spawn_camera, grab_cursor, read_footing))
             .init_resource::<Controls>()
-            .add_systems(FixedUpdate, walk)
+            .init_resource::<MovementResult>()
             .add_systems(
-                Update,
+                PreUpdate,
+                read_keys
+                    .after(bevy::input::InputSystems)
+                    .run_if(not(resource_exists::<Scripted>)),
+            )
+            .add_systems(FixedUpdate, simulate);
+    }
+}
+
+pub struct PlayerPlugin;
+
+impl Plugin for PlayerPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_plugins(MovementPlugin)
+            .add_systems(Startup, (spawn_camera, grab_cursor, read_footing))
+            .add_systems(FixedUpdate, walk.after(simulate))
+            .add_systems(
+                PreUpdate,
                 (
-                    (read_keys, look).run_if(not(resource_exists::<Scripted>)),
+                    look.after(bevy::input::InputSystems)
+                        .run_if(not(resource_exists::<Scripted>)),
                     run_script.run_if(resource_exists::<Scripted>),
-                    place_camera,
                 )
                     .chain(),
-            );
+            )
+            .add_systems(Update, place_camera);
     }
 }
 
@@ -102,7 +124,9 @@ fn read_keys(
     let axis = |plus, minus| keys.pressed(plus) as i8 as f32 - keys.pressed(minus) as i8 as f32;
     controls.forward = axis(KeyCode::KeyW, KeyCode::KeyS);
     controls.side = axis(KeyCode::KeyD, KeyCode::KeyA);
-    controls.jump |= keys.pressed(KeyCode::Space);
+    controls.crouch = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
+    controls.jump = keys.pressed(KeyCode::Space);
+    controls.jump_pressed |= keys.just_pressed(KeyCode::Space);
     controls.fire1 |= mouse.just_pressed(MouseButton::Left);
     controls.fire2 |= mouse.just_pressed(MouseButton::Right);
 }
@@ -118,7 +142,12 @@ fn run_script(
         match action {
             Action::Fire1 => controls.fire1 = true,
             Action::Fire2 => controls.fire2 = true,
-            Action::Jump => controls.jump = true,
+            Action::Jump => controls.jump_pressed = true,
+            Action::JumpHeld(held) => {
+                controls.jump_pressed |= held && !controls.jump;
+                controls.jump = held;
+            }
+            Action::Crouch(held) => controls.crouch = held,
             Action::Look(yaw, pitch) => {
                 player.yaw += yaw;
                 player.pitch = (player.pitch + pitch).clamp(-89.0, 89.0);
@@ -128,14 +157,31 @@ fn run_script(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn walk(
-    mut commands: Commands,
+fn simulate(
     level: Res<Level>,
     time: Res<Time>,
     portals: Res<Portals>,
     mut controls: ResMut<Controls>,
     mut player: ResMut<Player>,
+    mut result: ResMut<MovementResult>,
+) {
+    let pressed = std::mem::take(&mut controls.jump_pressed);
+    let input = Input {
+        forward: controls.forward,
+        side: controls.side,
+        jump: controls.jump || pressed,
+        jump_pressed: pressed,
+        crouch: controls.crouch,
+    };
+    result.0 = player.step(&input, time.delta_secs(), &level, portals.linked());
+}
+
+#[allow(clippy::too_many_arguments)]
+fn walk(
+    mut commands: Commands,
+    time: Res<Time>,
+    player: Res<Player>,
+    result: Res<MovementResult>,
     mut sounds: ResMut<Sounds>,
     files: Res<Files>,
     mut audio: ResMut<Assets<AudioSource>>,
@@ -146,21 +192,17 @@ fn walk(
     if time.elapsed_secs() >= *logged + WALK_LOG {
         *logged = time.elapsed_secs();
         info!(
-            "[walk] at={:.2} feet={:?} yaw={:.1} pitch={:.1} velocity={:?} grounded={}",
+            "[walk] at={:.2} feet={:?} yaw={:.1} pitch={:.1} velocity={:?} grounded={} ducked={} eye={:.3}",
             *logged,
             player.feet.map(|v| (v * 10.0).round() / 10.0),
             player.yaw,
             player.pitch,
             player.velocity.map(|v| v.round()),
-            player.grounded
+            player.grounded,
+            player.duck.ducked,
+            player.duck.eye
         );
     }
-    let input = Input {
-        forward: controls.forward,
-        side: controls.side,
-        jump: std::mem::take(&mut controls.jump),
-    };
-    let crossed = player.step(&input, time.delta_secs(), &level, portals.linked());
     if let Some(n) = player.ground {
         footing.last = n;
     }
@@ -188,10 +230,13 @@ fn walk(
         heard("land", l.step);
     }
     let moved = (player.velocity, player.grounded);
-    if let Some(s) = footing
-        .steps
-        .update(time.delta_secs(), moved.0, moved.1, surface.material)
-    {
+    if let Some(s) = footing.steps.update_duck(
+        time.delta_secs(),
+        moved.0,
+        moved.1,
+        surface.material,
+        player.duck.ducked,
+    ) {
         heard("step", s);
     }
     if let Some((pitch, volume)) = landing.and_then(|l| l.recover) {
@@ -204,7 +249,7 @@ fn walk(
             Some(pitch as f32),
         );
     }
-    let Some(i) = crossed else {
+    let Some(i) = result.0 else {
         return;
     };
     let from = Colour::ALL[i];
@@ -233,6 +278,7 @@ fn read_footing(
     mut commands: Commands,
     files: Res<Files>,
     level: Res<Level>,
+    mut player: ResMut<Player>,
     mut exit: MessageWriter<AppExit>,
 ) {
     match Surfaces::read(&files) {
@@ -247,6 +293,7 @@ fn read_footing(
                 surfaces.len(),
                 surfaces[0].step_left
             );
+            player.set_surfaces(surfaces.clone());
             commands.insert_resource(Footing {
                 surfaces,
                 steps: Steps::default(),

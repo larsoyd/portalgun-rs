@@ -1,0 +1,204 @@
+[project]
+root = "../.."
+test_command = ["cargo", "test", "--workspace"]
+test_regex = '^test (\S+) \.\.\. (ok|FAILED)'
+mutant_command = ["cargo", "test", "--workspace"]
+timeout = 300
+
+[project.binaries]
+"server.so" = { path = "/home/lars/portal-decomp/bin/server.so", sha256 = "9079f5dc98add02a0b10755f033353b32fa2d73c98645aca5df27a97a56f30fb" }
+"client.so" = { path = "/home/lars/portal-decomp/bin/client.so", sha256 = "00b6e45eb84a93f0974c23d3e2656aa9e32e9ada64443f651899a78cde694aae" }
+"engine.so" = { path = "/home/lars/.local/share/Steam/steamapps/common/Portal/bin/engine.so", sha256 = "e3c5b0c567a0a4fae765a572b983d8aae5100acb68ae18322c32a67cbb1bdd7a" }
+"vphysics.so" = { path = "/home/lars/.local/share/Steam/steamapps/common/Portal/bin/vphysics.so", sha256 = "2cf294207058fa31aed0a1bee93def3260b76b7c770da5d80181e78962cc5615" }
+
+[[row]]
+id = "controller.input"
+category = "movement"
+binary = "server.so"
+address = "0x275d90, 0x2750e0"
+symbol = "FullWalkMove / CheckJumpButton input contract"
+expect = "Held state persists and explicit presses survive render frames"
+evidence = "derived"
+status = "green"
+rust = "src/player.rs:simulate"
+tests = ["held_space_never_repeats_across_zero_one_or_multiple_fixed_ticks", "release_and_repress_between_ticks_is_a_real_new_jump", "the_fixed_trajectory_is_identical_at_thirty_sixty_and_144_render_fps"]
+
+[[row]]
+id = "controller.duck"
+category = "movement"
+binary = "server.so"
+address = "0x27b6e0, 0x279490, 0x270540, 0x26fd90"
+symbol = "Duck / FinishDuck / FinishUnDuck / CanUnduck"
+expect = "Timed crouch, standing clearance and eye recovery"
+evidence = "traced"
+status = "green"
+rust = "src/walker.rs:Walker::update_duck"
+tests = ["crouch_uses_a_timed_eye_spline_then_switches_the_hull", "releasing_ctrl_under_a_ceiling_waits_for_standing_clearance", "airborne_duck_raises_feet_by_the_full_hull_difference"]
+
+[[row]]
+id = "controller.jump_sequence"
+category = "movement"
+binary = "server.so"
+address = "0x2750e0, 0x27a3f0, 0x279bc0"
+symbol = "CheckJumpButton / StartUnDuckJump / FinishUnDuckJump"
+expect = "Complete recorded standing and crouched jump sequences match"
+evidence = "observed"
+status = "green"
+rust = "src/walker.rs:Walker::check_jump"
+tests = ["standing_jump_matches_recorded_original_positions_velocity_and_states", "crouch_jump_and_release_match_recorded_original_each_tick"]
+
+[[row]]
+id = "controller.sweep"
+category = "movement"
+binary = "server.so"
+address = "server 0x2763b0, 0x2762c0; engine 0x31e480"
+symbol = "TryPlayerMove / ClipVelocity / AABB clipping"
+expect = "Swept hull, collision skin, plane clipping and steps"
+evidence = "traced"
+status = "green"
+rust = "src/collision.rs:slide"
+tests = ["a_fast_hull_hits_a_thin_wall_before_its_endpoint", "collision_skin_selects_the_first_plane_again_at_a_corner", "two_walls_stop_both_horizontal_components_without_stopping_fall", "stepping_cannot_push_the_standing_hull_through_a_ceiling"]
+
+[[row]]
+id = "controller.surface"
+category = "movement"
+binary = "server.so"
+address = "server 0x2732c0, 0x2d06d0; vphysics 0x2b700"
+symbol = "CategorizeGroundSurface / ParseSurfaceData"
+expect = "Friction conversion and movement properties inherited and applied"
+evidence = "traced"
+status = "green"
+rust = "src/walker.rs:Walker::categorize"
+tests = ["ground_surface_scales_acceleration_friction_and_jump", "physics_properties_inherit_and_override_independently", "repeated_surface_definitions_retain_properties_and_apply_base_in_order"]
+
+[[row]]
+id = "controller.portal_adapter"
+category = "movement"
+binary = "server.so"
+address = "0x912ff0, 0x908c60, 0x2ce890"
+symbol = "TeleportTouchingEntity / ForceDuckThisFrame / TracePlayerBBox"
+expect = "Verified transform and forced duck plus chamber exit sweep adaptation"
+evidence = "derived"
+status = "green"
+rust = "src/walker.rs:Walker::carry"
+tests = ["floor_to_wall_teleport_forces_a_duck_and_recovers_when_clear", "a_fast_crossing_sweeps_the_remaining_motion_against_exit_geometry", "an_obstructed_exit_cannot_place_the_player_inside_a_solid"]
+
+[[row]]
+id = "controller.measured_speed"
+category = "movement"
+binary = "server.so"
+address = "0x906fc0, 0x601a70, 0x5fb4a0"
+symbol = "Portal spawn and HL2 maxspeed selection"
+expect = "Original player has maxspeed150 and suit0; acceleration and duck walking match"
+evidence = "observed"
+status = "green"
+rust = "crates/portal/src/movement.rs:command"
+tests = ["acceleration_matches_recorded_original_each_tick", "duck_walking_braking_and_unducking_match_recorded_original_each_tick"]
+
+[[mutant]]
+id = "held"
+row = "controller.input"
+file = "src/player.rs"
+search = "jump: controls.jump || pressed,"
+replace = "jump: pressed,"
+args = ["--test", "input"]
+
+[[mutant]]
+id = "press"
+row = "controller.input"
+file = "src/walker.rs"
+search = "if input.jump_pressed {"
+replace = "if false {"
+args = ["--test", "input"]
+
+[[mutant]]
+id = "duck_time"
+row = "controller.duck"
+file = "src/walker.rs"
+search = "seconds as f64 > 0.4"
+replace = "seconds as f64 > 0.39"
+args = ["--test", "reference_movement"]
+
+[[mutant]]
+id = "eye_curve"
+row = "controller.duck"
+file = "src/walker.rs"
+search = "amount * amount * (3.0 - 2.0 * amount)"
+replace = "amount * amount * (2.99 - 2.0 * amount)"
+args = ["--test", "controller"]
+
+[[mutant]]
+id = "jump_timer"
+row = "controller.jump_sequence"
+file = "src/walker.rs"
+search = "self.duck.jump_timer = 510.0;"
+replace = "self.duck.jump_timer = 0.0;"
+args = ["--test", "reference_movement"]
+
+[[mutant]]
+id = "skin"
+row = "controller.sweep"
+file = "src/collision.rs"
+search = "const DIST_EPSILON: f32 = 0.03125;"
+replace = "const DIST_EPSILON: f32 = 0.0;"
+args = ["--test", "controller"]
+
+[[mutant]]
+id = "bumps"
+row = "controller.sweep"
+file = "src/collision.rs"
+search = "for _ in 0..4 {"
+replace = "for _ in 0..1 {"
+args = ["--test", "controller"]
+
+[[mutant]]
+id = "friction"
+row = "controller.surface"
+file = "src/walker.rs"
+search = "self.surface.friction * 1.25"
+replace = "self.surface.friction * 1.0"
+args = ["--test", "controller"]
+
+[[mutant]]
+id = "force_duck"
+row = "controller.portal_adapter"
+file = "src/walker.rs"
+search = "if force && !self.duck.ducked {"
+replace = "if false && !self.duck.ducked {"
+args = ["--test", "controller"]
+
+[[row]]
+id = "controller.linked_world_collision"
+category = "movement"
+binary = "server.so"
+address = "0x2ce890, 0x2dc8e0 (raw)"
+symbol = "CPortalGameMovement::TracePlayerBBox / portal simulator trace"
+expect = "Complete linked-world collision before and during crossing"
+evidence = "open"
+status = "open"
+reason = "Chamber aperture and exit-sweep adaptation is tested; complete simulator collision models are not reconstructed"
+tests = []
+
+[[row]]
+id = "controller.portal_eye_interpolation"
+category = "movement"
+binary = "client.so"
+address = "0x5416e0 (raw)"
+symbol = "C_Portal_Player::UpdatePortalEyeInterpolation"
+expect = "Original portal-specific camera interpolation around forced duck and rotated crossings"
+evidence = "open"
+status = "open"
+reason = "Ordinary crouch camera is reconstructed; portal interpolation and view-roll recovery remain incomplete"
+tests = []
+
+[[row]]
+id = "controller.other_movement_modes"
+category = "movement"
+binary = "server.so"
+address = "0x27ab40, 0x275d90 (raw)"
+symbol = "CGameMovement::PlayerMove / FullWalkMove alternate modes"
+expect = "Water, ladders, moving-ground basevelocity and non-AABB world interactions"
+evidence = "traced"
+status = "n-a"
+reason = "The static AABB chamber has no corresponding world entities or movement modes; no fidelity claim for these branches"
+tests = []

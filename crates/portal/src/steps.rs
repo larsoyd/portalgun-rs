@@ -54,6 +54,17 @@ impl Steps {
         on_ground: bool,
         material: u8,
     ) -> Option<Step> {
+        self.update_duck(frametime, velocity, on_ground, material, false)
+    }
+
+    pub fn update_duck(
+        &mut self,
+        frametime: f32,
+        velocity: Vec3,
+        on_ground: bool,
+        material: u8,
+        ducked: bool,
+    ) -> Option<Step> {
         if self.time > 0.0 {
             self.time -= 1000.0 * frametime;
             if self.time < 0.0 {
@@ -67,14 +78,22 @@ impl Steps {
             return None;
         }
         let speed = (ground_sq + velocity[2] * velocity[2]).sqrt();
-        let walking = RUN > speed;
+        let walking = (if ducked { 60.0 } else { RUN }) > speed;
         self.time = if walking { WALK_MS } else { RUN_MS };
+        if ducked {
+            self.time += 100.0;
+        }
         let (walk, run) = match material {
             b'D' => (0.25, 0.55),
             b'V' => (0.4, 0.7),
             _ => (0.2, 0.5),
         };
-        Some(self.play(if walking { walk } else { run }))
+        let volume = if walking { walk } else { run };
+        Some(self.play(if ducked {
+            (volume as f64 * 0.65) as f32
+        } else {
+            volume
+        }))
     }
 
     /// Translated from 0x2750e0 (disassembled, server.so)
