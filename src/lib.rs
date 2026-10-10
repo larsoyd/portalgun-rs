@@ -1,7 +1,10 @@
 pub mod args;
 pub mod chamber;
+pub mod player;
 pub mod run;
 pub mod scene;
+pub mod settings;
 pub mod sound;
 pub mod texture;
 pub mod units;
+pub mod walker;

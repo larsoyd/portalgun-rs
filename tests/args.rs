@@ -55,3 +55,12 @@ fn a_shot_at_zero_is_fine_but_not_at_the_quit_itself() {
     assert!(parse("--shot-at 4 --quit-after 4").is_err());
     assert!(parse("--shot-at inf").is_err());
 }
+
+#[test]
+fn settings_default_to_a_file_beside_where_it_runs() {
+    assert_eq!(parse("").unwrap().settings, PathBuf::from("settings.toml"));
+    assert_eq!(
+        parse("--settings mine.toml").unwrap().settings,
+        PathBuf::from("mine.toml")
+    );
+}
