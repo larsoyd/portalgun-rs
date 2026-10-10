@@ -9,4 +9,5 @@ pub mod sound;
 pub mod texture;
 pub mod units;
 pub mod viewanim;
+pub mod viewmodel;
 pub mod walker;
