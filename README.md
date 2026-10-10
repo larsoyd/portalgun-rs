@@ -26,6 +26,11 @@ need your own copy of Portal, which the program reads at startup.
   leaves 30 units ahead, 4 right and 5 down of the eye, and the portal opens
   when the shot arrives, at 3000 units a second.
 - A shot at a surface marked `%noportal` is refused.
+- Walking bobs and sways the gun the way `C_BasePortalCombatWeapon` does: a
+  0.45 second up and down cycle and a 0.9 second side to side one, growing with
+  speed up to 320, plus the lag that trails the gun behind a turn and the push
+  out of the way when you look down. The lag switches off while you touch a
+  portal.
 
 TODO: the glow sprites and beams, the stream and impact particles, the pickup
 and hold animations, and the fizzle effects for shots that cannot land.
@@ -37,9 +42,19 @@ and hold animations, and the fizzle effects for shots that cannot land.
 - Each face draws the rim and static of Portal's `PortalRefract` stage 2 shader
   with the game's own noise and colour ramps, and opens over half a second.
   Moving one portal turns its partner to static.
+- Each linked portal shows the view out of its partner, rendered by its own
+  camera with the game's clip plane half a unit behind the exit. Views nest two
+  deep, `r_portal_stencil_depth`'s default, and the deepest level shows full
+  static or, when the two portals face each other, the game's depth doubler,
+  which repeats last frame's screen down the tunnel.
+- A view is drawn only when the game would draw it: linked, not full static,
+  you in front of it, and part of it on screen, or you within 54 units.
+- Walking up to a portal, the part of the near plane inside the opening is
+  filled with the view, as Portal's render fix does, so you never see past the
+  wall as you step through.
 
-TODO: the view through a linked portal with recursion, the refraction while a
-portal opens, closing and fizzling.
+TODO: the refraction while a portal opens, closing and fizzling, and the
+cheaper culling the game uses for nested views.
 
 ### Going through
 
@@ -47,8 +62,8 @@ portal opens, closing and fizzling.
   speed and view carried over. Exit speed is capped at 1000 and a floor exit
   pushes you up at least 300.
 
-TODO: Portal's own crossing rules and collision behind a portal, falling
-through floor portals, the view roll recovery, and objects that follow you.
+TODO: Portal's own crossing rules and collision behind a portal, the view roll
+recovery, and objects that follow you.
 
 ### Sound
 
@@ -57,15 +72,31 @@ waves. The gun's fire sounds come from its weapon script, the portal opening
 sounds and the enter and exit sounds from the game's sound scripts, each
 played at a volume and pitch drawn from the script's range.
 
+Footsteps follow `UpdateStepSound`: a step every 300 milliseconds running
+and 400 walking, alternating feet, quieter when walking, with the sound of the
+surface under you from its `$surfaceprop`. A jump plays a step at full volume,
+a hard landing plays one by how fast you fell, and a long fall adds the long
+fall boots' `PortalPlayer.FallRecover`.
+
 TODO: positional sound with each script's sound level, the portals' ambient
 loop, close and fizzle sounds.
+
+### The crosshair
+
+Portal's quick info crosshair from `CHUDQuickInfo`: the blue bracket on the
+left and the orange on the right fill when a shot of that colour would land
+where you are aiming, checked ten times a second as the server does, and a
+small ring beside each fades in and out to show which colour you fired last.
+The centre is the `Q` of Half-Life 2's crosshair font, read from your install.
+Sizes, places, colours and fade speeds are the game's.
 
 ### The test chamber
 
 A room of 768 by 512 by 384 units built from Portal's own wall, floor and
 ceiling materials, with a non-portalable metal strip, a ledge and a cube. Until
 Portal's own player movement is ported, you walk it with a simple stand-in:
-fixed walking speed, gravity, a jump and box collision.
+fixed walking speed, gravity, a jump, box collision with each portal's opening
+cut out of its wall, and steps up to 18 units.
 
 ### The portal crate
 
@@ -116,19 +147,31 @@ Read from Portal's binaries and files:
   `CWeaponPortalgun` in `server.so`.
 - The stream's path from `C_PortalBlast` in `client.so`, ready for the stream
   particles.
+- The view through portals, its recursion, culling, static and depth doubler,
+  and the render fix near a portal, from `client.so`.
+- The crosshair from `CHUDQuickInfo` and `CHudCrosshair` in `client.so`, and
+  the placement test behind it from `server.so`.
+- The gun's bob, lag and look down push from `client.so`, and the footstep,
+  jump and landing sounds from `server.so`.
 - The view model's animation rates and fades, the sounds' volumes and pitches,
   the materials and the window icon, from the game's files.
 
 Still stand-ins or estimates:
 
 - Walking, jumping and collision. Portal's player movement comes next.
-- Walking through the wall behind a portal. The game carves its collision, this
-  sandbox skips the wall inside the opening.
+- Walking through the wall behind a portal. The game builds its collision
+  behind each portal, this sandbox cuts the opening out of the wall's box.
 - Where a portal fits: the fitting rules are ported but not yet checked against
   `VerifyPortalPlacement`.
 - Sound is not positional yet.
 
-There are no deliberate deviations from the original so far.
+Deliberate deviations:
+
+- Nested portal views are culled by the whole view instead of the game's
+  narrower frustum through the portal. The picture is the same, a nested view
+  is only drawn a little more often.
+- No occlusion query: a view hidden behind something is still drawn. The game
+  skips that query too when its material system runs threaded.
 
 ## Controls
 
@@ -195,7 +238,8 @@ cargo run -p portal --example portal_inspect -- "/path/to/Steam/steamapps/common
 | `src/chamber.rs`, `src/scene.rs` | The test chamber and its drawing. |
 | `src/walker.rs`, `src/player.rs` | The stand-in walker, mouse look and crossing portals. |
 | `src/gun.rs`, `src/firing.rs` | The gun's shots and what happens when they land. |
-| `src/portals.rs`, `src/faces.rs`, `src/shaders/` | The portal pair and the drawn faces. |
+| `src/portals.rs`, `src/faces.rs`, `src/views.rs`, `src/shaders/` | The portal pair, the drawn faces and the views through them. |
+| `src/hud.rs` | The crosshair. |
 | `src/viewmodel.rs`, `src/viewanim.rs`, `src/view.rs` | The view model, its animation and its camera. |
 | `src/sound.rs`, `src/texture.rs`, `src/icon.rs` | Sounds, textures and the window icon from the install. |
 | `src/run.rs` | Timed screenshots and quitting for scripted runs. |
