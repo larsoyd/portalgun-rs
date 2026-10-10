@@ -95,7 +95,7 @@ fn wandering_between_random_portal_pairs_never_leaves_the_walls() {
     let mut tried = 0;
     for seed in 1..400u64 {
         let mut rng = Rng(seed.wrapping_mul(0x2545_f491_4f6c_dd1d));
-        let mut shoot = |rng: &mut Rng, other: Option<&Portal>| {
+        let shoot = |rng: &mut Rng, other: Option<&Portal>| {
             let eye = [
                 rng.next() * 700.0 - 350.0,
                 rng.next() * 480.0 - 240.0,
@@ -108,7 +108,7 @@ fn wandering_between_random_portal_pairs_never_leaves_the_walls() {
             if solid {
                 return None;
             }
-            let (yaw, pitch) = (rng.next() * 6.283, rng.next() * 3.0 - 1.5);
+            let (yaw, pitch) = (rng.next() * std::f32::consts::TAU, rng.next() * 3.0 - 1.5);
             let dir = [
                 pitch.cos() * yaw.cos(),
                 pitch.cos() * yaw.sin(),
