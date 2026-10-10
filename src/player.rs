@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
 use crate::scene::Level;
+use crate::script::{Action, Script};
 use crate::settings::Settings;
 use crate::units::{to_bevy, to_bevy_dir};
 use crate::walker::{Input, Walker};
@@ -20,6 +21,19 @@ pub struct Config(pub Settings);
 #[derive(Component)]
 pub struct PlayerCamera;
 
+/// What the player asked for, from the keys or a script. Presses stay set until used.
+#[derive(Resource, Default)]
+pub struct Controls {
+    pub forward: f32,
+    pub side: f32,
+    pub jump: bool,
+    pub fire1: bool,
+    pub fire2: bool,
+}
+
+#[derive(Resource)]
+pub struct Scripted(pub Script);
+
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
@@ -29,8 +43,17 @@ impl Plugin for PlayerPlugin {
         app.insert_resource(Player(walker))
             .insert_resource(Time::<Fixed>::from_hz(TICK_HZ))
             .add_systems(Startup, (spawn_camera, grab_cursor))
+            .init_resource::<Controls>()
             .add_systems(FixedUpdate, walk)
-            .add_systems(Update, (look, place_camera).chain());
+            .add_systems(
+                Update,
+                (
+                    (read_keys, look).run_if(not(resource_exists::<Scripted>)),
+                    run_script.run_if(resource_exists::<Scripted>),
+                    place_camera,
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -61,17 +84,50 @@ fn look(motion: Res<AccumulatedMouseMotion>, config: Res<Config>, mut player: Re
     player.look(motion.delta.x, motion.delta.y, config.0.sensitivity);
 }
 
-fn walk(
+fn read_keys(
     keys: Res<ButtonInput<KeyCode>>,
-    level: Res<Level>,
-    time: Res<Time>,
-    mut player: ResMut<Player>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut controls: ResMut<Controls>,
 ) {
     let axis = |plus, minus| keys.pressed(plus) as i8 as f32 - keys.pressed(minus) as i8 as f32;
+    controls.forward = axis(KeyCode::KeyW, KeyCode::KeyS);
+    controls.side = axis(KeyCode::KeyD, KeyCode::KeyA);
+    controls.jump |= keys.pressed(KeyCode::Space);
+    controls.fire1 |= mouse.just_pressed(MouseButton::Left);
+    controls.fire2 |= mouse.just_pressed(MouseButton::Right);
+}
+
+fn run_script(
+    mut script: ResMut<Scripted>,
+    time: Res<Time<Real>>,
+    mut controls: ResMut<Controls>,
+    mut player: ResMut<Player>,
+) {
+    for action in script.0.due(time.elapsed_secs()) {
+        info!("[script] at={:.2} action={action:?}", time.elapsed_secs());
+        match action {
+            Action::Fire1 => controls.fire1 = true,
+            Action::Fire2 => controls.fire2 = true,
+            Action::Jump => controls.jump = true,
+            Action::Look(yaw, pitch) => {
+                player.yaw += yaw;
+                player.pitch = (player.pitch + pitch).clamp(-89.0, 89.0);
+            }
+            Action::Move(forward, side) => (controls.forward, controls.side) = (forward, side),
+        }
+    }
+}
+
+fn walk(
+    level: Res<Level>,
+    time: Res<Time>,
+    mut controls: ResMut<Controls>,
+    mut player: ResMut<Player>,
+) {
     let input = Input {
-        forward: axis(KeyCode::KeyW, KeyCode::KeyS),
-        side: axis(KeyCode::KeyD, KeyCode::KeyA),
-        jump: keys.pressed(KeyCode::Space),
+        forward: controls.forward,
+        side: controls.side,
+        jump: std::mem::take(&mut controls.jump),
     };
     player.step(&input, time.delta_secs(), &level);
 }

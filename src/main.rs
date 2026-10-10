@@ -6,9 +6,10 @@ use portal::install::{root, Install};
 use portalgun::args::Args;
 use portalgun::chamber::Chamber;
 use portalgun::icon::{self, GameIcon, APP_ID};
-use portalgun::player::{Config, PlayerPlugin};
+use portalgun::player::{Config, PlayerPlugin, Scripted};
 use portalgun::run::RunPlugin;
 use portalgun::scene::{Level, ScenePlugin};
+use portalgun::script::Script;
 use portalgun::settings::Settings;
 use portalgun::sound::{Files, Sounds};
 use portalgun::view::{GunMeshes, ViewPlugin};
@@ -28,6 +29,16 @@ fn main() -> ExitCode {
     let settings = match settings(&args.settings) {
         Ok(s) => s,
         Err(e) => return refuse(&e),
+    };
+    let script = match &args.script {
+        Some(path) => match std::fs::read_to_string(path)
+            .map_err(|e| e.to_string())
+            .and_then(|t| Script::parse(&t))
+        {
+            Ok(s) => Some(s),
+            Err(e) => return refuse(&format!("{}: {e}", path.display())),
+        },
+        None => None,
     };
     let started = std::time::Instant::now();
     let install = match Install::open(&dir) {
@@ -56,7 +67,11 @@ fn main() -> ExitCode {
         install.root.display(),
         started.elapsed().as_millis()
     );
-    let exit = App::new()
+    let mut app = App::new();
+    if let Some(script) = script {
+        app.insert_resource(Scripted(script));
+    }
+    let exit = app
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "portalgun".into(),

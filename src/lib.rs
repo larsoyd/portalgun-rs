@@ -4,6 +4,7 @@ pub mod icon;
 pub mod player;
 pub mod run;
 pub mod scene;
+pub mod script;
 pub mod settings;
 pub mod sound;
 pub mod texture;
