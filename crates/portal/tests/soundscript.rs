@@ -1,4 +1,7 @@
-use portal::soundscript::{parse, Pitch};
+use std::path::Path;
+
+use portal::install::{root, Install};
+use portal::soundscript::{parse, Bank, Entry, Pitch};
 
 const SCRIPT: &str = r#"
 "Weapon_Portalgun.fire_blue"
@@ -62,4 +65,78 @@ fn entries_keep_their_waves_volume_and_pitch() {
 fn an_entry_without_a_wave_is_refused() {
     assert!(parse("\"A\" { \"volume\" \"1\" }").is_err());
     assert!(parse("\"A\" { \"wave\" \"a.wav\" \"volume\" \"loud\" }").is_err());
+}
+
+fn bank() -> Bank {
+    let dir = root(None, None, Path::new(&std::env::var("HOME").unwrap()));
+    let install = Install::open(&dir).unwrap_or_else(|e| panic!("install at {dir:?}: {e}"));
+    Bank::read(&install.search).unwrap()
+}
+
+#[test]
+fn the_manifest_brings_in_the_player_portal_sounds() {
+    let b = bank();
+    let enter = b.get("PortalPlayer.EnterPortal").unwrap();
+    assert_eq!(
+        enter.waves,
+        [
+            "sound/player/portal_enter1.wav",
+            "sound/player/portal_enter2.wav"
+        ]
+    );
+    assert_eq!(enter.volume, (0.5, 0.5));
+    assert_eq!(enter.pitch, Pitch::Range(95.0, 105.0));
+    assert_eq!(enter.soundlevel.as_deref(), Some("SNDLVL_70db"));
+    assert_eq!(b.get("PortalPlayer.ExitPortal").unwrap().waves.len(), 2);
+    assert_eq!(
+        b.get("Weapon_Portalgun.fire_blue").unwrap().volume,
+        (0.7, 0.7)
+    );
+}
+
+#[test]
+fn the_manifest_counts_the_scripts_it_could_not_find() {
+    let b = bank();
+    assert_eq!(b.scripts, 13);
+    assert_eq!(b.missing.len(), 11);
+    assert!(b
+        .missing
+        .contains(&"scripts/game_sounds_weapons.txt".to_string()));
+}
+
+#[test]
+fn names_that_are_unknown_or_disagree_between_scripts_are_refused() {
+    let b = bank();
+    let unknown = b.get("Portal.NoSuchSound").unwrap_err().to_string();
+    assert!(
+        unknown.contains("unknown sound portal.nosuchsound"),
+        "{unknown}"
+    );
+    let twice = b
+        .get("Portal.PartyEscortAssociate")
+        .unwrap_err()
+        .to_string();
+    assert!(twice.contains("ambiguous"), "{twice}");
+}
+
+#[test]
+fn a_pick_spans_the_wave_volume_and_pitch_ranges() {
+    let e = Entry {
+        waves: vec!["a.wav".into(), "b.wav".into()],
+        volume: (0.4, 0.6),
+        pitch: Pitch::Range(95.0, 105.0),
+        soundlevel: None,
+    };
+    let low = e.pick([0.0, 0.0, 0.0]);
+    assert_eq!((low.wave, low.volume, low.pitch), (0, 0.4, 95.0));
+    let high = e.pick([0.99, 0.5, 0.75]);
+    assert_eq!(high.wave, 1);
+    assert_eq!(e.pick([1.0, 1.0, 1.0]).wave, 1);
+    assert!((high.volume - 0.5).abs() < 1e-6, "{}", high.volume);
+    assert!((high.pitch - 102.5).abs() < 1e-4, "{}", high.pitch);
+    let fixed = Entry {
+        pitch: Pitch::Fixed(140.0),
+        ..e
+    };
+    assert_eq!(fixed.pick([0.3, 0.3, 0.9]).pitch, 140.0);
 }

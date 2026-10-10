@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use portal::install::{root, Install};
 use portalgun::args::Args;
 use portalgun::run::RunPlugin;
+use portalgun::sound::{Files, Sounds};
 
 fn main() -> ExitCode {
     let args = match Args::parse(std::env::args().skip(1)) {
@@ -20,6 +21,10 @@ fn main() -> ExitCode {
     let started = std::time::Instant::now();
     let install = match Install::open(&dir) {
         Ok(i) => i,
+        Err(e) => return refuse(&e.to_string()),
+    };
+    let sounds = match Sounds::read(&install.search) {
+        Ok(s) => s,
         Err(e) => return refuse(&e.to_string()),
     };
     println!(
@@ -40,6 +45,8 @@ fn main() -> ExitCode {
             quit_after: args.quit_after,
             shot_dir: args.shot_dir,
         })
+        .insert_resource(Files(install.search))
+        .insert_resource(sounds)
         .add_systems(Startup, |mut commands: Commands| {
             commands.spawn(Camera3d::default());
         })
