@@ -145,9 +145,7 @@ the copy of the game they own.
 
 ## License
 
-MIT or Apache-2.0, at your option.
-
-TODO: the licence files.
+The code is under the [MIT License](LICENSE).
 
 The licence covers this project's code only. It grants nothing over Portal or
 its files, which remain Valve's.
