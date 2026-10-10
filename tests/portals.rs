@@ -87,3 +87,35 @@ fn the_face_sits_a_quarter_unit_out_and_winds_toward_the_viewer() {
         "u grows to the viewer's right"
     );
 }
+
+fn facing(x: f32, toward: f32) -> Portal {
+    Portal::new(
+        [x, 0.0, 64.0],
+        [toward, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        (32.0, 54.0),
+    )
+}
+
+#[test]
+fn the_moved_portal_decides_the_doubler_and_its_partner_always_may() {
+    let mut p = Pair::default();
+    p.place(Colour::Blue, facing(-384.0, 1.0));
+    assert_eq!(p.usable, [false, false], "a lone portal has no doubler");
+    p.place(Colour::Orange, facing(384.0, -1.0));
+    assert_eq!(p.usable, [true, true]);
+    p.place(Colour::Orange, facing(384.0, 1.0));
+    assert_eq!(p.usable, [true, false], "the partner keeps its mark");
+    p.place(Colour::Blue, facing(-384.0, 1.0));
+    assert_eq!(p.usable, [false, true]);
+    let mut q = Pair::default();
+    q.place(Colour::Blue, facing(0.0, 1.0));
+    let askew = Portal::new(
+        [10.0, 100.0, 64.0],
+        [-0.766, 0.643, 0.0],
+        [0.0, 0.0, 1.0],
+        (32.0, 54.0),
+    );
+    q.place(Colour::Orange, askew);
+    assert_eq!(q.usable, [true, false], "blue is not in front of orange");
+}

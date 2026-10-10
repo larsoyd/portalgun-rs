@@ -1,6 +1,7 @@
 use portal::keyvalues;
 use portal::pair::Portal;
 use portal::portal_face::{self, Fade};
+use portal::view::doubler_usable;
 use portal::vpk::SearchPath;
 
 /// PortalRefract's stage 2 materials, blue then orange
@@ -43,6 +44,8 @@ impl Colour {
 pub struct Pair {
     pub open: [Option<Portal>; 2],
     pub fade: [Fade; 2],
+    /// whether each portal may draw the depth doubler
+    pub usable: [bool; 2],
     /// bumped whenever a portal opens, moves or closes
     pub changes: u64,
 }
@@ -56,9 +59,15 @@ impl Pair {
         Some([*self.get(Colour::Blue)?, *self.get(Colour::Orange)?])
     }
 
+    // Translated from 0x559c30 (decompiled, client.so)
     pub fn place(&mut self, c: Colour, portal: Portal) {
-        let linked = self.get(c.other()).is_some();
+        let partner = self.get(c.other()).copied();
+        let linked = partner.is_some();
         self.open[c.index()] = Some(portal);
+        self.usable[c.index()] = partner.is_some_and(|o| doubler_usable(&portal, &o));
+        if linked {
+            self.usable[c.other().index()] = true;
+        }
         let [blue, orange] = &mut self.fade;
         let (fade, partner) = match c {
             Colour::Blue => (blue, orange),
