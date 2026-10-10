@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use portal::install::Install;
 use portal::mdl::Mdl;
 use portal::particles::emitters::Emitter;
 use portal::particles::forces::{Constraint, Force};
@@ -8,18 +9,12 @@ use portal::particles::operators::Operator;
 use portal::particles::renderers::Renderer;
 use portal::particles::system::Definition;
 use portal::pcf::Function;
-use portal::vpk::{Pak, SearchPath};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = std::env::args()
         .nth(1)
         .ok_or("usage: portal_inspect PORTAL_INSTALL_DIR")?;
-    let root = Path::new(&root);
-    let search = SearchPath::new(vec![
-        Pak::open(&root.join("portal/portal_pak_dir.vpk"))?,
-        Pak::open(&root.join("hl2/hl2_misc_dir.vpk"))?,
-        Pak::open(&root.join("hl2/hl2_textures_dir.vpk"))?,
-    ]);
+    let search = Install::open(Path::new(&root))?.search;
     let mdl = Mdl::parse(search.read("models/weapons/v_portalgun.mdl")?)?;
     println!(
         "[mdl] name={} version={} bones={} anims={} sequences={} textures={:?} attachments={}",

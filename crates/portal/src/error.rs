@@ -6,6 +6,7 @@ pub enum Error {
     Missing(String),
     Malformed { what: String, reason: String },
     Unsupported(String),
+    Refused(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -17,6 +18,7 @@ impl fmt::Display for Error {
             Error::Missing(path) => write!(f, "not found: {path}"),
             Error::Malformed { what, reason } => write!(f, "malformed {what}: {reason}"),
             Error::Unsupported(what) => write!(f, "unsupported: {what}"),
+            Error::Refused(reason) => write!(f, "refused: {reason}"),
         }
     }
 }

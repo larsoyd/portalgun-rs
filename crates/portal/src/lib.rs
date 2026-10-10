@@ -5,6 +5,7 @@ pub mod anim;
 pub mod dmx;
 mod error;
 pub mod gun_fx;
+pub mod install;
 pub mod keyvalues;
 pub mod mdl;
 pub mod model;
