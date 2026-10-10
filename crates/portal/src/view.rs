@@ -158,3 +158,72 @@ pub fn shows_view(
     }
     poly.len() > 2
 }
+
+/// The rim the render fix is clipped to, wider than the opening
+const FIX_RIM: (f32, f32) = (35.2, 59.4);
+const FIX_RIM_PLANES: usize = 12;
+/// how far past the near plane and how wide the render fix quad is
+const FIX_AHEAD: f32 = 0.05;
+const FIX_HALF: f32 = 40.0;
+/// how far in front of the surface the fix may reach, DrawStencilMask's offset
+const FIX_FRONT: f32 = 0.3;
+const FIX_BEHIND: f32 = -1.0;
+
+/// Translated from 0x559c30 (decompiled, client.so). The planes around the rim, normals inward.
+fn rim_planes(p: &Portal) -> [Plane; FIX_RIM_PLANES] {
+    std::array::from_fn(|i| {
+        let a = i as f64 * std::f64::consts::FRAC_PI_6;
+        let (s, c) = ((a as f32).sin(), (a as f32).cos());
+        let normal = [0, 1, 2].map(|k| -c * p.up[k] - s * p.right[k]);
+        let at = p.world([0.0, s * FIX_RIM.0, c * FIX_RIM.1]);
+        Plane {
+            normal,
+            dist: dot(at, normal),
+        }
+    })
+}
+
+/// Translated from 0x55dc10, 0x55d8d0 and 0x55d300 (decompiled, client.so). The near plane
+/// inside the hole, empty unless the eye is close to a top level portal.
+#[allow(clippy::too_many_arguments)]
+pub fn render_fix(
+    p: &Portal,
+    eye: Vec3,
+    forward: Vec3,
+    right: Vec3,
+    up: Vec3,
+    near: f32,
+    frustum: &[Plane],
+    level: i32,
+) -> Vec<Vec3> {
+    let to = [0, 1, 2].map(|i| eye[i] - p.origin[i]);
+    let ahead = dot(p.forward, to);
+    if level != 0 || FIX_BEHIND > ahead || dot(to, to) >= CLOSE_SQ {
+        return Vec::new();
+    }
+    let at = |f: f32, r: f32, u: f32| {
+        [0, 1, 2].map(|k| eye[k] + forward[k] * f + right[k] * r + up[k] * u)
+    };
+    let f = near + FIX_AHEAD;
+    let mut poly = vec![
+        at(f, -FIX_HALF, FIX_HALF),
+        at(f, FIX_HALF, FIX_HALF),
+        at(f, FIX_HALF, -FIX_HALF),
+        at(f, -FIX_HALF, -FIX_HALF),
+    ];
+    let behind = Plane {
+        normal: p.forward.map(|v| -v),
+        dist: -dot(p.forward, p.origin) - ahead.min(FIX_FRONT),
+    };
+    for plane in rim_planes(p).iter().chain([&behind]).chain(frustum) {
+        if poly.len() <= 2 {
+            break;
+        }
+        poly = clip_poly(&poly, plane, CULL_EPSILON);
+    }
+    if poly.len() > 2 {
+        poly
+    } else {
+        Vec::new()
+    }
+}

@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use bevy::asset::{embedded_asset, RenderAssetUsages};
-use bevy::camera::visibility::RenderLayers;
+use bevy::camera::visibility::{NoFrustumCulling, RenderLayers};
 use bevy::camera::{CameraProjection, Hdr, RenderTarget, SubCameraView};
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::image::{ImageAddressMode, ImageSampler};
@@ -13,15 +13,15 @@ use bevy::render::render_resource::{AsBindGroup, ShaderType, TextureFormat};
 use bevy::shader::{load_shader_library, ShaderRef};
 use portal::portal_face::{near, shader_time};
 use portal::view::{
-    clip_plane, draws_doubler, max_depth, near_plane, remaining, shows_view, static_amount,
-    STENCIL_DEPTH,
+    clip_plane, draws_doubler, max_depth, near_plane, remaining, render_fix, shows_view,
+    static_amount, STENCIL_DEPTH,
 };
 
 use crate::player::PlayerCamera;
 use crate::portals::{doubler_mask, face_quad, overlay_look, Colour, Pair};
 use crate::sound::Files;
 use crate::texture;
-use crate::units::{from_bevy, to_bevy, to_bevy_dir, METRES_PER_UNIT};
+use crate::units::{from_bevy, from_bevy_dir, to_bevy, to_bevy_dir, METRES_PER_UNIT};
 use crate::views::{frustum_planes, through, view_clip_plane};
 
 /// TEXTUREFLAGS_CLAMPS and TEXTUREFLAGS_CLAMPT
@@ -68,6 +68,7 @@ pub struct PortalParams {
     time: f32,
     hole: f32,
     doubler: f32,
+    fix: f32,
     doubler_clip_from_world: Mat4,
 }
 
@@ -120,6 +121,8 @@ struct Chain {
     images: Vec<Handle<Image>>,
     /// the view the doubler projects through, from the last frame (0x990 in client.so)
     saved: Option<Mat4>,
+    /// the near plane's cut through the hole, filled with the first view
+    fix: (Entity, Handle<Mesh>, Handle<PortalMaterial>),
 }
 
 #[derive(Resource)]
@@ -190,6 +193,25 @@ fn face_mesh(pair: &Pair, c: Colour) -> Mesh {
     .with_inserted_indices(Indices::U16(vec![0, 1, 2, 0, 2, 3]))
 }
 
+/// A convex polygon in Source units as a fan.
+fn fix_mesh(poly: &[[f32; 3]]) -> Mesh {
+    let positions: Vec<[f32; 3]> = poly.iter().map(|&p| to_bevy(p).to_array()).collect();
+    let fan: Vec<u32> = (1..poly.len().saturating_sub(1) as u32)
+        .flat_map(|i| [0, i, i + 1])
+        .collect();
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(
+        Mesh::ATTRIBUTE_NORMAL,
+        vec![[0.0, 0.0, 1.0]; positions.len()],
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, vec![[0.0, 0.0]; positions.len()])
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_indices(Indices::U32(fan))
+}
+
 fn target(size: UVec2) -> Image {
     Image::new_target_texture(size.x, size.y, TextureFormat::Rgba16Float, None)
 }
@@ -244,11 +266,32 @@ fn spawn_faces(
         let noise = images.add(overlay_texture(&files, &look.noise)?);
         let ramp = images.add(overlay_texture(&files, &look.ramp)?);
         let mesh = meshes.add(face_mesh(&portals, c));
+        let fix_mesh = meshes.add(fix_mesh(&[]));
+        let fix_material = materials.add(PortalMaterial {
+            params: PortalParams {
+                fix: 1.0,
+                ..default()
+            },
+            noise: noise.clone(),
+            ramp: ramp.clone(),
+            view: blank.clone(),
+            mask: mask.clone(),
+        });
+        let fix = commands
+            .spawn((
+                Mesh3d(fix_mesh.clone()),
+                MeshMaterial3d(fix_material.clone()),
+                Visibility::Hidden,
+                RenderLayers::layer(MAIN_FACES),
+                NoFrustumCulling,
+            ))
+            .id();
         let mut chain = Chain {
             faces: Vec::new(),
             cameras: Vec::new(),
             images: Vec::new(),
             saved: None,
+            fix: (fix, fix_mesh, fix_material),
         };
         for level in 0..=depth {
             let material = materials.add(PortalMaterial {
@@ -357,6 +400,7 @@ fn draw_views(
     let plain = plain(perspective);
     let doubler_projection = plain.get_clip_from_view();
     let mut any_doubler = false;
+    let main_frustum = frustum_planes(&(plain.get_clip_from_view() * eye.to_matrix().inverse()));
     let mut report = Vec::new();
     for c in Colour::ALL {
         let i = c.index();
@@ -451,6 +495,39 @@ fn draw_views(
                 doubler_projection * chain.saved.unwrap_or(Mat4::IDENTITY).inverse();
         }
         chain.saved = saved;
+        let fix = match (portals.get(c), shown[1]) {
+            (Some(p), true) => render_fix(
+                p,
+                eye_at,
+                from_bevy_dir(*eye.forward()),
+                from_bevy_dir(*eye.right()),
+                from_bevy_dir(*eye.up()),
+                perspective.near / METRES_PER_UNIT,
+                &main_frustum,
+                0,
+            ),
+            _ => Vec::new(),
+        };
+        let (fix_entity, fix_mesh_handle, fix_material) = &chain.fix;
+        if let Ok(mut v) = visibility.get_mut(*fix_entity) {
+            let want = match fix.is_empty() {
+                true => Visibility::Hidden,
+                false => Visibility::Inherited,
+            };
+            if *v != want {
+                *v = want;
+            }
+        }
+        if !fix.is_empty() {
+            if let Some(mut mesh) = meshes.get_mut(fix_mesh_handle) {
+                *mesh = fix_mesh(&fix);
+            }
+            if let Some(mut m) = materials.get_mut(fix_material) {
+                if m.view != chain.images[0] {
+                    m.view = chain.images[0].clone();
+                }
+            }
+        }
         let levels: String = shown[1..]
             .iter()
             .map(|&v| if v { '1' } else { '0' })

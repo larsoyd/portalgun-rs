@@ -18,6 +18,8 @@ struct PortalParams {
     hole: f32,
     // 1 when the face is the depth doubler
     doubler: f32,
+    // 1 for the near plane's cut through the hole, which shows the view
+    fix: f32,
     doubler_clip_from_world: mat4x4<f32>,
 };
 
@@ -43,6 +45,9 @@ fn seen(uv: vec2<f32>) -> vec3<f32> {
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
+    if params.fix > 0.5 {
+        return vec4<f32>(seen(in.position.xy / view.viewport.zw), 1.0);
+    }
     if params.doubler > 0.5 {
         let clip = params.doubler_clip_from_world * vec4<f32>(in.world_position.xyz, 1.0);
         let at = saturate(vec2<f32>(clip.x + clip.w, clip.w - clip.y) / (2.0 * clip.w));

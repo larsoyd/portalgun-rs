@@ -2,7 +2,7 @@ use portal::pair::Portal;
 use portal::placement::{HALF_HEIGHT, HALF_WIDTH};
 use portal::view::{
     clip_plane, clip_poly, doubler_usable, draws_doubler, max_depth, near_plane, remaining,
-    shows_view, static_amount, Plane, STENCIL_DEPTH,
+    render_fix, shows_view, static_amount, Plane, STENCIL_DEPTH,
 };
 
 const X: [f32; 3] = [1.0, 0.0, 0.0];
@@ -222,4 +222,61 @@ fn a_corner_left_on_screen_still_shows_the_view() {
     assert!(shows_view(&p, 0.0, true, [300.0, 0.0, 0.0], 1, &corner));
     let past = [plane([0.0, s, s], (32.0 + 54.0) * s + 0.1)];
     assert!(!shows_view(&p, 0.0, true, [300.0, 0.0, 0.0], 1, &past));
+}
+
+fn fix(p: &Portal, eye: [f32; 3], forward: [f32; 3], near: f32, level: i32) -> Vec<[f32; 3]> {
+    let up = Z;
+    let right = [
+        forward[1] * up[2] - forward[2] * up[1],
+        forward[2] * up[0] - forward[0] * up[2],
+        forward[0] * up[1] - forward[1] * up[0],
+    ];
+    render_fix(p, eye, forward, right, up, near, &boxed(10000.0), level)
+}
+
+#[test]
+fn the_render_fix_covers_the_hole_the_near_plane_cuts() {
+    let p = wall_at(0.0, X);
+    let poly = fix(&p, [2.0, 0.0, 0.0], [-1.0, 0.0, 0.0], 4.0, 0);
+    assert!(poly.len() > 2, "{poly:?}");
+    for v in &poly {
+        assert!((v[0] - -2.05).abs() < 1e-4, "{v:?}");
+        assert!(v[1].abs() <= 35.2 + 1e-3, "inside the rim {v:?}");
+        assert!(v[2].abs() <= 40.0 + 1e-3, "inside the quad {v:?}");
+    }
+    assert!(poly.iter().any(|v| (v[2].abs() - 40.0).abs() < 1e-3));
+    assert!(poly.iter().any(|v| v[1].abs() > 35.0));
+}
+
+#[test]
+fn the_render_fix_is_only_for_a_close_eye_at_the_top_level() {
+    let p = wall_at(0.0, X);
+    let look = [-1.0, 0.0, 0.0];
+    assert!(fix(&p, [2.0, 0.0, 0.0], look, 4.0, 1).is_empty());
+    assert!(fix(&p, [0.1, 0.0, 53.9], look, 4.0, 0).len() > 2);
+    assert!(fix(&p, [0.0, 0.0, 54.0], look, 4.0, 0).is_empty());
+    assert!(fix(&p, [-1.1, 0.0, 0.0], look, 4.0, 0).is_empty());
+    assert!(
+        fix(&p, [-0.9, 0.0, 0.0], [1.0, 0.0, 0.0], 4.0, 0).is_empty(),
+        "looking out keeps the quad in front"
+    );
+    assert!(fix(&p, [-0.9, 0.0, 0.0], look, 4.0, 0).len() > 2);
+    assert!(
+        fix(&p, [20.0, 0.0, 0.0], look, 4.0, 0).is_empty(),
+        "the quad is still in front of the wall"
+    );
+}
+
+#[test]
+fn the_render_fix_reaches_past_the_wall_by_at_most_three_tenths() {
+    let p = wall_at(0.0, X);
+    let along = [0.0, 1.0, 0.0];
+    let deepest = |eye_x: f32| {
+        fix(&p, [eye_x, 0.0, 0.0], along, 4.0, 0)
+            .iter()
+            .map(|v| v[0])
+            .fold(f32::MIN, f32::max)
+    };
+    assert!((deepest(0.25) - 0.25).abs() < 1e-4, "{}", deepest(0.25));
+    assert!((deepest(5.0) - 0.3).abs() < 1e-4, "{}", deepest(5.0));
 }
