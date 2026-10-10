@@ -50,6 +50,18 @@ impl Walker {
         [cp * cy, cp * sy, -sp]
     }
 
+    /// AngleVectors with no roll
+    pub fn right(&self) -> Vec3 {
+        let (sy, cy) = self.yaw.to_radians().sin_cos();
+        [sy, -cy, 0.0]
+    }
+
+    pub fn up(&self) -> Vec3 {
+        let (sy, cy) = self.yaw.to_radians().sin_cos();
+        let (sp, cp) = self.pitch.to_radians().sin_cos();
+        [sp * cy, sp * sy, cp]
+    }
+
     /// Mouse counts, right and down positive, as Source turns them.
     pub fn look(&mut self, dx: f32, dy: f32, sensitivity: f32) {
         self.yaw -= dx * sensitivity * MOUSE_FACTOR;
