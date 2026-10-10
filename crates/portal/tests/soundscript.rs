@@ -95,13 +95,12 @@ fn the_manifest_brings_in_the_player_portal_sounds() {
 }
 
 #[test]
-fn the_manifest_counts_the_scripts_it_could_not_find() {
+fn every_manifest_script_is_found_in_the_paks_or_loose_hl2() {
     let b = bank();
-    assert_eq!(b.scripts, 13);
-    assert_eq!(b.missing.len(), 11);
-    assert!(b
-        .missing
-        .contains(&"scripts/game_sounds_weapons.txt".to_string()));
+    assert_eq!(b.scripts, 24);
+    assert!(b.missing.is_empty(), "{:?}", b.missing);
+    let step = b.get("Concrete.StepLeft").unwrap();
+    assert_eq!(step.waves.len(), 2, "{:?}", step.waves);
 }
 
 #[test]

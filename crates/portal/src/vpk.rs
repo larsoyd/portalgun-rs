@@ -158,23 +158,43 @@ fn parse_tree(
     }
 }
 
-/// Paks searched in order, like a Source game's gameinfo search paths.
-pub struct SearchPath(Vec<Pak>);
+/// Paks searched in order, then loose folders, like a Source game's gameinfo search paths.
+pub struct SearchPath {
+    paks: Vec<Pak>,
+    loose: Vec<PathBuf>,
+}
 
 impl SearchPath {
     pub fn new(paks: Vec<Pak>) -> Self {
-        SearchPath(paks)
+        SearchPath {
+            paks,
+            loose: Vec::new(),
+        }
+    }
+
+    pub fn with_loose(self, loose: Vec<PathBuf>) -> Self {
+        SearchPath { loose, ..self }
+    }
+
+    fn loose_file(&self, path: &str) -> Option<PathBuf> {
+        let path = normalize(path);
+        self.loose
+            .iter()
+            .map(|d| d.join(&path))
+            .find(|f| f.is_file())
     }
 
     pub fn contains(&self, path: &str) -> bool {
-        self.0.iter().any(|p| p.contains(path))
+        self.paks.iter().any(|p| p.contains(path)) || self.loose_file(path).is_some()
     }
 
     pub fn read(&self, path: &str) -> Result<Vec<u8>> {
-        self.0
-            .iter()
-            .find(|p| p.contains(path))
-            .ok_or_else(|| Error::Missing(path.to_string()))?
-            .read(path)
+        if let Some(pak) = self.paks.iter().find(|p| p.contains(path)) {
+            return pak.read(path);
+        }
+        let file = self
+            .loose_file(path)
+            .ok_or_else(|| Error::Missing(path.to_string()))?;
+        std::fs::read(&file).map_err(|e| Error::Missing(format!("{}: {e}", file.display())))
     }
 }

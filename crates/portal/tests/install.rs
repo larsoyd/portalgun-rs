@@ -82,3 +82,17 @@ fn a_missing_pinned_file_is_refused_by_name() {
     }
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn the_search_path_reaches_step_sounds_and_loose_hl2_scripts() {
+    let install =
+        Install::open(&steam()).unwrap_or_else(|e| panic!("install at {:?}: {e}", steam()));
+    for path in [
+        "sound/player/footsteps/concrete1.wav",
+        "scripts/game_sounds_physics.txt",
+        "scripts/surfaceproperties.txt",
+    ] {
+        assert!(install.search.contains(path), "{path} not found");
+    }
+    assert!(!install.search.contains("scripts/no_such_file.txt"));
+}

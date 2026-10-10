@@ -4,11 +4,18 @@ use crate::particles::random::sha256;
 use crate::vpk::{Pak, SearchPath};
 use crate::{Error, Result};
 
+/// Loose folders searched after every pak, as the game mounts them
+const LOOSE: [&str; 2] = ["portal", "hl2"];
+
 /// Traced against these files, by sha256. Anything else is a different game as far as we care.
-pub const PINNED: [(&str, &str); 5] = [
+pub const PINNED: [(&str, &str); 6] = [
     (
         "portal/portal_pak_dir.vpk",
         "11ac8d930872d398d975d8f2e3a43fa2c47d2894619b5584efdda7072bde48b9",
+    ),
+    (
+        "hl2/hl2_sound_misc_dir.vpk",
+        "3ac73e26801f06d02abaa2601dac9e481613ca53f240bcb57ee52b66af403331",
     ),
     (
         "hl2/hl2_misc_dir.vpk",
@@ -59,11 +66,13 @@ impl Install {
             }
         }
         let search = SearchPath::new(
-            PINNED[..3]
+            PINNED
                 .iter()
+                .filter(|(file, _)| file.ends_with(".vpk"))
                 .map(|(file, _)| Pak::open(&root.join(file)))
                 .collect::<Result<_>>()?,
-        );
+        )
+        .with_loose(LOOSE.iter().map(|d| root.join(d)).collect());
         Ok(Install {
             root: root.to_path_buf(),
             search,
