@@ -17,6 +17,7 @@ pub mod placement;
 pub mod portal_face;
 pub mod soundscript;
 pub mod teleport;
+pub mod view;
 pub mod vpk;
 pub mod vtf;
 

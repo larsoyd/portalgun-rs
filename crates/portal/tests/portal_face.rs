@@ -2,7 +2,7 @@ use portal::pair::Portal;
 use portal::placement::{HALF_HEIGHT, HALF_WIDTH};
 use portal::portal_face::{
     corner, coverage, ellipse, in_hole, near, noise_coords, opening, overlay, overlay_rgb, radius,
-    refraction, screen_uv, shader_time, srgb_decode, srgb_encode, static_amount, Fade,
+    refraction, screen_uv, shader_time, srgb_decode, srgb_encode, Fade,
 };
 
 const X: [f32; 3] = [1.0, 0.0, 0.0];
@@ -271,13 +271,6 @@ fn a_camera_within_54_units_in_front_clears_the_static() {
     // up to a unit behind the plane still counts
     assert!(near(&p, at(-0.5, 0.0)));
     assert!(!near(&p, at(-2.0, 0.0)));
-}
-
-#[test]
-fn a_lone_portal_or_the_last_view_shows_full_static() {
-    assert_eq!(static_amount(0.25, true, false), 0.25);
-    assert_eq!(static_amount(0.25, false, false), 1.0);
-    assert_eq!(static_amount(0.25, true, true), 1.0);
 }
 
 #[test]

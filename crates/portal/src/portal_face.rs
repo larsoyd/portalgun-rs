@@ -192,12 +192,3 @@ pub fn near(portal: &Portal, eye: Vec3) -> bool {
     let l = portal.local(eye);
     l[0] >= -1.0 && l[0] * l[0] + l[1] * l[1] + l[2] * l[2] < NEAR * NEAR
 }
-
-/// CPortalStaticProxy::ComputeStaticAmount, without the depth doubler.
-pub fn static_amount(statics: f32, linked: bool, last_view: bool) -> f32 {
-    if !linked || last_view {
-        1.0
-    } else {
-        statics
-    }
-}
