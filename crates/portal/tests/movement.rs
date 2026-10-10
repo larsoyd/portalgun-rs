@@ -201,7 +201,10 @@ fn the_funnel_needs_a_floor_portal_a_downward_look_and_a_fall() {
         Funnel::Off
     );
     let exact = [0.994, 0.0, -0.1];
-    assert_ne!(funnel(v, [0.0; 2], feet, exact, &floor_portal()), Funnel::Off);
+    assert_ne!(
+        funnel(v, [0.0; 2], feet, exact, &floor_portal()),
+        Funnel::Off
+    );
     let barely = [0.994, 0.0, -0.1001];
     assert_ne!(
         funnel(v, [0.0; 2], feet, barely, &floor_portal()),
@@ -283,7 +286,10 @@ fn a_jump_adds_160_and_a_forward_boost_up_to_one_and_a_half_times_the_walk_speed
     let v = jump([300.0, 0.0, 0.0], 0.0, -150.0, WALK_SPEED);
     assert!(close(v[0], 375.0), "backwards it speeds up: {v:?}");
     let v = jump([0.0; 3], 0.0, -150.0, WALK_SPEED);
-    assert!(close(v[0], -75.0), "a standing jump backwards goes back: {v:?}");
+    assert!(
+        close(v[0], -75.0),
+        "a standing jump backwards goes back: {v:?}"
+    );
     let v = jump([0.0; 3], 90.0, 0.0, WALK_SPEED);
     assert!(close(v[0], 0.0) && close(v[1], 0.0), "{v:?}");
 }
