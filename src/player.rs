@@ -2,9 +2,12 @@ use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
+use crate::faces::Portals;
+use crate::portals::Colour;
 use crate::scene::Level;
 use crate::script::{Action, Script};
 use crate::settings::Settings;
+use crate::sound::{Files, Sounds};
 use crate::units::{to_bevy, to_bevy_dir};
 use crate::walker::{Input, Walker};
 
@@ -118,18 +121,37 @@ fn run_script(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn walk(
+    mut commands: Commands,
     level: Res<Level>,
     time: Res<Time>,
+    portals: Res<Portals>,
     mut controls: ResMut<Controls>,
     mut player: ResMut<Player>,
+    mut sounds: ResMut<Sounds>,
+    files: Res<Files>,
+    mut audio: ResMut<Assets<AudioSource>>,
 ) {
     let input = Input {
         forward: controls.forward,
         side: controls.side,
         jump: std::mem::take(&mut controls.jump),
     };
-    player.step(&input, time.delta_secs(), &level);
+    let Some(i) = player.step(&input, time.delta_secs(), &level, portals.linked()) else {
+        return;
+    };
+    let from = Colour::ALL[i];
+    info!(
+        "[cross] from={from:?} to={:?} feet={:?} yaw={:.1} velocity={:?}",
+        from.other(),
+        player.feet.map(|v| v.round()),
+        player.yaw,
+        player.velocity.map(|v| v.round())
+    );
+    for name in ["PortalPlayer.EnterPortal", "PortalPlayer.ExitPortal"] {
+        sounds.play(&mut commands, &files, &mut audio, name);
+    }
 }
 
 fn place_camera(player: Res<Player>, mut camera: Single<&mut Transform, With<PlayerCamera>>) {

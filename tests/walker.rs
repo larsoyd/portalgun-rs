@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use portal::install::{root, Install};
+use portal::pair::Portal;
 use portalgun::chamber::Chamber;
 use portalgun::walker::{Input, Walker, EYE, HALF_WIDTH};
 
@@ -12,7 +13,7 @@ fn chamber() -> Chamber {
 
 fn run(w: &mut Walker, c: &Chamber, input: Input, seconds: f32) {
     for _ in 0..(seconds * 100.0) as usize {
-        w.step(&input, 0.01, c);
+        w.step(&input, 0.01, c, None);
     }
 }
 
@@ -74,10 +75,10 @@ fn a_jump_leaves_the_ground_only_from_the_ground() {
         jump: true,
         ..Input::default()
     };
-    w.step(&jump, 0.01, &c);
+    w.step(&jump, 0.01, &c, None);
     assert!(w.velocity[2] > 0.0 && !w.grounded);
     let rising = w.velocity[2];
-    w.step(&jump, 0.01, &c);
+    w.step(&jump, 0.01, &c, None);
     assert!(w.velocity[2] < rising, "no second jump in the air");
 }
 
@@ -103,7 +104,7 @@ fn hitting_a_wall_in_the_air_is_not_standing() {
         ..Input::default()
     };
     for _ in 0..10 {
-        w.step(&input, 0.01, &c);
+        w.step(&input, 0.01, &c, None);
     }
     assert!(
         (w.feet[0] - (-384.0 + HALF_WIDTH)).abs() < 1e-3,
@@ -141,4 +142,100 @@ fn the_view_points_along_yaw_and_down_with_positive_pitch() {
     assert!(f[2] < -0.99, "{f:?}");
     w.pitch = -45.0;
     close(w.forward(), [0.0, 0.5f32.sqrt(), 0.5f32.sqrt()]);
+}
+
+fn pair() -> [Portal; 2] {
+    [
+        Portal::new(
+            [-384.0, 0.0, 54.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        ),
+        Portal::new(
+            [0.0, -256.0, 54.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        ),
+    ]
+}
+
+fn walk_west(w: &mut Walker, c: &Chamber, linked: Option<[Portal; 2]>) -> Option<usize> {
+    let input = Input {
+        forward: 1.0,
+        ..Input::default()
+    };
+    let mut crossed = None;
+    for _ in 0..200 {
+        crossed = crossed.or(w.step(&input, 0.01, c, linked));
+    }
+    crossed
+}
+
+#[test]
+fn walking_into_a_linked_wall_portal_comes_out_of_its_partner() {
+    let c = chamber();
+    let mut w = Walker::at([-340.0, 0.0, 0.0]);
+    w.yaw = 180.0;
+    assert_eq!(walk_west(&mut w, &c, Some(pair())), Some(0));
+    assert!(
+        w.feet[1] > -256.0 + HALF_WIDTH - 1e-3,
+        "out in front of orange: {:?}",
+        w.feet
+    );
+    assert!(w.feet[0].abs() < 20.0, "{:?}", w.feet);
+    assert!(
+        (w.yaw.rem_euclid(360.0) - 90.0).abs() < 1e-3,
+        "faces out of orange: {}",
+        w.yaw
+    );
+    assert!(w.feet[2].abs() < 1e-3, "{:?}", w.feet);
+}
+
+#[test]
+fn the_wall_beside_a_portal_still_stops_the_walker() {
+    let c = chamber();
+    let mut w = Walker::at([-340.0, 150.0, 0.0]);
+    w.yaw = 180.0;
+    assert_eq!(walk_west(&mut w, &c, Some(pair())), None);
+    assert!(
+        (w.feet[0] - (-384.0 + HALF_WIDTH)).abs() < 1e-3,
+        "{:?}",
+        w.feet
+    );
+}
+
+#[test]
+fn an_unlinked_portal_is_just_wall() {
+    let c = chamber();
+    let mut w = Walker::at([-340.0, 0.0, 0.0]);
+    w.yaw = 180.0;
+    assert_eq!(walk_west(&mut w, &c, None), None);
+    assert!(
+        (w.feet[0] - (-384.0 + HALF_WIDTH)).abs() < 1e-3,
+        "{:?}",
+        w.feet
+    );
+}
+
+#[test]
+fn the_crossing_keeps_height_and_pitch_between_upright_portals() {
+    let c = chamber();
+    let mut w = Walker::at([-340.0, 0.0, 0.0]);
+    w.yaw = 180.0;
+    w.pitch = 30.0;
+    let input = Input {
+        forward: 1.0,
+        ..Input::default()
+    };
+    for _ in 0..200 {
+        let z = w.feet[2];
+        if w.step(&input, 0.01, &c, Some(pair())).is_some() {
+            assert!((w.feet[2] - z).abs() < 1.0, "feet {} after {z}", w.feet[2]);
+            assert!((w.pitch - 30.0).abs() < 1e-3, "pitch {}", w.pitch);
+            return;
+        }
+    }
+    panic!("never crossed, feet {:?}", w.feet);
 }

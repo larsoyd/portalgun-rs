@@ -2,7 +2,6 @@
 #![allow(dead_code)]
 
 use bevy::asset::{embedded_asset, RenderAssetUsages};
-use bevy::camera::visibility::RenderLayers;
 use bevy::image::{ImageAddressMode, ImageSampler};
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
@@ -14,7 +13,6 @@ use crate::portals::{face_quad, overlay_look, Colour, Pair};
 use crate::sound::Files;
 use crate::texture;
 use crate::units::{to_bevy, to_bevy_dir};
-use crate::view::VIEW_LAYER;
 
 /// TEXTUREFLAGS_CLAMPS and TEXTUREFLAGS_CLAMPT
 const CLAMP_S: u32 = 0x4;
@@ -149,7 +147,6 @@ fn spawn_faces(
                 Mesh3d(mesh.clone()),
                 MeshMaterial3d(material.clone()),
                 Visibility::Hidden,
-                RenderLayers::from_layers(&[0, VIEW_LAYER]),
             ))
             .id();
         Ok((entity, material, mesh))

@@ -1,4 +1,5 @@
-use portal::pair::Vec3;
+use portal::pair::{through_point, Portal, Vec3};
+use portal::teleport::{entered, exit_velocity, meets_opening, view_through, Mover};
 
 use crate::chamber::Chamber;
 
@@ -69,7 +70,14 @@ impl Walker {
             (self.pitch + dy * sensitivity * MOUSE_FACTOR).clamp(-PITCH_LIMIT, PITCH_LIMIT);
     }
 
-    pub fn step(&mut self, input: &Input, dt: f32, chamber: &Chamber) {
+    pub fn step(
+        &mut self,
+        input: &Input,
+        dt: f32,
+        chamber: &Chamber,
+        linked: Option<[Portal; 2]>,
+    ) -> Option<usize> {
+        let before = self.centre();
         let (sin, cos) = self.yaw.to_radians().sin_cos();
         let wish = [
             cos * input.forward + sin * input.side,
@@ -86,8 +94,29 @@ impl Walker {
         self.grounded = false;
         for axis in 0..3 {
             self.feet[axis] += self.velocity[axis] * dt;
-            self.push_out(axis, chamber);
+            self.push_out(axis, chamber, linked.as_ref());
         }
+        let pair = linked?;
+        let i = (0..2).find(|&i| entered(&pair[i], before, self.centre(), self.half()))?;
+        self.carry(&pair[i], &pair[1 - i]);
+        Some(i)
+    }
+
+    fn centre(&self) -> Vec3 {
+        [self.feet[0], self.feet[1], self.feet[2] + HEIGHT / 2.0]
+    }
+
+    fn half(&self) -> Vec3 {
+        [HALF_WIDTH, HALF_WIDTH, HEIGHT / 2.0]
+    }
+
+    fn carry(&mut self, from: &Portal, to: &Portal) {
+        let c = through_point(from, to, self.centre());
+        self.feet = [c[0], c[1], c[2] - HEIGHT / 2.0];
+        self.velocity = exit_velocity(from, to, self.velocity, Mover::Player);
+        let (f, _) = view_through(from, to, self.forward(), self.up());
+        self.yaw = f[1].atan2(f[0]).to_degrees();
+        self.pitch = -f[2].clamp(-1.0, 1.0).asin().to_degrees();
     }
 
     fn bounds(&self) -> (Vec3, Vec3) {
@@ -98,8 +127,23 @@ impl Walker {
         )
     }
 
-    fn push_out(&mut self, axis: usize, chamber: &Chamber) {
+    /// The surface a portal sits on lets the walker into the opening, a stand-in for the carved
+    /// collision the game builds behind each portal.
+    fn push_out(&mut self, axis: usize, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
+        let (centre, half) = (self.centre(), self.half());
+        let open: Vec<&Portal> = linked
+            .into_iter()
+            .flatten()
+            .filter(|p| meets_opening(p, centre, half))
+            .collect();
         for block in &chamber.blocks {
+            let behind = |p: &&Portal| {
+                let q = [0, 1, 2].map(|i| p.origin[i] - p.forward[i]);
+                (0..3).all(|i| q[i] >= block.min[i] && q[i] <= block.max[i])
+            };
+            if open.iter().any(|p| behind(p)) {
+                continue;
+            }
             let (lo, hi) = self.bounds();
             let overlaps = (0..3).all(|i| lo[i] < block.max[i] && hi[i] > block.min[i]);
             if !overlaps {
