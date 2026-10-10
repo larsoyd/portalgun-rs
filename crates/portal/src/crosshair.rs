@@ -128,10 +128,10 @@ pub fn paint(
         }
         [true, true] => {
             rings.think(gun.last_fired, dt);
-            for side in 0..2 {
-                r[side][3] = match gun.last_fired {
+            for (ring, a) in r.iter_mut().zip(rings.alpha) {
+                ring[3] = match gun.last_fired {
                     0 => 0,
-                    _ => rings.alpha[side] as i32 as u8,
+                    _ => a as i32 as u8,
                 };
             }
         }
