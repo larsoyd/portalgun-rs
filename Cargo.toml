@@ -7,7 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-bevy = { version = "=0.19.1", features = ["wav"] }
+bevy = { version = "=0.19.1", features = ["wav", "dds"] }
 portal = { path = "crates/portal" }
 
 [workspace]

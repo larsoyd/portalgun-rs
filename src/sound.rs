@@ -18,7 +18,7 @@ pub struct Sounds {
 impl Sounds {
     pub fn read(search: &SearchPath) -> portal::Result<Sounds> {
         let bank = Bank::read(search)?;
-        info!(
+        println!(
             "[sound] bank scripts={} missing_scripts={}",
             bank.scripts,
             bank.missing.len()

@@ -4,7 +4,9 @@ use std::process::ExitCode;
 use bevy::prelude::*;
 use portal::install::{root, Install};
 use portalgun::args::Args;
+use portalgun::chamber::Chamber;
 use portalgun::run::RunPlugin;
+use portalgun::scene::{Level, ScenePlugin};
 use portalgun::sound::{Files, Sounds};
 
 fn main() -> ExitCode {
@@ -27,6 +29,10 @@ fn main() -> ExitCode {
         Ok(s) => s,
         Err(e) => return refuse(&e.to_string()),
     };
+    let chamber = match Chamber::test_chamber(&install.search) {
+        Ok(c) => c,
+        Err(e) => return refuse(&e.to_string()),
+    };
     println!(
         "[startup] install={} checked_ms={}",
         install.root.display(),
@@ -47,8 +53,14 @@ fn main() -> ExitCode {
         })
         .insert_resource(Files(install.search))
         .insert_resource(sounds)
+        .insert_resource(Level(chamber))
+        .add_plugins(ScenePlugin)
         .add_systems(Startup, |mut commands: Commands| {
-            commands.spawn(Camera3d::default());
+            commands.spawn((
+                Camera3d::default(),
+                Transform::from_translation(portalgun::units::to_bevy([-320.0, -120.0, 64.0]))
+                    .looking_at(portalgun::units::to_bevy([200.0, 100.0, 40.0]), Vec3::Y),
+            ));
         })
         .run();
     if exit.is_success() {
