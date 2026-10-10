@@ -8,7 +8,13 @@ use portalgun::viewanim::{frame_at, GunAnim};
 fn gun() -> Mdl {
     let dir = root(None, None, Path::new(&std::env::var("HOME").unwrap()));
     let install = Install::open(&dir).unwrap_or_else(|e| panic!("install at {dir:?}: {e}"));
-    Mdl::parse(install.search.read("models/weapons/v_portalgun.mdl").unwrap()).unwrap()
+    Mdl::parse(
+        install
+            .search
+            .read("models/weapons/v_portalgun.mdl")
+            .unwrap(),
+    )
+    .unwrap()
 }
 
 fn seq(m: &Mdl, label: &str) -> usize {
@@ -64,7 +70,10 @@ fn a_new_sequence_fades_in_over_its_fade_time() {
     let fire_at = sample(&m, 1, frame_at(&m, seq(&m, "fire1"), 0.2)).unwrap();
     for &i in &moved {
         for k in 0..3 {
-            assert!((done[i].pos[k] - fire_at[i].pos[k]).abs() < 1e-4, "bone {i} axis {k}");
+            assert!(
+                (done[i].pos[k] - fire_at[i].pos[k]).abs() < 1e-4,
+                "bone {i} axis {k}"
+            );
         }
     }
 }

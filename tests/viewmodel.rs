@@ -23,7 +23,10 @@ fn rest(m: &Mdl) -> Vec<Mat4> {
 fn the_gun_has_its_hands_body_and_glass() {
     let i = install();
     let (mdl, meshes) = read_gun(&i.search).unwrap();
-    assert_eq!(meshes.iter().map(|m| m.material).collect::<Vec<_>>(), [0, 1, 2]);
+    assert_eq!(
+        meshes.iter().map(|m| m.material).collect::<Vec<_>>(),
+        [0, 1, 2]
+    );
     assert_eq!(mdl.textures.len(), 3);
 }
 
@@ -37,11 +40,17 @@ fn every_vertex_is_fully_weighted_to_real_bones_and_faces_flip_winding() {
         for (j, w) in s.joints.iter().zip(&s.weights) {
             assert!((w.iter().sum::<f32>() - 1.0).abs() < 1e-3, "{w:?}");
             for k in 0..4 {
-                assert!(w[k] == 0.0 || (j[k] as usize) < mdl.bones.len(), "{j:?} {w:?}");
+                assert!(
+                    w[k] == 0.0 || (j[k] as usize) < mdl.bones.len(),
+                    "{j:?} {w:?}"
+                );
             }
         }
         assert_eq!(s.indices.len(), mesh.indices.len());
-        assert_eq!(s.indices[..3], [mesh.indices[0], mesh.indices[2], mesh.indices[1]]);
+        assert_eq!(
+            s.indices[..3],
+            [mesh.indices[0], mesh.indices[2], mesh.indices[1]]
+        );
     }
 }
 
@@ -60,13 +69,19 @@ fn materials_name_their_texture_and_blend_and_a_missing_texture_is_none() {
     let i = install();
     let (mdl, _) = read_gun(&i.search).unwrap();
     let body = look(&i.search, &mdl, 1).unwrap();
-    assert_eq!(body.texture.as_deref(), Some("models/weapons/v_models/v_portalgun/v_portalgun"));
+    assert_eq!(
+        body.texture.as_deref(),
+        Some("models/weapons/v_models/v_portalgun/v_portalgun")
+    );
     assert_eq!(body.blend, Blend::Opaque);
     let glass = look(&i.search, &mdl, 2).unwrap();
     assert_eq!(glass.blend, Blend::Add);
     let hands = look(&i.search, &mdl, 0).unwrap();
     assert_eq!(hands.texture, None);
-    assert_eq!(hands.missing.as_deref(), Some("models/weapons/v_models/v_hands/v_hands"));
+    assert_eq!(
+        hands.missing.as_deref(),
+        Some("models/weapons/v_models/v_hands/v_hands")
+    );
 }
 
 #[test]

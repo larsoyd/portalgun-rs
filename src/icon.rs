@@ -1,8 +1,8 @@
 use std::io::Cursor;
 use std::path::Path;
 
-use bevy::prelude::*;
 use bevy::ecs::system::NonSendMarker;
+use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use bevy::winit::WINIT_WINDOWS;
 use image::{ImageFormat, RgbaImage};

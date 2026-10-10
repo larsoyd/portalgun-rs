@@ -212,11 +212,7 @@ fn spawn_view(
         VIEWMODEL_FOV,
         config.0.msaa
     );
-    commands.insert_resource(Gun {
-        mdl,
-        anim,
-        joints,
-    });
+    commands.insert_resource(Gun { mdl, anim, joints });
     commands.remove_resource::<GunMeshes>();
 }
 

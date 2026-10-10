@@ -130,7 +130,9 @@ fn with_anim_field(at: usize, value: i32) -> Vec<u8> {
 
 #[test]
 fn sectioned_animations_are_refused_by_their_section_frames() {
-    let e = Mdl::parse(with_anim_field(84, 30)).err().expect("sectionframes 30 refused");
+    let e = Mdl::parse(with_anim_field(84, 30))
+        .err()
+        .expect("sectionframes 30 refused");
     assert!(e.to_string().contains("sectioned"), "{e}");
     assert!(Mdl::parse(with_anim_field(52, 1)).is_err());
 }
