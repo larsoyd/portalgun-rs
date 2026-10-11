@@ -165,3 +165,26 @@ fn a_rolled_view_lowers_the_eye_toward_the_feet() {
         );
     }
 }
+
+#[test]
+fn the_camera_adds_the_view_punch_but_the_body_aim_does_not() {
+    use portalgun::visual::VisualHistory;
+    use portalgun::walker::Walker;
+    let mut walker = Walker::at([0.0; 3]);
+    walker.punch.angle = [-5.0, 2.0, 0.0];
+    let visual = VisualHistory::new(&walker).sample(&walker, 0.0);
+    assert_eq!((visual.angles.pitch, visual.angles.yaw), (0.0, 0.0));
+    let forward = visual.camera().forward();
+    let expected = to_bevy_dir(
+        portal::viewbob::angle_vectors(portal::viewbob::Angles {
+            pitch: -5.0,
+            yaw: 2.0,
+            roll: 0.0,
+        })
+        .0,
+    );
+    assert!(
+        forward.dot(expected) > 0.99999,
+        "{forward:?} vs {expected:?}"
+    );
+}

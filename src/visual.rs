@@ -104,6 +104,7 @@ impl VisualHistory {
             pose,
             // Mouse look and portal turns are immediate, including across +/-180 degrees.
             angles: player.angles(),
+            punch: player.punch.angle,
             revision: self.revision,
             reset_revision: self.reset_revision,
             teleport_rotation: self.teleport_rotation,
@@ -115,6 +116,7 @@ impl VisualHistory {
 pub struct VisualPlayer {
     pub pose: Snapshot,
     pub angles: Angles,
+    pub punch: [f32; 3],
     pub revision: u64,
     pub reset_revision: u64,
     pub teleport_rotation: Quat,
@@ -154,8 +156,17 @@ impl VisualPlayer {
         None
     }
 
+    /// The eye angles plus the punch, as CalcPlayerView adds them at 0x20c0a6 (disassembly, client.so).
+    pub fn view_angles(&self) -> Angles {
+        Angles {
+            pitch: self.angles.pitch + self.punch[0],
+            yaw: self.angles.yaw + self.punch[1],
+            roll: self.angles.roll + self.punch[2],
+        }
+    }
+
     pub fn camera(&self) -> Transform {
-        let (forward, _, up) = angle_vectors(self.angles);
+        let (forward, _, up) = angle_vectors(self.view_angles());
         Transform::from_translation(to_bevy(self.pose.eye.to_array()))
             .looking_to(to_bevy_dir(forward), to_bevy_dir(up))
     }

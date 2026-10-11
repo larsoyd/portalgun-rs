@@ -132,3 +132,9 @@ pub fn test_shot(colour: Colour, w: &Walker, world: &impl World, pair: &Pair) ->
         Placement::Failed(_) => 0.0,
     }
 }
+
+/// The ViewPunch PrimaryAttack and SecondaryAttack add.
+/// Translated from 0x2e4000 (decompiled, server.so)
+pub fn fire_punch(rng: &mut crate::random::Xorshift) -> [f32; 3] {
+    [rng.range(-1.0, -0.5), rng.range(-1.0, 1.0), 0.0]
+}

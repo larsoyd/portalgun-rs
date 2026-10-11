@@ -462,3 +462,18 @@ fn mouse_pitch_stops_at_cl_pitchdown_and_cl_pitchup() {
     w.look(0.0, -1.0e6, 1.0);
     assert_eq!(w.pitch, -89.0);
 }
+
+#[test]
+fn each_tick_decays_the_view_punch_to_rest() {
+    let c = chamber();
+    let mut w = Walker::at([0.0; 3]);
+    w.punch.kick([-1.0, 1.0, 0.0]);
+    w.step(&Input::default(), 0.015, &c, None);
+    assert!(
+        w.punch.angle[0] < 0.0 && w.punch.angle[1] > 0.0,
+        "{:?}",
+        w.punch
+    );
+    run(&mut w, &c, Input::default(), 3.0);
+    assert_eq!(w.punch, portal::movement::Punch::default());
+}

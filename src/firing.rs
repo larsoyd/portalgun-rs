@@ -32,7 +32,7 @@ fn fire(
     time: Res<Time>,
     mut controls: ResMut<Controls>,
     mut gun: ResMut<Firing>,
-    player: Res<Player>,
+    mut player: ResMut<Player>,
     level: Res<Level>,
     portals: Res<Portals>,
     mut view: Option<ResMut<ViewGun>>,
@@ -40,6 +40,7 @@ fn fire(
     mut sounds: ResMut<Sounds>,
     files: Res<Files>,
     mut audio: ResMut<Assets<AudioSource>>,
+    mut rng: Local<crate::random::Xorshift>,
 ) {
     let now = time.elapsed_secs();
     let pressed = [
@@ -66,6 +67,9 @@ fn fire(
         if let Some(body) = body.as_deref_mut() {
             body.fire(now);
         }
+        let kick = crate::gun::fire_punch(&mut rng);
+        player.punch.kick(kick);
+        info!("[view] punch fire pitch={:.2} yaw={:.2}", kick[0], kick[1]);
         if let Some(view) = view.as_deref_mut() {
             let crate::view::Gun { mdl, anim, .. } = view;
             anim.play(mdl, "ACT_VM_PRIMARYATTACK", now);

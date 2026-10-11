@@ -16,6 +16,7 @@ pub mod hud;
 pub mod icon;
 pub mod player;
 pub mod portals;
+pub mod random;
 pub mod run;
 pub mod scene;
 pub mod script;

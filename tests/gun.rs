@@ -158,3 +158,31 @@ fn the_test_shot_scores_a_fit_by_its_quality_and_a_failure_as_nothing() {
         "the metal strip takes no portal"
     );
 }
+
+#[test]
+fn firing_kicks_the_view_up_by_half_to_one_degree_and_sideways_up_to_one() {
+    let mut rng = portalgun::random::Xorshift::default();
+    let kicks: Vec<_> = (0..2000)
+        .map(|_| portalgun::gun::fire_punch(&mut rng))
+        .collect();
+    for k in &kicks {
+        assert!(
+            (-1.0..=-0.5).contains(&k[0]) && (-1.0..=1.0).contains(&k[1]) && k[2] == 0.0,
+            "{k:?}"
+        );
+    }
+    let spread = |i: usize| {
+        kicks.iter().map(|k| k[i]).fold(f32::INFINITY, f32::min)
+            ..kicks.iter().map(|k| k[i]).fold(f32::NEG_INFINITY, f32::max)
+    };
+    assert!(
+        spread(0).start < -0.98 && spread(0).end > -0.52,
+        "{:?}",
+        spread(0)
+    );
+    assert!(
+        spread(1).start < -0.95 && spread(1).end > 0.95,
+        "{:?}",
+        spread(1)
+    );
+}

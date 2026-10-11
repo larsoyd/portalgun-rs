@@ -90,7 +90,7 @@ fn sway(
 
 impl ViewMotion {
     pub fn relative(&mut self, visual: &VisualPlayer, now: f32, dt: f32) -> Mat4 {
-        let angles = visual.angles;
+        let angles = visual.view_angles();
         let eye = visual.pose.eye.to_array();
         if self.reset_revision != Some(visual.reset_revision) {
             self.lag.reset(angles);

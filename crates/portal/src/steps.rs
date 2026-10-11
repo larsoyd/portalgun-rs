@@ -13,7 +13,6 @@ const LAND_MS: f32 = 400.0;
 const PUNCH_FALL: f32 = 303.0;
 const SAFE_FALL: f32 = 526.5;
 const MIN_BOUNCE: f32 = 173.0;
-const PUNCH_ROLL: f64 = 0.013;
 /// PortalPlayer.FallRecover's pitch and volume from the fall speed
 const RECOVER_PITCH: (f64, f64) = (125.0, 0.03);
 const RECOVER_VOLUME: (f64, f64, f64) = (0.00075, 1.38, 0.38);
@@ -30,7 +29,6 @@ pub struct Landing {
     pub step: Step,
     /// PortalPlayer.FallRecover's pitch and volume after a fall the boots take
     pub recover: Option<(i32, f32)>,
-    pub punch_roll: f32,
 }
 
 /// m_flStepSoundTime in milliseconds and m_nStepside.
@@ -128,7 +126,6 @@ impl Steps {
         Some(Landing {
             step: self.play(volume),
             recover,
-            punch_roll: (fall as f64 * PUNCH_ROLL) as f32,
         })
     }
 }

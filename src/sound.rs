@@ -15,7 +15,7 @@ pub struct Files(pub SearchPath);
 pub struct Sounds {
     bank: Bank,
     waves: HashMap<String, Handle<AudioSource>>,
-    seed: u32,
+    seed: crate::random::Xorshift,
 }
 
 impl Sounds {
@@ -29,7 +29,7 @@ impl Sounds {
         Ok(Sounds {
             bank,
             waves: HashMap::new(),
-            seed: 0x9e37_79b9,
+            seed: crate::random::Xorshift::default(),
         })
     }
 
@@ -96,11 +96,7 @@ impl Sounds {
         Some(commands.spawn((AudioPlayer(wave), settings)).id())
     }
 
-    // xorshift, the engine's own random stream is not traced
     fn draw(&mut self) -> f32 {
-        self.seed ^= self.seed << 13;
-        self.seed ^= self.seed >> 17;
-        self.seed ^= self.seed << 5;
-        (self.seed >> 8) as f32 / (1 << 24) as f32
+        self.seed.unit()
     }
 }

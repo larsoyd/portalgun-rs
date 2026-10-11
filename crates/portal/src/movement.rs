@@ -197,3 +197,42 @@ pub fn check_velocity(v: Vec3) -> Vec3 {
         false => 0.0,
     })
 }
+
+/// m_vecPunchAngle and its velocity.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Punch {
+    pub angle: Vec3,
+    pub velocity: Vec3,
+}
+
+impl Punch {
+    /// Translated from 0x246190 (decompiled, server.so), with sv_suppress_viewpunch at its default of 0
+    pub fn kick(&mut self, angle: Vec3) {
+        self.velocity = [0, 1, 2].map(|i| self.velocity[i] + angle[i] * 20.0);
+    }
+
+    /// A damped spring back to zero, once per movement tick.
+    /// Translated from 0x26f6e0 (decompiled, server.so)
+    pub fn decay(&mut self, dt: f32) {
+        let length = |v: Vec3| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) as f64;
+        if length(self.angle) <= 0.001 && length(self.velocity) <= 0.001 {
+            *self = Self::default();
+            return;
+        }
+        let damping = if dt <= 1.0 / 9.0 { 1.0 - 9.0 * dt } else { 0.0 };
+        let spring = (65.0 * dt).clamp(0.0, 2.0);
+        for i in 0..3 {
+            self.angle[i] += self.velocity[i] * dt;
+            self.velocity[i] = self.velocity[i] * damping - spring * self.angle[i];
+        }
+        let limits = [89.0, 179.0, 89.0];
+        self.angle = [0, 1, 2].map(|i| self.angle[i].clamp(-limits[i], limits[i]));
+    }
+
+    /// PlayerRoughLandingEffects sets the roll outright and caps the pitch.
+    /// Translated from 0x26f5a0 (disassembled, server.so)
+    pub fn land(&mut self, fall: f32) {
+        self.angle[2] = (fall as f64 * 0.013) as f32;
+        self.angle[0] = self.angle[0].min(8.0);
+    }
+}

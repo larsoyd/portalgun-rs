@@ -11,6 +11,7 @@ use portal::surfaces::{Surface, Surfaces};
 
 use crate::faces::{Portals, MAIN_FACES};
 use crate::portals::Colour;
+use crate::random::Xorshift;
 use crate::scene::Level;
 use crate::script::{Action, Script};
 use crate::settings::Settings;
@@ -199,7 +200,7 @@ fn simulate(
 fn walk(
     mut commands: Commands,
     time: Res<Time>,
-    player: Res<Player>,
+    mut player: ResMut<Player>,
     result: Res<MovementResult>,
     mut sounds: ResMut<Sounds>,
     files: Res<Files>,
@@ -246,8 +247,13 @@ fn walk(
         heard("jump", footing.steps.jump());
     }
     let landing = player.landed.and_then(|fall| footing.steps.land(fall));
-    if let Some(l) = landing {
+    if let (Some(l), Some(fall)) = (landing, player.landed) {
         heard("land", l.step);
+        player.punch.land(fall);
+        info!(
+            "[view] punch landing fall={fall:.0} roll={:.2}",
+            player.punch.angle[2]
+        );
     }
     let moved = (player.velocity, player.grounded);
     if let Some(s) = footing.steps.update_duck(
@@ -332,14 +338,9 @@ fn read_footing(
     }
 }
 
-fn reorient(time: Res<Time>, mut player: ResMut<Player>, mut seed: Local<u32>) {
-    // xorshift for RandomInt(0, 1), the engine's own random stream is not traced
-    *seed = if *seed == 0 { 0x9e37_79b9 } else { *seed };
-    *seed ^= *seed << 13;
-    *seed ^= *seed >> 17;
-    *seed ^= *seed << 5;
+fn reorient(time: Res<Time>, mut player: ResMut<Player>, mut rng: Local<Xorshift>) {
     let roll = player.roll;
-    player.fix_view(time.delta_secs(), *seed & 1 == 1);
+    player.fix_view(time.delta_secs(), rng.unit() >= 0.5);
     if roll != 0.0 && player.roll == 0.0 {
         info!("[view] level after_roll={roll:.1}");
     }

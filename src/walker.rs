@@ -3,7 +3,7 @@
 
 use portal::movement::{
     accelerate, air_accelerate, check_velocity, command, finish_gravity, fling_guard, flinging,
-    funnel, jump_on_surface, leaves_ground, start_gravity, surface_friction, wish, Funnel,
+    funnel, jump_on_surface, leaves_ground, start_gravity, surface_friction, wish, Funnel, Punch,
     ACCELERATE, AIR_ACCELERATE, MAX_SPEED, WALK_SPEED,
 };
 use portal::pair::{crossing, through_point, Portal, Vec3};
@@ -83,6 +83,7 @@ pub struct Walker {
     pub jumps: u64,
     pub roll: f32,
     pub reorient: Reorient,
+    pub punch: Punch,
     /// the fall speed, for the step the walker landed on
     pub landed: Option<f32>,
     /// jump held since the last jump or since leaving the ground, so holding it never repeats
@@ -108,6 +109,7 @@ impl Walker {
             jumps: 0,
             roll: 0.0,
             reorient: Reorient::default(),
+            punch: Punch::default(),
             landed: None,
             jump_held: false,
             duck: Duck::default(),
@@ -192,6 +194,8 @@ impl Walker {
             self.categorize(chamber, linked.as_ref());
             self.categorize_on_spawn = false;
         }
+        // DecayPunchAngle, through slot 0x38 at 0x273970 (disassembly, server.so)
+        self.punch.decay(dt);
         if self.velocity[2] > 250.0 {
             self.grounded = false;
             self.ground = None;

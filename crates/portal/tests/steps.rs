@@ -112,7 +112,6 @@ fn soft_landings_make_no_sound() {
     assert_eq!(l.step.volume, 0.85);
     assert!(l.recover.is_none());
     assert_eq!(s.time, 400.0, "a landing holds the next step 400 ms");
-    assert!((l.punch_roll - 303.0 * 0.013).abs() < 1e-4);
 }
 
 #[test]
