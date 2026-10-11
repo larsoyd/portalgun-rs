@@ -40,19 +40,42 @@ pub fn sample(mdl: &Mdl, anim: usize, frame: f32) -> Result<Vec<BonePose>> {
             ),
         ));
     }
-    let (k, s) = (frame.floor() as usize, frame.fract());
+    let (mut k, s) = (frame.floor() as usize, frame.fract());
+    let data = if desc.section_frames > 0 {
+        let section = if desc.frames > desc.section_frames && k == desc.frames - 1 {
+            k = 0;
+            desc.frames / desc.section_frames + 1
+        } else {
+            let section = k / desc.section_frames;
+            k %= desc.section_frames;
+            section
+        };
+        *desc
+            .sections
+            .get(section)
+            .ok_or_else(|| malformed("animation", "missing section"))?
+    } else {
+        desc.data
+    };
     let r = Reader::new(&mdl.bytes, "animation");
     let mut poses: Vec<BonePose> = mdl
         .bones
         .iter()
         .map(|b| BonePose {
-            pos: b.pos,
-            quat: b.quat,
+            pos: if desc.flags & 4 != 0 { [0.0; 3] } else { b.pos },
+            quat: if desc.flags & 4 != 0 {
+                [0.0, 0.0, 0.0, 1.0]
+            } else {
+                b.quat
+            },
         })
         .collect();
-    let mut at = desc.data;
+    let mut at = data;
     loop {
         let [bone, flags] = r.get::<2>(at)?;
+        if bone == 255 {
+            return Ok(poses);
+        }
         let next = r.i16(at + 2)?;
         let b = mdl
             .bones

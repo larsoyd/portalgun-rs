@@ -357,7 +357,7 @@ fn spawn_faces(
                 let order = DOUBLER_ORDER - (2 * level + c.index()) as isize;
                 let camera = view_camera(&mut commands, image.clone(), order, msaa);
                 commands.entity(camera).insert((
-                    RenderLayers::from_layers(&[0, layer, 32 + layer]),
+                    RenderLayers::from_layers(&[0, layer, 32 + layer, crate::body::BODY_LAYER]),
                     crate::effects::ParticleView(32 + layer),
                     bevy::core_pipeline::prepass::DepthPrepass,
                 ));

@@ -30,8 +30,12 @@ pub struct Skin {
 }
 
 pub fn read_gun(search: &SearchPath) -> Result<(Mdl, Vec<MeshData>), String> {
+    read_model(search, VIEW_MODEL)
+}
+
+pub fn read_model(search: &SearchPath, name: &str) -> Result<(Mdl, Vec<MeshData>), String> {
     let file = |ext: &str| {
-        let path = format!("{VIEW_MODEL}.{ext}");
+        let path = format!("{name}.{ext}");
         search.read(&path).map_err(|e| format!("{path}: {e}"))
     };
     let mdl = Mdl::parse(file("mdl")?).map_err(|e| format!("mdl: {e}"))?;
@@ -90,10 +94,16 @@ pub fn look(search: &SearchPath, mdl: &Mdl, index: usize) -> Result<Look, String
         .textures
         .get(index)
         .ok_or_else(|| format!("material {index} of {}", mdl.textures.len()))?;
-    let dir = mdl.cd_textures.first().map_or("", String::as_str);
-    let path = format!("materials/{dir}{name}.vmt")
-        .replace('\\', "/")
-        .to_ascii_lowercase();
+    let path = mdl
+        .cd_textures
+        .iter()
+        .map(|dir| {
+            format!("materials/{dir}{name}.vmt")
+                .replace('\\', "/")
+                .to_ascii_lowercase()
+        })
+        .find(|path| search.contains(path))
+        .ok_or_else(|| format!("material {name}: no VMT in model search directories"))?;
     let text = search.read(&path).map_err(|e| format!("{path}: {e}"))?;
     let root =
         keyvalues::parse(&String::from_utf8_lossy(&text)).map_err(|e| format!("{path}: {e}"))?;

@@ -25,6 +25,9 @@ pub struct AnimDesc {
     pub frames: usize,
     /// absolute offset of the first mstudioanim_t record
     pub data: usize,
+    pub section_frames: usize,
+    pub sections: Vec<usize>,
+    pub movement: [f32; 3],
 }
 
 #[derive(Debug, Clone, Default)]
@@ -43,6 +46,13 @@ pub struct Sequence {
     pub fade_in: f32,
     pub fade_out: f32,
     pub events: Vec<Event>,
+    pub flags: i32,
+    pub grid: [usize; 2],
+    pub blends: Vec<usize>,
+    pub param_start: [f32; 2],
+    pub param_end: [f32; 2],
+    pub weights: Vec<f32>,
+    pub layers: Vec<usize>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -116,17 +126,39 @@ impl Mdl {
                 flags: r.i32(o + 160)? as u32,
             })
         })?;
-        // Translated from 0x2f5f07 (disassembly, client.so): sectionframes at +84, animblock at +52
+        // Translated from 0x2f5ef0 (decompiled, client.so).
         m.anims = r.table(180, 100, |o| {
-            if r.i32(o + 84)? != 0 || r.i32(o + 52)? != 0 {
-                return Err(Error::Unsupported("sectioned or block animations".into()));
+            if r.i32(o + 52)? != 0 {
+                return Err(Error::Unsupported("external animation blocks".into()));
             }
+            let frames = r.i32(o + 16)?.max(1) as usize;
+            let section_frames = r.i32(o + 84)?.max(0) as usize;
+            let sections = if let Some(count) = frames.checked_div(section_frames) {
+                r.counted((count + 2) as i32, r.offset(o, r.i32(o + 80)?)?, 8, |s| {
+                    if r.i32(s)? != 0 {
+                        return Err(Error::Unsupported("external animation section".into()));
+                    }
+                    r.offset(o, r.i32(s + 4)?)
+                })?
+            } else {
+                Vec::new()
+            };
+            let movements = r.i32(o + 20)?;
+            let movement = if movements > 0 {
+                let last = r.offset(o, r.i32(o + 24)?)? + (movements as usize - 1) * 44;
+                r.f32s(last + 32)?
+            } else {
+                [0.0; 3]
+            };
             Ok(AnimDesc {
                 name: r.name(o, o + 4)?,
                 fps: r.f32(o + 8)?,
                 flags: r.i32(o + 12)?,
-                frames: r.i32(o + 16)?.max(1) as usize,
+                frames,
                 data: r.offset(o, r.i32(o + 56)?)?,
+                section_frames,
+                sections,
+                movement,
             })
         })?;
         m.sequences = r.table(188, 212, |o| {
@@ -138,6 +170,26 @@ impl Mdl {
                     options: r.fixed_str(e + 12, 64)?,
                 })
             })?;
+            let grid = [
+                r.i32(o + 68)?.max(1) as usize,
+                r.i32(o + 72)?.max(1) as usize,
+            ];
+            let blends = r.counted((grid[0] * grid[1]) as i32, first, 2, |p| {
+                Ok(r.i16(p)? as usize)
+            })?;
+            let weights = if r.i32(o + 156)? != 0 {
+                r.counted(
+                    m.bones.len() as i32,
+                    r.offset(o, r.i32(o + 156)?)?,
+                    4,
+                    |p| r.f32(p),
+                )?
+            } else {
+                vec![1.0; m.bones.len()]
+            };
+            let layers = r.counted(r.i32(o + 148)?, r.offset(o, r.i32(o + 152)?)?, 24, |p| {
+                Ok(r.i16(p)? as usize)
+            })?;
             Ok(Sequence {
                 label: r.name(o, o + 4)?,
                 activity: r.name(o, o + 8)?,
@@ -146,6 +198,13 @@ impl Mdl {
                 fade_in: r.f32(o + 104)?,
                 fade_out: r.f32(o + 108)?,
                 events,
+                flags: r.i32(o + 12)?,
+                grid,
+                blends,
+                weights,
+                layers,
+                param_start: r.f32s(o + 84)?,
+                param_end: r.f32s(o + 92)?,
             })
         })?;
         m.textures = r.table(204, 64, |o| r.name(o, o))?;

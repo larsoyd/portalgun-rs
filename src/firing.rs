@@ -33,6 +33,7 @@ fn fire(
     level: Res<Level>,
     portals: Res<Portals>,
     mut view: Option<ResMut<ViewGun>>,
+    mut body: Option<ResMut<crate::body::BodyAnimation>>,
     mut sounds: ResMut<Sounds>,
     files: Res<Files>,
     mut audio: ResMut<Assets<AudioSource>>,
@@ -59,6 +60,9 @@ fn fire(
             &mut audio,
             &format!("Weapon_Portalgun.fire_{}", colour.sound()),
         );
+        if let Some(body) = body.as_deref_mut() {
+            body.fire(now);
+        }
         if let Some(view) = view.as_deref_mut() {
             let crate::view::Gun { mdl, anim, .. } = view;
             anim.play(mdl, "ACT_VM_PRIMARYATTACK", now);

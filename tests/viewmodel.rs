@@ -108,3 +108,19 @@ fn a_vertex_keeps_all_three_of_its_bone_weights() {
     assert_eq!(s.weights[0], [0.5, 0.3, 0.2, 0.0]);
     assert_eq!(s.weights[1], [1.0, 0.0, 0.0, 0.0]);
 }
+
+#[test]
+fn world_gun_loads_with_its_own_material_search_path_and_forward_muzzle() {
+    let install = install();
+    let (mdl, meshes) =
+        portalgun::viewmodel::read_model(&install.search, "models/weapons/w_portalgun").unwrap();
+    assert_eq!(mdl.bones.len(), 1);
+    assert!(!meshes.is_empty());
+    for piece in meshes {
+        let material = look(&install.search, &mdl, piece.material).unwrap();
+        let name = material.texture.unwrap();
+        assert!(portalgun::texture::load(&install.search, &name).is_ok());
+    }
+    let muzzle = mdl.attachments.iter().find(|a| a.name == "muzzle").unwrap();
+    assert!(muzzle.local[2][3] < -20.0);
+}

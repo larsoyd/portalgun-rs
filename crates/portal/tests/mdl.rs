@@ -129,11 +129,11 @@ fn with_anim_field(at: usize, value: i32) -> Vec<u8> {
 }
 
 #[test]
-fn sectioned_animations_are_refused_by_their_section_frames() {
+fn external_animation_blocks_and_missing_section_tables_are_refused() {
     let e = Mdl::parse(with_anim_field(84, 30))
         .err()
-        .expect("sectionframes 30 refused");
-    assert!(e.to_string().contains("sectioned"), "{e}");
+        .expect("missing section table refused");
+    assert!(e.to_string().contains("section"), "{e}");
     assert!(Mdl::parse(with_anim_field(52, 1)).is_err());
 }
 

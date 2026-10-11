@@ -36,6 +36,27 @@ Portal placement now dispatches the original success and supported failure
 particle graphs. Refraction children remain unsupported. TODO: the gun's glow
 sprites and beams, projectile streams, and pickup and hold animations.
 
+### The player model
+
+A capsule-and-joint player rig adapted from
+[Funny-Bones/ELDEN-RING-Combat-Rewrite](https://github.com/Funny-Bones/ELDEN-RING-Combat-Rewrite)
+holds Portal's world gun model. Chell's installed animation data drives the
+joints, folding hands, and weapon bone: idle, directional movement, crouching,
+jumping, aiming and firing. The animation-state rules were traced in Ghidra;
+clip rates, movement distances, blend grids, layers and transition durations
+come from the model. Takeoff and landing blend from the previous pose.
+Movement and collision still use the existing Portal controller.
+
+The body and held gun render in both colours' recursive portal views. The
+first-person camera retains its separate animated view model. Capsule radii
+and the head are the credited rig's stand-ins. The body relocates with the
+player at a crossing; there is no split body clone on the other side while
+straddling an opening. Full Source foot IK and animation-layer history are
+not reproduced. See [animation evidence and limits](docs/player-animation.md).
+
+See [third-party credits](THIRD_PARTY.md) for the upstream revision and MIT
+notice. No Elden Ring installation or data is needed.
+
 ### The portals
 
 - Portals open on surfaces the gun accepts, fitted to the wall and nudged off
@@ -297,6 +318,7 @@ cargo run -p portal --example portal_inspect -- "/path/to/Steam/steamapps/common
 | `src/args.rs`, `src/settings.rs`, `src/script.rs` | Flags, the settings file and timed scripts. |
 | `src/units.rs` | Source units to Bevy metres, the only place that converts. |
 | `src/chamber.rs`, `src/scene.rs` | The test chamber and its drawing. |
+| `src/body.rs`, `src/bodyanim.rs` | The capsule rig, Portal animation clips and held world gun, visible in portals. |
 | `src/walker.rs`, `src/player.rs` | Moving through the chamber, mouse look and crossing portals. |
 | `src/gun.rs`, `src/firing.rs` | The gun's shots and what happens when they land. |
 | `src/portals.rs`, `src/faces.rs`, `src/views.rs`, `src/shaders/` | The portal pair, the drawn faces and the views through them. |
@@ -315,7 +337,9 @@ the copy of the game they own.
 
 ## License
 
-The code is under the [MIT License](LICENSE).
+The code is under the [MIT License](LICENSE). Adapted rig code retains its
+[upstream MIT notice](licenses/ELDEN-RING-Combat-Rewrite-MIT.txt); see
+[third-party credits](THIRD_PARTY.md).
 
 The licence covers this project's code only. It grants nothing over Portal or
 its files, which remain Valve's.

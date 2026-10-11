@@ -137,6 +137,11 @@ fn particle_view_layers_are_isolated_for_main_recursive_and_screen_copy_views() 
         .collect();
     assert_eq!(views.len(), 6);
     for (layer, layers) in &views {
+        assert_eq!(
+            layers.intersects(&RenderLayers::layer(portalgun::body::BODY_LAYER)),
+            *layer != 32 && *layer != 33,
+            "only recursive portal cameras render the player body"
+        );
         assert!(layers.intersects(&RenderLayers::layer(0)));
         assert!(layers.intersects(&RenderLayers::layer(*layer)));
         for (other, _) in &views {

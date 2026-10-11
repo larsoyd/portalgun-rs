@@ -96,7 +96,7 @@ fn spawn_chamber(
                 ..default()
             },
             Transform::from_translation(to_bevy(at)),
-            RenderLayers::from_layers(&[0, VIEW_LAYER]),
+            RenderLayers::from_layers(&[0, VIEW_LAYER, crate::body::BODY_LAYER]),
         ));
     }
     info!(

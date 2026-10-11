@@ -1,4 +1,6 @@
 pub mod args;
+pub mod body;
+pub mod bodyanim;
 pub mod chamber;
 pub mod collision;
 pub mod display;

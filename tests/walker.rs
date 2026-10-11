@@ -320,6 +320,34 @@ fn a_walker_dropped_into_the_ledge_top_leaves_by_the_ledge_side() {
 }
 
 #[test]
+fn unducking_across_a_floor_portal_plane_still_teleports() {
+    let c = chamber();
+    let floor = Portal::new(
+        [-250.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0],
+        (32.0, 54.0),
+    );
+    let ceiling = Portal::new(
+        [0.0, -120.0, 384.0],
+        [0.0, 0.0, -1.0],
+        [0.0, 1.0, 0.0],
+        (32.0, 54.0),
+    );
+    let mut w = Walker::at([-250.0, 0.0, -15.0]);
+    w.duck.ducked = true;
+    w.duck.eye = 28.0;
+    assert!(w.centre()[2] > 0.0);
+    assert_eq!(
+        w.step(&Input::default(), 0.015, &c, Some([floor, ceiling])),
+        Some(0)
+    );
+    assert!(!w.duck.ducked);
+    assert!(w.feet[2] > 300.0 && w.centre()[2] < 384.0);
+    assert!((w.feet[1] + 120.0).abs() < 0.01);
+}
+
+#[test]
 fn the_walker_reports_its_jump_landing_speed_and_ground() {
     let c = chamber();
     let mut w = Walker::at([0.0, 0.0, 100.0]);

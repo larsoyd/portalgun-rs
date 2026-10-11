@@ -165,8 +165,9 @@ impl Walker {
             fmove *= 1.0 / 3.0;
             smove *= 1.0 / 3.0;
         }
-        self.update_duck(input.crouch, dt, chamber, linked.as_ref());
+        // Resizing the hull can carry its centre across a portal plane.
         let before = self.centre();
+        self.update_duck(input.crouch, dt, chamber, linked.as_ref());
         self.velocity[2] = start_gravity(self.velocity[2], dt);
         if input.jump_pressed {
             self.jump_held = false;
