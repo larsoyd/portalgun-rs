@@ -102,6 +102,8 @@ pub struct Walker {
     pub owner: Option<usize>,
     /// set by each teleport, makes the roll recovery pitch instead
     pub pitch_reorientation: bool,
+    /// velocity, ground and duck when UpdateStepSound reads them, before the move
+    pub before_move: (Vec3, bool, bool),
     touching: [bool; 2],
     /// IN_DUCK forced by a tilted teleport until the next move ends
     forced_duck: bool,
@@ -135,6 +137,7 @@ impl Walker {
             categorize_on_spawn: true,
             owner: None,
             pitch_reorientation: false,
+            before_move: ([0.0; 3], false, false),
             touching: [false; 2],
             forced_duck: false,
             stuck_count: 0,
@@ -237,6 +240,7 @@ impl Walker {
         if !self.grounded {
             self.fall = -self.velocity[2];
         }
+        self.before_move = (self.velocity, self.grounded, self.duck.ducked);
         let max = MAX_SPEED.min(WALK_SPEED) * self.surface.max_speed_factor.min(1.0);
         let (mut fmove, mut smove) = command(input.forward, input.side, max);
         if self.duck.ducked && self.grounded {

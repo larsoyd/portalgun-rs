@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 larsoyd
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-use crate::pair::Vec3;
+use crate::pair::{Portal, Vec3};
+use crate::teleport::box_meets_portal;
 
 /// below this squared ground speed nothing steps
 const STILL_SQ: f32 = 1e-8;
@@ -130,6 +131,39 @@ impl Steps {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Heard {
+    Step(Step),
+    Jump(Step),
+    Land(Landing),
+}
+
+/// What a tick of movement did that makes a sound.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Moved {
+    /// velocity, ground and duck before the move
+    pub before: (Vec3, bool, bool),
+    pub jumped: bool,
+    pub landed: Option<f32>,
+}
+
+impl Steps {
+    /// PlayerMove runs UpdateStepSound before FullWalkMove, which jumps and then lands.
+    /// Translated from 0x27ab40 (decompiled, server.so)
+    pub fn tick(&mut self, frametime: f32, moved: Moved, material: u8) -> Vec<Heard> {
+        let (velocity, grounded, ducked) = moved.before;
+        let step = self.update_duck(frametime, velocity, grounded, material, ducked);
+        let jump = moved.jumped.then(|| self.jump());
+        let land = moved.landed.and_then(|fall| self.land(fall));
+        let heard = [
+            step.map(Heard::Step),
+            jump.map(Heard::Jump),
+            land.map(Heard::Land),
+        ];
+        heard.into_iter().flatten().collect()
+    }
+}
+
 /// Translated from 0x271130 (disassembled, server.so)
 pub fn landing_volume(fall: f32) -> f32 {
     if fall > SAFE_FALL {
@@ -140,5 +174,97 @@ pub fn landing_volume(fall: f32) -> f32 {
         0.0
     } else {
         0.5
+    }
+}
+
+/// Whether the player's shrunk box meets the portal holding it, for PortalPlayer.EnterPortal and
+/// ExitPortal.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct PlaneSounds {
+    intersecting: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlaneSound {
+    pub enter: bool,
+    pub pitch: i32,
+    pub volume: f32,
+}
+
+impl PlaneSounds {
+    /// size is the player's box. Enter takes a quarter of it, exit three tenths.
+    /// Translated from 0x909920 (decompiled, server.so)
+    pub fn update(
+        &mut self,
+        portal: Option<&Portal>,
+        centre: Vec3,
+        size: Vec3,
+        velocity: Vec3,
+    ) -> Option<PlaneSound> {
+        let speed =
+            (velocity[0] * velocity[0] + velocity[1] * velocity[1] + velocity[2] * velocity[2])
+                .sqrt();
+        let Some(p) = portal else {
+            return std::mem::take(&mut self.intersecting).then(|| plane_sound(false, speed));
+        };
+        if velocity.iter().all(|&c| -0.01 < c && c < 0.01) {
+            return None;
+        }
+        let scale = if self.intersecting { 0.3 } else { 0.25 };
+        let meets = box_meets_portal(p, centre, size.map(|s| s * scale));
+        (meets != self.intersecting).then(|| {
+            self.intersecting = meets;
+            plane_sound(meets, speed)
+        })
+    }
+}
+
+/// Pitch and volume from the speed, in place of the script's.
+pub fn plane_sound(enter: bool, speed: f32) -> PlaneSound {
+    PlaneSound {
+        enter,
+        pitch: (0.03 * speed + 80.0) as i32,
+        volume: match speed < 933.3333 {
+            true => speed * 0.00075 + 0.3,
+            false => 1.0,
+        },
+    }
+}
+
+/// PortalPlayer.Woosh's volume, faded to over 0.1 s.
+/// Translated from 0x902670 (decompiled, server.so)
+pub fn woosh_volume(velocity: Vec3) -> f32 {
+    let speed_sq =
+        velocity[0] * velocity[0] + velocity[1] * velocity[1] + velocity[2] * velocity[2];
+    let speed = speed_sq.sqrt();
+    match speed < 300.0 {
+        true => 0.0,
+        false if speed_sq <= 5290000.5 => (speed - 300.0) * 0.0005,
+        false => 1.0,
+    }
+}
+
+/// A controller patch's volume, faded linearly to each new target. The fade restarts on every
+/// change, as the woosh's 0.1 s fade does each tick.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Fade {
+    pub volume: f32,
+    rate: f32,
+    target: f32,
+}
+
+impl Fade {
+    pub fn to(&mut self, target: f32, seconds: f32) {
+        self.target = target;
+        self.rate = (target - self.volume) / seconds;
+    }
+
+    pub fn advance(&mut self, dt: f32) -> f32 {
+        let next = self.volume + self.rate * dt;
+        self.volume = match self.rate > 0.0 {
+            true => next.min(self.target),
+            false => next.max(self.target),
+        };
+        self.volume
     }
 }

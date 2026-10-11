@@ -144,3 +144,138 @@ fn crouching_uses_quieter_steps_with_a_longer_interval_and_lower_run_threshold()
     assert!((running.volume - 0.325).abs() < 0.00001);
     assert_eq!(steps.time, 400.0);
 }
+
+fn wall() -> portal::pair::Portal {
+    portal::pair::Portal::new([0.0; 3], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0], (32.0, 54.0))
+}
+
+const HULL: [f32; 3] = [32.0, 32.0, 72.0];
+
+#[test]
+fn the_enter_sound_waits_for_a_box_half_the_hull_to_meet_the_opening() {
+    use portal::steps::PlaneSounds;
+    let mut s = PlaneSounds::default();
+    let v = [-200.0, 0.0, 0.0];
+    assert_eq!(
+        s.update(Some(&wall()), [8.1, 0.0, 0.0], HULL, v),
+        None,
+        "quarter box short of the plane"
+    );
+    let enter = s
+        .update(Some(&wall()), [7.9, 0.0, 0.0], HULL, v)
+        .expect("enters");
+    assert!(enter.enter);
+    assert_eq!(enter.pitch, 86);
+    assert!((enter.volume - 0.45).abs() < 1e-6);
+    assert_eq!(
+        s.update(Some(&wall()), [-8.1, 0.0, 0.0], HULL, v),
+        None,
+        "still within the wider exit box"
+    );
+    let exit = s
+        .update(Some(&wall()), [-9.7, 0.0, 0.0], HULL, v)
+        .expect("leaves");
+    assert!(!exit.enter);
+}
+
+#[test]
+fn a_still_player_makes_no_plane_sound_and_losing_the_portal_plays_the_exit() {
+    use portal::steps::PlaneSounds;
+    let mut s = PlaneSounds::default();
+    assert_eq!(
+        s.update(Some(&wall()), [0.0; 3], HULL, [0.0099, -0.0099, 0.0]),
+        None
+    );
+    assert!(s
+        .update(Some(&wall()), [0.0; 3], HULL, [0.01, 0.0, 0.0])
+        .is_some_and(|p| p.enter));
+    let exit = s
+        .update(None, [0.0; 3], HULL, [1000.0, 0.0, 0.0])
+        .expect("environment lost");
+    assert!(!exit.enter && exit.volume == 1.0 && exit.pitch == 110);
+    assert_eq!(s.update(None, [0.0; 3], HULL, [1000.0, 0.0, 0.0]), None);
+}
+
+#[test]
+fn plane_sound_volume_caps_at_933_and_a_third() {
+    assert!(
+        (portal::steps::plane_sound(true, 933.0).volume - (933.0 * 0.00075 + 0.3)).abs() < 1e-6
+    );
+    assert_eq!(portal::steps::plane_sound(true, 933.4).volume, 1.0);
+}
+
+#[test]
+fn the_woosh_rises_from_300_to_full_at_2300() {
+    use portal::steps::woosh_volume;
+    assert_eq!(woosh_volume([299.9, 0.0, 0.0]), 0.0);
+    assert_eq!(woosh_volume([300.0, 0.0, 0.0]), 0.0);
+    assert!((woosh_volume([1300.0, 0.0, 0.0]) - 0.5).abs() < 1e-4);
+    assert!((woosh_volume([2299.9, 0.0, 0.0]) - 0.99995).abs() < 1e-4);
+    assert_eq!(woosh_volume([2301.0, 0.0, 0.0]), 1.0);
+}
+
+#[test]
+fn a_tick_steps_on_the_state_before_its_move_then_jumps_and_lands() {
+    use portal::steps::{Heard, Moved};
+    let mut steps = Steps::default();
+    let landing = Moved {
+        before: ([200.0, 0.0, -600.0], false, false),
+        jumped: false,
+        landed: Some(600.0),
+    };
+    let heard = steps.tick(TICK, landing, b'C');
+    assert!(matches!(heard[..], [Heard::Land(_)]), "{heard:?}");
+    assert_eq!(
+        steps.time, 400.0,
+        "the landing lockout is not spent on its own tick"
+    );
+    let mut steps = Steps::default();
+    let takeoff = Moved {
+        before: ([200.0, 0.0, 0.0], true, false),
+        jumped: true,
+        landed: None,
+    };
+    let heard = steps.tick(TICK, takeoff, b'C');
+    assert!(
+        matches!(heard[..], [Heard::Step(_), Heard::Jump(_)]),
+        "the step on the ground it leaves, then the jump: {heard:?}"
+    );
+}
+
+#[test]
+fn a_fade_reaches_its_target_in_its_time_and_stops_there() {
+    let mut f = portal::steps::Fade::default();
+    f.to(1.0, 0.1);
+    assert!((f.advance(0.05) - 0.5).abs() < 1e-6);
+    assert!((f.advance(0.05) - 1.0).abs() < 1e-6);
+    assert_eq!(f.advance(0.05), 1.0);
+    f.to(0.0, 0.1);
+    assert!((f.advance(0.025) - 0.75).abs() < 1e-6);
+}
+
+#[test]
+fn plane_sound_pitch_truncates() {
+    assert_eq!(portal::steps::plane_sound(true, 220.0).pitch, 86);
+}
+
+#[test]
+fn a_fade_down_stops_at_its_target() {
+    let mut f = portal::steps::Fade::default();
+    f.to(1.0, 0.1);
+    f.advance(0.1);
+    f.to(0.0, 0.1);
+    assert_eq!(f.advance(0.2), 0.0);
+}
+
+#[test]
+fn a_ground_speed_squared_at_the_still_limit_makes_no_step() {
+    let near = |base: f32| (0..400).map(move |i| f32::from_bits(base.to_bits() - 200 + i));
+    let [x, y] = near(8e-5)
+        .flat_map(|x| near(6e-5).map(move |y| [x, y]))
+        .find(|[x, y]| x * x + y * y == 1e-8f32)
+        .expect("a ground velocity whose square is the limit");
+    let mut steps = Steps::default();
+    assert_eq!(steps.update(TICK, [x, y, 0.0], true, b'C'), None);
+    let mut steps = Steps::default();
+    assert!(steps.update(TICK, [x * 1.01, y, 0.0], true, b'C').is_some());
+}

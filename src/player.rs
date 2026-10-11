@@ -6,7 +6,7 @@ use bevy::input::mouse::AccumulatedMouseMotion;
 use bevy::prelude::*;
 use bevy::window::{CursorGrabMode, CursorOptions};
 
-use portal::steps::{Step, Steps};
+use portal::steps::{woosh_volume, Fade, Heard, Moved, PlaneSounds, Step, Steps};
 use portal::surfaces::{Surface, Surfaces};
 
 use crate::faces::{Portals, MAIN_FACES};
@@ -95,7 +95,10 @@ impl Plugin for PlayerPlugin {
             .add_systems(Startup, (spawn_camera, grab_cursor, read_footing))
             .add_systems(
                 FixedUpdate,
-                walk.after(simulate).run_if(crate::menu::playing),
+                (walk, woosh)
+                    .chain()
+                    .after(simulate)
+                    .run_if(crate::menu::playing),
             );
     }
 }
@@ -213,6 +216,7 @@ fn walk(
     mut logged: Local<f32>,
     footing: Option<ResMut<Footing>>,
     mut gait: ResMut<crate::bodyanim::Gait>,
+    portals: Res<Portals>,
 ) {
     let Some(mut footing) = footing else { return };
     if time.elapsed_secs() >= *logged + WALK_LOG {
@@ -248,34 +252,39 @@ fn walk(
             None,
         );
     };
-    if player.jumped {
-        heard("jump", footing.steps.jump());
+    let moved = Moved {
+        before: player.before_move,
+        jumped: player.jumped,
+        landed: player.landed,
+    };
+    let mut recover = None;
+    for event in footing
+        .steps
+        .tick(time.delta_secs(), moved, surface.material)
+    {
+        match event {
+            Heard::Step(s) => {
+                gait.0 = Some(crate::bodyanim::Footfall {
+                    left: s.left,
+                    at: time.elapsed_secs(),
+                    interval: footing.steps.time / 1000.0,
+                });
+                heard("step", s);
+            }
+            Heard::Jump(s) => heard("jump", s),
+            Heard::Land(l) => {
+                heard("land", l.step);
+                recover = l.recover;
+                let fall = player.landed.unwrap_or_default();
+                player.punch.land(fall);
+                info!(
+                    "[view] punch landing fall={fall:.0} roll={:.2}",
+                    player.punch.angle[2]
+                );
+            }
+        }
     }
-    let landing = player.landed.and_then(|fall| footing.steps.land(fall));
-    if let (Some(l), Some(fall)) = (landing, player.landed) {
-        heard("land", l.step);
-        player.punch.land(fall);
-        info!(
-            "[view] punch landing fall={fall:.0} roll={:.2}",
-            player.punch.angle[2]
-        );
-    }
-    let moved = (player.velocity, player.grounded);
-    if let Some(s) = footing.steps.update_duck(
-        time.delta_secs(),
-        moved.0,
-        moved.1,
-        surface.material,
-        player.duck.ducked,
-    ) {
-        gait.0 = Some(crate::bodyanim::Footfall {
-            left: s.left,
-            at: time.elapsed_secs(),
-            interval: footing.steps.time / 1000.0,
-        });
-        heard("step", s);
-    }
-    if let Some((pitch, volume)) = landing.and_then(|l| l.recover) {
+    if let Some((pitch, volume)) = recover {
         sounds.play_as(
             &mut commands,
             &files,
@@ -285,19 +294,71 @@ fn walk(
             Some(pitch as f32),
         );
     }
-    let Some(i) = result.0 else {
+    if let Some(i) = result.0 {
+        info!(
+            "[cross] from={:?} to={:?} feet={:?} yaw={:.1} velocity={:?}",
+            Colour::ALL[i],
+            Colour::ALL[i].other(),
+            player.feet.map(|v| v.round()),
+            player.yaw,
+            player.velocity.map(|v| v.round())
+        );
+    }
+    let holder = player.owner.zip(portals.linked()).map(|(i, pair)| pair[i]);
+    let size = [32.0, 32.0, player.height()];
+    let plane = footing
+        .plane
+        .update(holder.as_ref(), player.centre(), size, player.velocity);
+    if let Some(p) = plane {
+        let name = match p.enter {
+            true => "PortalPlayer.EnterPortal",
+            false => "PortalPlayer.ExitPortal",
+        };
+        sounds.play_as(
+            &mut commands,
+            &files,
+            &mut audio,
+            name,
+            Some(p.volume),
+            Some(p.pitch as f32),
+        );
+    }
+}
+
+/// PortalPlayer.Woosh, started silent and faded with the player's speed.
+#[derive(Resource)]
+struct Woosh {
+    sound: Entity,
+    fade: Fade,
+}
+
+/// Translated from 0x9033b0 and 0x902670 (decompiled, server.so)
+#[allow(clippy::too_many_arguments)]
+fn woosh(
+    mut commands: Commands,
+    time: Res<Time>,
+    player: Res<Player>,
+    woosh: Option<ResMut<Woosh>>,
+    mut sounds: ResMut<Sounds>,
+    files: Res<Files>,
+    mut audio: ResMut<Assets<AudioSource>>,
+    mut sinks: Query<&mut AudioSink>,
+) {
+    let Some(mut woosh) = woosh else {
+        if let Some(sound) =
+            sounds.looped(&mut commands, &files, &mut audio, "PortalPlayer.Woosh", 0.0)
+        {
+            commands.insert_resource(Woosh {
+                sound,
+                fade: Fade::default(),
+            });
+        }
         return;
     };
-    let from = Colour::ALL[i];
-    info!(
-        "[cross] from={from:?} to={:?} feet={:?} yaw={:.1} velocity={:?}",
-        from.other(),
-        player.feet.map(|v| v.round()),
-        player.yaw,
-        player.velocity.map(|v| v.round())
-    );
-    for name in ["PortalPlayer.EnterPortal", "PortalPlayer.ExitPortal"] {
-        sounds.play(&mut commands, &files, &mut audio, name);
+    woosh.fade.to(woosh_volume(player.velocity), 0.1);
+    let volume = woosh.fade.advance(time.delta_secs());
+    if let Ok(mut sink) = sinks.get_mut(woosh.sound) {
+        sink.set_volume(bevy::audio::Volume::Linear(volume));
     }
 }
 
@@ -308,6 +369,7 @@ pub struct Footing {
     steps: Steps,
     /// the block last stood on, the surface a jump pushes off
     last: usize,
+    plane: PlaneSounds,
 }
 
 fn read_footing(
@@ -334,6 +396,7 @@ fn read_footing(
                 surfaces,
                 steps: Steps::default(),
                 last: 0,
+                plane: PlaneSounds::default(),
             });
         }
         Err(e) => {

@@ -58,6 +58,48 @@ impl Sounds {
         volume: Option<f32>,
         pitch: Option<f32>,
     ) -> Option<Entity> {
+        self.start(
+            commands,
+            files,
+            audio,
+            name,
+            volume,
+            pitch,
+            PlaybackSettings::DESPAWN,
+        )
+    }
+
+    /// A sound that runs until despawned, like the controller patches the game fades.
+    pub fn looped(
+        &mut self,
+        commands: &mut Commands,
+        files: &Files,
+        audio: &mut Assets<AudioSource>,
+        name: &str,
+        volume: f32,
+    ) -> Option<Entity> {
+        self.start(
+            commands,
+            files,
+            audio,
+            name,
+            Some(volume),
+            None,
+            PlaybackSettings::LOOP,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn start(
+        &mut self,
+        commands: &mut Commands,
+        files: &Files,
+        audio: &mut Assets<AudioSource>,
+        name: &str,
+        volume: Option<f32>,
+        pitch: Option<f32>,
+        mode: PlaybackSettings,
+    ) -> Option<Entity> {
         let draws = [self.draw(), self.draw(), self.draw()];
         let entry = match self.bank.get(name) {
             Ok(e) => e,
@@ -90,7 +132,7 @@ impl Sounds {
             "[sound] played name={name} wave={path} volume={:.3} pitch={:.1}",
             pick.volume, pick.pitch
         );
-        let settings = PlaybackSettings::DESPAWN
+        let settings = mode
             .with_volume(Volume::Linear(pick.volume))
             .with_speed(pick.pitch / 100.0);
         Some(commands.spawn((AudioPlayer(wave), settings)).id())

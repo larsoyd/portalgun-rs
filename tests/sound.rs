@@ -78,3 +78,24 @@ fn each_wave_is_decoded_once() {
         app.world().resource::<Assets<AudioSource>>().len()
     );
 }
+
+#[test]
+fn the_woosh_loops_from_silence() {
+    let mut app = app();
+    let played = app
+        .world_mut()
+        .run_system_cached(
+            |mut commands: Commands,
+             mut sounds: ResMut<Sounds>,
+             files: Res<Files>,
+             mut audio: ResMut<Assets<AudioSource>>| {
+                sounds.looped(&mut commands, &files, &mut audio, "PortalPlayer.Woosh", 0.0)
+            },
+        )
+        .unwrap()
+        .expect("the woosh script resolves");
+    app.update();
+    let settings = app.world().get::<PlaybackSettings>(played).unwrap();
+    assert!(matches!(settings.mode, bevy::audio::PlaybackMode::Loop));
+    assert_eq!(settings.volume, Volume::Linear(0.0));
+}
