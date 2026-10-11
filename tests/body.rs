@@ -206,7 +206,7 @@ fn every_body_and_gun_mesh_is_on_the_portal_only_layer_and_follows_teleports() {
 }
 
 #[test]
-fn jump_duck_and_midair_crouch_toggles_keep_the_body_continuous() {
+fn jump_duck_and_midair_crouch_render_at_the_interpolated_entity_origin() {
     use portalgun::chamber::Chamber;
     use portalgun::walker::Input;
     let home = std::env::var("HOME").unwrap();
@@ -215,9 +215,9 @@ fn jump_duck_and_midair_crouch_toggles_keep_the_body_continuous() {
     let clips = clips();
     for held in [false, true] {
         let mut player = Walker::at([-320.0, -120.0, 0.0]);
+        let mut history = VisualHistory::new(&player);
         let mut animation = BodyAnimation::default();
-        animation.support = Some(0.0);
-        let mut previous = Vec3::from(player.feet);
+        let mut raised = false;
         for step in 0..80 {
             let input = Input {
                 jump: step == 1,
@@ -225,30 +225,31 @@ fn jump_duck_and_midair_crouch_toggles_keep_the_body_continuous() {
                 crouch: held && (8..55).contains(&step),
                 ..default()
             };
+            let before = Vec3::from(player.feet);
             player.step(&input, 0.015, &chamber, None);
-            let visual = VisualHistory::new(&player).sample(&player, 0.0);
-            let pose = animation
-                .pose(
-                    &clips,
-                    &visual,
-                    Stance::of(&player),
-                    step as f32 * 0.015,
-                    0.015,
-                )
-                .unwrap();
-            assert!(
-                pose.origin.distance(previous) < 6.0,
-                "held={held} step={step} origin={:?} previous={previous:?}",
-                pose.origin
-            );
-            if step == 2 {
-                assert!(player.duck.ducked && player.duck.in_duck_jump);
-                assert!(player.feet[2] - pose.origin.z > 35.9);
+            history.advance(&player, false);
+            for fraction in [0.0, 0.5, 1.0] {
+                let visual = history.sample(&player, fraction);
+                let pose = animation
+                    .pose(
+                        &clips,
+                        &visual,
+                        Stance::of(&player),
+                        step as f32 * 0.015,
+                        0.0,
+                    )
+                    .unwrap();
+                let origin = before.lerp(Vec3::from(player.feet), fraction);
+                assert!(
+                    pose.origin.abs_diff_eq(origin, 1e-3),
+                    "held={held} step={step} fraction={fraction} body={:?} entity={origin:?}",
+                    pose.origin
+                );
             }
-            previous = pose.origin;
+            raised |= step == 2 && player.duck.ducked && player.duck.in_duck_jump;
         }
+        assert!(raised, "step 2 should be a duck jump");
         assert!(player.grounded);
-        assert!(previous.abs_diff_eq(Vec3::from(player.feet), 0.001));
     }
 }
 
@@ -263,7 +264,6 @@ fn jumping_from_crouch_keeps_the_body_above_the_floor() {
     for release in [false, true] {
         let mut player = Walker::at([-320.0, -120.0, 0.0]);
         let mut animation = BodyAnimation::default();
-        animation.support = Some(0.0);
         let mut takeoffs = 0;
         for tick in 0..160 {
             player.step(

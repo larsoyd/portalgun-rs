@@ -249,8 +249,6 @@ pub struct BodyAnimation {
     from: Vec<BonePose>,
     shown: Vec<BonePose>,
     transition: f32,
-    eye_height: f32,
-    pub support: Option<f32>,
     pub footfall: Option<Footfall>,
     shot: Option<f32>,
     feet_yaw: Option<f32>,
@@ -407,10 +405,6 @@ impl BodyAnimation {
         };
         let params = [full[0] * amount, full[1] * amount];
         let changed = self.sequence != Some(seq);
-        let feet = visual.pose.centre - Vec3::Z * visual.pose.half.z;
-        if grounded || self.sequence.is_none() || relocated {
-            self.eye_height = visual.pose.eye.z - feet.z;
-        }
         if changed {
             self.from = self.shown.clone();
             self.transition = 0.0;
@@ -474,11 +468,8 @@ impl BodyAnimation {
             }
         }
         let bones = global_bones(&clips.mdl, &pose);
-        // Keep the takeoff reference through airborne hull changes.
-        let mut origin = visual.pose.eye - Vec3::Z * self.eye_height;
-        if let Some(floor) = self.support {
-            origin.z = origin.z.max(floor);
-        }
+        // Translated from 0x340080, 0x362790 and 0x361d00 (decompiled, client.so)
+        let origin = visual.pose.centre - Vec3::Z * visual.pose.half.z;
         let planted = self
             .footfall
             .filter(|step| grounded && now - step.at < step.interval * 0.15)

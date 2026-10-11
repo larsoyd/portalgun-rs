@@ -15,7 +15,7 @@ Names describe vtable and call-graph identifications rather than exported symbol
 | Address | Observation used |
 |---|---|
 | `0x999f14` | `CPortalPlayerAnimState` vtable, identified through its RTTI at `0x999f00`. |
-| `0x283140` | Primary and secondary fire events choose standing or crouched primary-fire gestures. |
+| `0x283140` | Primary and secondary fire events choose standing or crouched primary-fire gestures. The crouched one needs `FL_DUCKING`, which client movement sets and clears together with `m_bDucked` (raw `0x230416`, `0x230a3c`, `0x231a55`, `0x2267bf`, `0x230942`), so a duck still in progress fires standing. |
 | `0x282fb0` | Activities are translated by the active weapon. |
 | `0x2830c0` | Ducking/ducked states select crouch idle below speed 0.5, crouch locomotion otherwise. |
 | `0x283020` | Moving above speed 0.5 chooses running activity. |
@@ -24,8 +24,11 @@ Names describe vtable and call-graph identifications rather than exported symbol
 | `0x250f80` | Maximum ground speed samples the movement blend with its direction normalized to the edge. |
 | `0x256460`, `0x256370` | Feet yaw follows movement; stationary body yaw allows 45 degrees before turning. Convergence uses 720 degrees/sec with `clamp(abs(delta)/60, 0.01, 1)`. |
 | `0x250670` | Body pitch pose parameter uses negative eye pitch. |
-| `0x282dc0` | Jump/airwalk state and landing restart are distinct from crouch locomotion. The >300 upward-velocity airwalk path is identified but not separately reproduced. |
-| `0x2536c0` | Main activity changes select a translated sequence and restart its cycle. |
+| `0x250530` | The main activity starts as `ACT_MP_STAND_IDLE` and asks jumping, duck, swim, dying and move in that order. |
+| `0x250a30` | Event 6 sets jumping and its first frame, stores the jump start time and restarts the main sequence. The server raises it from Portal's `CheckJumpButton` override (server `0x2de350`) only when a jump happens. |
+| `0x282dc0` | Upward speed above 300 (`0x7f3280`), or an airwalk already latched, is `ACT_MP_AIRWALK` until the ground. Otherwise a jump holds `ACT_MP_JUMP_START` until the player is on the ground more than 0.2 s (`0x7f2e0c`) after the event. Landing restarts the main sequence and asks for an `ACT_MP_JUMP_LAND` gesture. A fall without a jump keeps the ground activity. |
+| `0xa50f40` | The portal weapon's activity table maps these to `*_PRIMARY`. Activity names compare without case (`0x5ed870`), so the model's `ACT_MP_JUMP_START_primary` matches. |
+| `0x2536c0` | Main activity changes select a translated sequence and restart its cycle. A sequence changes only when its activity differs. An activity the model lacks returns -1 and falls back to sequence 0. |
 | `0x2f5ef0` | Animation sections use descriptor-relative offsets. The final frame has a separate section at `numframes/sectionframes + 1`. |
 
 The earlier base-player `move_yaw` path at `0x221530` was inspected but is not
@@ -87,14 +90,22 @@ held world gun. The camera-attached gun and arms cast no shadow and receive none
 This avoids the duplicate gun/arm silhouettes without claiming identical Source
 shadow rendering.
 
+## Jumps and airwalk
+
+Chell's animation model has `ACT_MP_JUMP_START_primary` but no airwalk, float or
+land sequence. A landing gesture therefore plays nothing. Airwalk selects
+sequence 0, `head_rot_z`, a one-frame head delta with no activity, on the bind
+pose. The game shows that pose while rising faster than 300 out of a portal. By
+default the app holds the jump clip instead, and `original_airwalk = true`
+restores the game's pose. The initial value of the `head_rot_z` parameter and the
+address of the bind-pose setup are still open. At value 0 the delta is identity.
+
 ## Feet, crouch jumps and cadence
 
-Grounded body origin now follows interpolated collision feet. Airborne poses keep
-the eye-height reference from takeoff, so a crouched jump does not replace 28 with
-64 and sink the rig by 36 units. Portal revisions reset that reference. A support
-probe prevents an airborne hull adjustment from pushing the visible body below
-solid ground. Probes use the controller's carved collision brushes: a linked
-floor opening is not treated as solid ground.
+The body renders at the interpolated entity origin, the bottom of the collision
+hull, as `0x340080` does. An airborne duck lifts the hull bottom by 36 units, and
+the body lifts with it, as in the game. Feet probes use the controller's carved
+collision brushes: a linked floor opening is not treated as solid ground.
 
 Each foot has a sole and heel. The toe bases are mirrored in the installed model,
 so the two boot orientations differ. A two-bone leg solve preserves segment
@@ -117,8 +128,7 @@ established. `0x2572d0` writes playback 1 in an ordinary local-draw branch;
 that branch alone does not prove the cadence of first-person portal views.
 The authored movement blend scaling at `0x255f20` remains in use.
 
-The capsule proportions and head remain stylized. Full Source IK, event-latched
-jump/airwalk state, gesture-slot history, arbitrary included-model remapping and
+The capsule proportions and head remain stylized. Full Source IK, gesture-slot history, arbitrary included-model remapping and
 external animation blocks remain outside this implementation. Installed poses and
 attachments are decoded; this is not a claim of a complete 1:1 Source renderer.
 

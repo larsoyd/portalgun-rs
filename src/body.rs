@@ -377,9 +377,6 @@ fn animate(
     };
     let feet = visual.pose.centre - Vec3::Z * visual.pose.half.z;
     let linked = portals.and_then(|p| p.linked());
-    animation.support = level
-        .as_ref()
-        .and_then(|l| crate::walker::body_support(feet.to_array(), l, linked.as_ref()));
     animation.footfall = gait.and_then(|g| g.0);
     animation.original_airwalk = config.is_some_and(|c| c.0.original_airwalk);
     let mut pose = match animation.pose(

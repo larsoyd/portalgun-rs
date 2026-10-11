@@ -200,8 +200,7 @@ fn seeded_movement_keeps_the_rig_attached_through_duck_jump_and_portals() {
             }
             let visual = history.sample(&walker, accumulator / 0.015);
             let feet = visual.pose.centre - Vec3::Z * visual.pose.half.z;
-            animation.support =
-                portalgun::walker::body_support(feet.to_array(), &chamber, Some(&pair));
+            let support = portalgun::walker::body_support(feet.to_array(), &chamber, Some(&pair));
             let mut pose = animation
                 .pose(&clips, &visual, Stance::of(&walker), now, dt)
                 .unwrap_or_else(|e| panic!("seed={seed} tick={tick}: {e}"));
@@ -213,7 +212,12 @@ fn seeded_movement_keeps_the_rig_attached_through_duck_jump_and_portals() {
                 )
             };
             portalgun::feet::ground(&clips, &mut pose, walker.grounded, probe);
-            if let Some(floor) = animation.support {
+            assert!(
+                pose.origin.abs_diff_eq(feet, 1e-4),
+                "body left the entity origin seed={seed} tick={tick} origin={:?} feet={feet:?}",
+                pose.origin
+            );
+            if let Some(floor) = support {
                 assert!(
                     pose.origin.z >= floor - 0.01,
                     "body underground seed={seed} tick={tick} origin={:?} floor={floor}",
