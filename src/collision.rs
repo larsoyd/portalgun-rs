@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 larsoyd
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+use portal::movement::standable;
 use portal::pair::Vec3;
 
 const DIST_EPSILON: f32 = 0.03125;
@@ -148,11 +149,13 @@ pub fn clip(v: Vec3, normal: Vec3) -> Vec3 {
     out
 }
 
-/// Four sweeps and up to five contact planes, from server.so 0x2763b0.
+/// Four sweeps and up to five contact planes.
+/// Translated from 0x2763b0 (decompiled, server.so)
 pub fn slide(
     start: Vec3,
     velocity: Vec3,
     dt: f32,
+    airborne: bool,
     mut cast: impl FnMut(Vec3, Vec3) -> Trace,
 ) -> (Vec3, Vec3) {
     let mut at = start;
@@ -190,6 +193,12 @@ pub fn slide(
             break;
         }
         planes.push(tr.normal);
+        // one plane in the air clips once and skips the primal test
+        if airborne && planes.len() == 1 {
+            v = clip(original, tr.normal);
+            original = v;
+            continue;
+        }
         let candidate = planes.iter().enumerate().find_map(|(i, &plane)| {
             let clipped = clip(original, plane);
             planes
@@ -226,4 +235,37 @@ pub fn slide(
         v = [0.0; 3];
     }
     (at, v)
+}
+
+/// The better of a plain move and one stepped up and back down.
+/// Translated from 0x26f150 (decompiled, server.so)
+pub fn step_move(
+    start: Vec3,
+    velocity: Vec3,
+    dt: f32,
+    step: f32,
+    mut cast: impl FnMut(Vec3, Vec3) -> Trace,
+) -> (Vec3, Vec3) {
+    let (down, down_v) = slide(start, velocity, dt, false, &mut cast);
+    let top = (step as f64 + start[2] as f64 + 0.03125) as f32;
+    let up = cast(start, [start[0], start[1], top]);
+    let from = match up.start_solid || up.all_solid {
+        true => start,
+        false => up.end,
+    };
+    let (mut raised, mut raised_v) = slide(from, velocity, dt, false, &mut cast);
+    let bottom = (raised[2] as f64 - 0.03125 - step as f64) as f32;
+    let descend = cast(raised, [raised[0], raised[1], bottom]);
+    if !standable(descend.normal[2]) {
+        return (down, down_v);
+    }
+    if !descend.start_solid && !descend.all_solid {
+        raised = descend.end;
+    }
+    let distance = |p: Vec3| (p[0] - start[0]).powi(2) + (p[1] - start[1]).powi(2);
+    if distance(down) > distance(raised) {
+        return (down, down_v);
+    }
+    raised_v[2] = down_v[2];
+    (raised, raised_v)
 }

@@ -3,8 +3,8 @@
 
 use portal::movement::{
     accelerate, air_accelerate, check_velocity, command, finish_gravity, fling_guard, flinging,
-    funnel, jump_on_surface, leaves_ground, start_gravity, surface_friction, wish, Funnel, Punch,
-    ACCELERATE, AIR_ACCELERATE, MAX_SPEED, WALK_SPEED,
+    funnel, jump_on_surface, leaves_ground, standable, start_gravity, surface_friction, wish,
+    Funnel, Punch, ACCELERATE, AIR_ACCELERATE, MAX_SPEED, WALK_SPEED,
 };
 use portal::pair::{crossing, through_point, Portal, Vec3};
 use portal::teleport::{
@@ -535,47 +535,13 @@ impl Walker {
 
     fn travel(&mut self, dt: f32, walking: bool, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
         let start = self.feet;
-        let velocity = self.velocity;
         let cast = |a, b| self.trace(a, b, chamber, linked);
-        let target = collision::add(start, collision::scale(velocity, dt));
-        if walking && cast(start, target).fraction == 1.0 {
-            self.feet = target;
-            return;
-        }
-        let (down, down_v) = collision::slide(start, velocity, dt, cast);
-        if !walking {
-            self.feet = down;
-            self.velocity = down_v;
-            return;
-        }
-        let up = cast(start, [start[0], start[1], start[2] + STEP + 0.03125]);
-        let (mut raised, mut raised_v) = collision::slide(
-            if up.start_solid || up.all_solid {
-                start
-            } else {
-                up.end
-            },
-            velocity,
-            dt,
-            cast,
-        );
-        let descend = cast(raised, [raised[0], raised[1], raised[2] - STEP - 0.03125]);
-        if descend.normal[2] >= 0.7 && !descend.start_solid && !descend.all_solid {
-            raised = descend.end;
-            raised_v[2] = down_v[2];
-        } else {
-            self.feet = down;
-            self.velocity = down_v;
-            return;
-        }
-        let distance = |p: Vec3| (p[0] - start[0]).powi(2) + (p[1] - start[1]).powi(2);
-        if distance(down) > distance(raised) {
-            self.feet = down;
-            self.velocity = down_v;
-        } else {
-            self.feet = raised;
-            self.velocity = raised_v;
-        }
+        let target = collision::add(start, collision::scale(self.velocity, dt));
+        (self.feet, self.velocity) = match walking {
+            true if cast(start, target).fraction == 1.0 => (target, self.velocity),
+            true => collision::step_move(start, self.velocity, dt, STEP, cast),
+            false => collision::slide(start, self.velocity, dt, true, cast),
+        };
     }
 
     fn stay_on_ground(&mut self, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
@@ -585,7 +551,7 @@ impl Walker {
         if down.fraction > 0.0
             && down.fraction < 1.0
             && !down.start_solid
-            && down.normal[2] >= 0.7
+            && standable(down.normal[2])
             && (p[2] - down.end[2]).abs() > 0.015625
         {
             self.feet = down.end;
@@ -596,7 +562,7 @@ impl Walker {
         let p = self.feet;
         let tr = self.trace(p, [p[0], p[1], p[2] - GROUND_REACH], chamber, linked);
         self.grounded =
-            !leaves_ground(self.velocity[2]) && tr.block.is_some() && tr.normal[2] >= 0.7;
+            !leaves_ground(self.velocity[2]) && tr.block.is_some() && standable(tr.normal[2]);
         self.ground = if self.grounded { tr.block } else { None };
         if let Some(n) = self.ground {
             self.velocity[2] = 0.0;
@@ -672,7 +638,7 @@ impl Walker {
         self.grounded = false;
         self.ground = None;
         let mut normals = Vec::new();
-        let (end, _) = collision::slide(exit, collision::sub(target, exit), 1.0, |a, b| {
+        let (end, _) = collision::slide(exit, collision::sub(target, exit), 1.0, true, |a, b| {
             let tr = self.trace(a, b, chamber, Some(linked));
             if tr.fraction < 1.0 {
                 normals.push(tr.normal);

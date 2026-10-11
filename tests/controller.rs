@@ -467,3 +467,73 @@ fn rotated_openings_still_support_hulls_that_overlap_the_rim() {
         );
     }
 }
+
+#[test]
+fn an_airborne_bump_into_one_plane_also_becomes_the_velocity_later_clips_start_from() {
+    use portalgun::collision::{slide, Trace};
+    let hit = |fraction: f32, normal: [f32; 3]| Trace {
+        fraction,
+        end: [0.0; 3],
+        normal,
+        start_solid: false,
+        all_solid: false,
+        block: Some(0),
+    };
+    let s = 0.6f32;
+    let script = [
+        hit(0.5, [-1.0, 0.0, 0.0]),
+        hit(0.0, [-s, 0.0, 0.8]),
+        hit(1.0, [0.0; 3]),
+        hit(1.0, [0.0; 3]),
+    ];
+    let mut n = 0;
+    let cast = |_: [f32; 3], _: [f32; 3]| {
+        n += 1;
+        script[n - 1]
+    };
+    let (_, air) = slide([0.0; 3], [100.0, 0.0, -300.0], 1.0, true, cast);
+    assert!(
+        (air[0] + 144.0).abs() < 1e-3 && (air[2] + 108.0).abs() < 1e-3,
+        "the second clip starts from the first clip in the air: {air:?}"
+    );
+    let mut n = 0;
+    let cast = |_: [f32; 3], _: [f32; 3]| {
+        n += 1;
+        script[n - 1]
+    };
+    let (_, ground) = slide([0.0; 3], [100.0, 0.0, -300.0], 1.0, false, cast);
+    assert!(
+        (ground[0] + 80.0).abs() < 1e-3 && (ground[2] + 60.0).abs() < 1e-3,
+        "on the ground both clips start from the pre-bump velocity: {ground:?}"
+    );
+}
+
+#[test]
+fn a_step_whose_descent_starts_solid_on_ground_keeps_the_raised_move() {
+    use portalgun::collision::{step_move, Trace};
+    let at = |fraction: f32, end: [f32; 3], normal: [f32; 3], start_solid: bool| Trace {
+        fraction,
+        end,
+        normal,
+        start_solid,
+        all_solid: false,
+        block: Some(0),
+    };
+    let mut calls = Vec::new();
+    let (feet, _) = step_move([0.0; 3], [100.0, 0.0, 0.0], 0.1, 18.0, |a, b| {
+        calls.push((a, b));
+        match calls.len() {
+            // down move blocked right away by a wall
+            1 => at(0.0, a, [-1.0, 0.0, 0.0], false),
+            // lift, raised move and its endpoint check, then a descent that starts solid on a floor
+            2..=4 => at(1.0, b, [0.0; 3], false),
+            _ => at(0.5, [10.0, 0.0, 9.0], [0.0, 0.0, 1.0], true),
+        }
+    });
+    assert_eq!(calls[1].1[2], 18.03125, "the lift is stepsize plus 1/32");
+    assert_eq!(
+        feet,
+        [10.0, 0.0, 18.03125],
+        "a solid descent keeps the raised origin, not its endpoint and not the down move"
+    );
+}

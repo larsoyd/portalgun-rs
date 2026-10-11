@@ -240,3 +240,8 @@ impl Punch {
         self.angle[0] = self.angle[0].min(8.0);
     }
 }
+
+/// Whether a plane is ground, against the double 0.7 the original compares with.
+pub fn standable(normal_z: f32) -> bool {
+    normal_z as f64 >= 0.7
+}

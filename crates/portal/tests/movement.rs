@@ -3,8 +3,8 @@
 
 use portal::movement::{
     accelerate, air_accelerate, check_velocity, command, finish_gravity, fling_guard, flinging,
-    friction, funnel, jump, leaves_ground, start_gravity, wish, Funnel, ACCELERATE, AIR_ACCELERATE,
-    AIR_SPEED_CAP, GRAVITY, JUMP_SPEED, MAX_SPEED, MAX_VELOCITY, WALK_SPEED,
+    friction, funnel, jump, leaves_ground, standable, start_gravity, wish, Funnel, ACCELERATE,
+    AIR_ACCELERATE, AIR_SPEED_CAP, GRAVITY, JUMP_SPEED, MAX_SPEED, MAX_VELOCITY, WALK_SPEED,
 };
 use portal::pair::Portal;
 
@@ -319,4 +319,12 @@ fn both_gravity_halves_end_inside_the_max_velocity() {
     assert_eq!(start_gravity(-3500.0, DT), -3500.0);
     assert_eq!(finish_gravity(-3499.0, DT), -3500.0);
     assert!(close(finish_gravity(-3490.0, DT), -3494.5));
+}
+
+#[test]
+fn ground_needs_a_normal_of_seven_tenths_in_double() {
+    assert!(!standable(0.7));
+    assert!(!standable(0.699_999));
+    assert!(standable(f32::from_bits(0.7f32.to_bits() + 1)));
+    assert!(standable(1.0));
 }
