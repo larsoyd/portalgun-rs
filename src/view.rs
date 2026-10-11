@@ -27,6 +27,8 @@ use crate::visual::VisualPlayer;
 pub const VIEW_LAYER: usize = 1;
 /// viewmodel_fov's default in the client
 const VIEWMODEL_FOV: f32 = 54.0;
+/// zNearViewmodel, the immediate 1.0 SetUpView stores at 0x595a8c (disassembly, client.so)
+const VIEWMODEL_NEAR: f32 = 1.0;
 /// g_fMaxViewModelLag, kept active through portals
 const MAX_LAG: f32 = 1.5;
 
@@ -188,7 +190,7 @@ fn spawn_view(
             *msaa,
             Projection::Perspective(PerspectiveProjection {
                 fov: horizontal_to_vertical(VIEWMODEL_FOV),
-                near: 0.01,
+                near: VIEWMODEL_NEAR * METRES_PER_UNIT,
                 ..default()
             }),
             RenderLayers::layer(VIEW_LAYER),

@@ -166,4 +166,17 @@ fn first_person_gun_and_arms_neither_cast_nor_receive_world_shadows() {
         parts.iter().all(|&(cast, receive)| cast && receive),
         "viewmodel shadows: {parts:?}"
     );
+    let nears: Vec<_> = world
+        .query_filtered::<&Projection, Without<PlayerCamera>>()
+        .iter(world)
+        .map(|p| match p {
+            Projection::Perspective(p) => p.near,
+            _ => f32::NAN,
+        })
+        .collect();
+    assert_eq!(
+        nears,
+        [portalgun::units::METRES_PER_UNIT],
+        "zNearViewmodel is one unit"
+    );
 }
