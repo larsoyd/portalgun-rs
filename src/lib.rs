@@ -22,3 +22,7 @@ pub mod viewmodel;
 pub mod views;
 pub mod visual;
 pub mod walker;
+
+pub mod effects;
+pub mod impacts;
+pub mod particle_material;

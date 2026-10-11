@@ -107,26 +107,26 @@ impl Definition {
 }
 
 /// A running system and its children, all sharing one random table.
-pub struct System<'r> {
-    pub def: &'r Definition,
-    pub c: Collection<'r>,
+pub struct System {
+    pub def: Definition,
+    pub c: Collection,
     operators: Vec<(Operator, Fade)>,
     initializers: Vec<Initializer>,
     emitters: Vec<(Emitter, Fade)>,
     first_frame: bool,
     prev_initialized: bool,
     drawn_frames: i32,
-    pub children: Vec<System<'r>>,
+    pub children: Vec<System>,
 }
 
-impl<'r> System<'r> {
+impl System {
     /// Init: a system that starts after its delay, children made with theirs added on.
     pub fn new(
-        defs: &'r [Definition],
+        defs: &[Definition],
         index: usize,
         delay: f32,
         seed: u32,
-        table: &'r RandomTable,
+        table: &RandomTable,
     ) -> Self {
         let def = &defs[index];
         let mut c = Collection {
@@ -139,7 +139,7 @@ impl<'r> System<'r> {
             seed,
             op_offset: 0,
             kills: Vec::new(),
-            table,
+            table: table.clone(),
             simd: SimdRandom::default(),
             lock_fade: None,
             query_count: 0,
@@ -161,7 +161,7 @@ impl<'r> System<'r> {
             })
             .collect();
         System {
-            def,
+            def: def.clone(),
             c,
             operators: def.operators.clone(),
             initializers: def.initializers.clone(),
@@ -259,7 +259,7 @@ impl<'r> System<'r> {
         query: &dyn Query,
         parent_active: Option<usize>,
     ) {
-        let def = self.def;
+        let def = &self.def;
         let (max_step, cap) = if def.max_time_step <= 0.0 {
             (0.1, 1.0)
         } else {

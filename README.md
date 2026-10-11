@@ -32,8 +32,9 @@ need your own copy of Portal, which the program reads at startup.
   out of the way when you look down. Sway continues through portals, with its
   saved direction rotated through the crossing so it does not snap to centre.
 
-TODO: the glow sprites and beams, the stream and impact particles, the pickup
-and hold animations, and the fizzle effects for shots that cannot land.
+Portal placement now dispatches the original success and supported failure
+particle graphs. Refraction children remain unsupported. TODO: the gun's glow
+sprites and beams, projectile streams, and pickup and hold animations.
 
 ### The portals
 
@@ -54,8 +55,14 @@ and hold animations, and the fizzle effects for shots that cannot land.
   filled with the view, as Portal's render fix does, so you never see past the
   wall as you step through.
 
-TODO: the refraction while a portal opens, closing and fizzling, and the
-cheaper culling the game uses for nested views.
+- Persistent particles and edge trails come from the installed PCFs and each
+  portal model's own attachments. They follow replacement and deactivation and
+  render with separate geometry for each recursive camera. Closing and failure
+  graphs run too, with their refraction children explicitly omitted.
+
+See [particle integration and limits](docs/particles/README.md) for the effect
+matrix, evidence and tests. TODO: opening/particle refraction and the cheaper
+culling the game uses for nested views.
 
 ### Going through
 
@@ -110,8 +117,8 @@ surface under you from its `$surfaceprop`. A jump plays a step at full volume,
 a hard landing plays one by how fast you fell, and a long fall adds the long
 fall boots' `PortalPlayer.FallRecover`.
 
-TODO: positional sound with each script's sound level, the portals' ambient
-loop, close and fizzle sounds.
+Close and supported invalid-placement sounds use the game's scripts too.
+TODO: positional sound with each script's sound level and the portals' ambient loop.
 
 ### The crosshair
 
@@ -293,6 +300,7 @@ cargo run -p portal --example portal_inspect -- "/path/to/Steam/steamapps/common
 | `src/walker.rs`, `src/player.rs` | Moving through the chamber, mouse look and crossing portals. |
 | `src/gun.rs`, `src/firing.rs` | The gun's shots and what happens when they land. |
 | `src/portals.rs`, `src/faces.rs`, `src/views.rs`, `src/shaders/` | The portal pair, the drawn faces and the views through them. |
+| `src/effects.rs`, `src/impacts.rs`, `src/particle_material.rs` | PCF instances, impact dispatch and particle materials. |
 | `src/hud.rs` | The crosshair. |
 | `src/viewmodel.rs`, `src/viewanim.rs`, `src/view.rs` | The view model, its animation and its camera. |
 | `src/sound.rs`, `src/texture.rs`, `src/icon.rs` | Sounds, textures and the window icon from the install. |

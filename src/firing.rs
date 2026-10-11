@@ -16,7 +16,8 @@ pub struct FiringPlugin;
 
 impl Plugin for FiringPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Firing>()
+        app.add_message::<crate::impacts::PortalImpact>()
+            .init_resource::<Firing>()
             .add_systems(Startup, |mut gun: ResMut<Firing>| gun.deploy(0.0))
             .add_systems(Update, (fire, land).chain());
     }
@@ -65,8 +66,10 @@ fn fire(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn land(
     mut commands: Commands,
+    mut impacts: MessageWriter<crate::impacts::PortalImpact>,
     time: Res<Time>,
     mut gun: ResMut<Firing>,
     mut portals: ResMut<Portals>,
@@ -75,6 +78,14 @@ fn land(
     mut audio: ResMut<Assets<AudioSource>>,
 ) {
     for shot in gun.land(time.elapsed_secs()) {
+        if let (Some(effect), Some(at)) = (crate::impacts::selection(&shot.placement), shot.impact)
+        {
+            let mut impact = crate::impacts::PortalImpact::at(shot.colour, effect, &at);
+            if effect == crate::effects::Effect::Overlap {
+                impact.target = portals.get(shot.colour.other()).map(|p| p.origin);
+            }
+            impacts.write(impact);
+        }
         match shot.placement {
             Placement::Placed { portal, quality } => {
                 info!(

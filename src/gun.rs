@@ -18,6 +18,7 @@ const MUZZLE: Vec3 = [30.0, 4.0, -5.0];
 pub struct Shot {
     pub colour: Colour,
     pub placement: Placement,
+    pub impact: Option<portal::pair::Portal>,
     /// the trace's hit point, which times the flight
     pub landed: Vec3,
     /// where the stream ends, the portal's spot when it fits
@@ -59,6 +60,13 @@ impl Gun {
         self.last_fired = colour.index() as u8 + 1;
         let (eye, dir) = (w.eye(), w.forward());
         let (placement, landed) = place(world, eye, dir, RANGE, pair.get(colour.other()));
+        let impact = match placement {
+            Placement::Placed { portal, .. } => Some(portal),
+            Placement::Failed(_) => world.cast(eye, dir, RANGE).map(|hit| {
+                let (forward, up) = portal::placement::orientation(hit.normal, dir);
+                portal::pair::Portal::new(landed, forward, up, (32.0, 54.0))
+            }),
+        };
         let from = tracer_origin(w);
         let ends = match placement {
             Placement::Placed { portal, .. } => portal.origin,
@@ -68,6 +76,7 @@ impl Gun {
         self.flying.push(Shot {
             colour,
             placement,
+            impact,
             landed,
             ends,
             from,

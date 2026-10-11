@@ -15,6 +15,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nth(1)
         .ok_or("usage: portal_inspect PORTAL_INSTALL_DIR")?;
     let search = Install::open(Path::new(&root))?.search;
+    if std::env::args().nth(2).as_deref() == Some("--effects") {
+        return effects(&search);
+    }
     let mdl = Mdl::parse(search.read("models/weapons/v_portalgun.mdl")?)?;
     println!(
         "[mdl] name={} version={} bones={} anims={} sequences={} textures={:?} attachments={}",
@@ -145,4 +148,55 @@ fn ported(kind: &str, f: &Function) -> bool {
         "renderer" => Renderer::from_function(f).is_some(),
         _ => false,
     }
+}
+
+fn effects(search: &portal::vpk::SearchPath) -> Result<(), Box<dyn std::error::Error>> {
+    for name in ["models/portals/portal1.mdl", "models/portals/portal2.mdl"] {
+        let mdl = Mdl::parse(search.read(name)?)?;
+        println!(
+            "[attachment-pose] {:?}",
+            portal::anim::sample(&mdl, 0, 0.0)?
+        );
+        println!(
+            "[model] {name} bones={:?} attachments={:?} sequences={:?} anims={:?}",
+            mdl.bones, mdl.attachments, mdl.sequences, mdl.anims
+        );
+    }
+    let mut materials = std::collections::BTreeSet::new();
+    for file in [
+        "particles/portals.pcf",
+        "particles/portalgun.pcf",
+        "particles/portal_projectile.pcf",
+    ] {
+        let systems = portal::pcf::systems(&portal::dmx::parse(&search.read(file)?)?)?;
+        for s in &systems {
+            println!(
+                "[system] file={file} name={} material={} color={:?} children={:?}",
+                s.name,
+                s.material,
+                s.color,
+                s.children
+                    .iter()
+                    .map(|c| (&systems[c.system].name, c.delay))
+                    .collect::<Vec<_>>()
+            );
+            println!("[definition] {s:?}");
+            if !s.material.is_empty() {
+                materials.insert(s.material.clone());
+            }
+        }
+    }
+    for material in materials {
+        let path = format!("materials/{}", material.replace('\\', "/"));
+        let path = if path.ends_with(".vmt") {
+            path
+        } else {
+            format!("{path}.vmt")
+        };
+        println!(
+            "[material] {path}\n{}",
+            String::from_utf8_lossy(&search.read(&path)?)
+        );
+    }
+    Ok(())
 }

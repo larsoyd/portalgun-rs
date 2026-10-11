@@ -110,7 +110,7 @@ impl Default for ControlPoint {
 }
 
 /// The state operators work on (CParticleCollection's fields they touch).
-pub struct Collection<'r> {
+pub struct Collection {
     pub particles: Vec<Particle>,
     pub cur_time: f32,
     pub dt: f32,
@@ -121,7 +121,7 @@ pub struct Collection<'r> {
     /// the random offset, 17 more for every operator that has run this step
     pub op_offset: u32,
     pub kills: Vec<usize>,
-    pub table: &'r RandomTable,
+    pub table: RandomTable,
     /// the process-wide SIMD stream, lent to whichever collection is simulating
     pub simd: SimdRandom,
     /// Movement Lock's two SIMD draws for the block of four being worked on
@@ -136,7 +136,7 @@ pub struct Collection<'r> {
     pub max_allowed: usize,
 }
 
-impl Collection<'_> {
+impl Collection {
     /// R_k of an operator: the table entry for this particle, seed and operator offset.
     pub fn op_random(&self, p: &Particle, k: u32) -> f32 {
         self.table.get(

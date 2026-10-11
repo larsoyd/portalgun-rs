@@ -20,6 +20,8 @@ pub struct Camera {
 pub struct Vertex {
     pub pos: Vec3,
     pub uv: [f32; 2],
+    pub uv_next: [f32; 2],
+    pub blend: f32,
     /// the packed r, g, b, a bytes over 255, faded further on cards
     pub color: [f32; 4],
 }
@@ -239,7 +241,13 @@ fn frame(sheet: Option<&Sheet>, p: &Particle, now: f32, rate: f32) -> Sample {
 fn quad(mesh: &mut Mesh, corners: [(Vec3, [f32; 2]); 4], color: [f32; 4]) {
     let base = mesh.vertices.len() as u32;
     for (pos, uv) in corners {
-        mesh.vertices.push(Vertex { pos, uv, color });
+        mesh.vertices.push(Vertex {
+            pos,
+            uv,
+            uv_next: uv,
+            blend: 0.0,
+            color,
+        });
     }
     mesh.indices.extend([0, 1, 2, 0, 2, 3].map(|i| base + i));
 }
@@ -327,6 +335,7 @@ fn sprite_card(
             [r + cx * (l - r), b + cy * (t - b)],
         )
     };
+    let base = mesh.vertices.len();
     quad(
         mesh,
         [
@@ -337,6 +346,14 @@ fn sprite_card(
         ],
         color,
     );
+    let [l, t, r, b] = frame.b;
+    for (v, uv) in mesh.vertices[base..]
+        .iter_mut()
+        .zip([[r, b], [l, b], [l, t], [r, t]])
+    {
+        v.uv_next = uv;
+        v.blend = frame.blend;
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -385,11 +402,15 @@ impl Beam<'_> {
         self.mesh.vertices.push(Vertex {
             pos: add(s.pos, half),
             uv: [0.0, s.tex],
+            uv_next: [0.0, s.tex],
+            blend: 0.0,
             color,
         });
         self.mesh.vertices.push(Vertex {
             pos: sub(s.pos, half),
             uv: [1.0, s.tex],
+            uv_next: [1.0, s.tex],
+            blend: 0.0,
             color,
         });
         if base >= 2 {

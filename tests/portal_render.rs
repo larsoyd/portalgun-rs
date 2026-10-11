@@ -98,3 +98,51 @@ fn linked_camera_matrices_and_targets_update_in_the_moving_and_resizing_frame() 
         assert!(active > 0, "at least one linked view must render");
     }
 }
+
+#[test]
+fn particle_view_layers_are_isolated_for_main_recursive_and_screen_copy_views() {
+    use bevy::camera::visibility::RenderLayers;
+    use portalgun::effects::ParticleView;
+    let home = std::env::var("HOME").unwrap();
+    let install = Install::open(&root(None, None, Path::new(&home))).unwrap();
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        TransformPlugin,
+        WindowPlugin::default(),
+    ))
+    .init_asset::<Image>()
+    .init_asset::<Mesh>()
+    .init_asset::<Shader>()
+    .init_resource::<ManualTextureViews>()
+    .insert_resource(Files(install.search))
+    .add_plugins((CameraPlugin, FacesPlugin));
+    let main = app
+        .world_mut()
+        .spawn((Camera3d::default(), PlayerCamera, Msaa::Off))
+        .id();
+    let gun = app
+        .world_mut()
+        .spawn((Camera3d::default(), RenderLayers::layer(1)))
+        .id();
+    app.update();
+    assert_eq!(app.world().get::<ParticleView>(main).unwrap().0, 32);
+    assert!(app.world().get::<ParticleView>(gun).is_none());
+    let views: Vec<_> = app
+        .world_mut()
+        .query::<(&ParticleView, &RenderLayers)>()
+        .iter(app.world())
+        .map(|(v, l)| (v.0, l.clone()))
+        .collect();
+    assert_eq!(views.len(), 6);
+    for (layer, layers) in &views {
+        assert!(layers.intersects(&RenderLayers::layer(0)));
+        assert!(layers.intersects(&RenderLayers::layer(*layer)));
+        for (other, _) in &views {
+            if layer != other {
+                assert!(!layers.intersects(&RenderLayers::layer(*other)));
+            }
+        }
+    }
+}

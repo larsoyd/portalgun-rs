@@ -48,6 +48,7 @@ pub struct Pair {
     pub usable: [bool; 2],
     /// bumped whenever a portal opens, moves or closes
     pub changes: u64,
+    pub revisions: [u64; 2],
 }
 
 impl Pair {
@@ -75,6 +76,16 @@ impl Pair {
         };
         fade.moved(linked.then_some(partner));
         self.changes += 1;
+        self.revisions[c.index()] += 1;
+    }
+
+    pub fn deactivate(&mut self, c: Colour) {
+        if self.open[c.index()].take().is_some() {
+            self.revisions[c.index()] += 1;
+            self.changes += 1;
+            self.usable = [false; 2];
+            self.fade[c.other().index()].statics = 1.0;
+        }
     }
 
     pub fn think(&mut self, dt: f32) {

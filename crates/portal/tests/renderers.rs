@@ -445,3 +445,31 @@ fn trails_and_ropes_skip_spritecard_materials() {
         .vertices
         .is_empty());
 }
+
+#[test]
+fn spritecard_exports_both_frames_and_their_blend() {
+    let table = flat(0.5);
+    let sheet = sheet(&[(0, vec![[0.0, 0.0, 0.5, 1.0], [0.5, 0.0, 1.0, 1.0]])]);
+    let col = collection(
+        &table,
+        SimdRandom::new(),
+        vec![at([0.0, 100.0, 0.0], 2.0)],
+        0.25,
+    );
+    let renderer = renderer(
+        "render_animated_sprites",
+        vec![("animation rate", Float(1.0))],
+    );
+    let look = Look {
+        sheet: Some(&sheet),
+        card: Some(Card::default()),
+        ..plain()
+    };
+    let mesh = renderer.build(&col, &looking_north(), &look);
+    assert_eq!(mesh.vertices.len(), 4);
+    for v in &mesh.vertices {
+        assert_eq!(v.blend, 0.5);
+        assert_eq!(v.uv_next, [v.uv[0] + 0.5, v.uv[1]]);
+    }
+    assert_eq!(mesh.vertices[0].color, rgba([255, 128, 0, 255]));
+}

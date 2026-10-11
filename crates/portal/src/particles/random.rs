@@ -83,7 +83,8 @@ pub fn sha256(data: &[u8]) -> [u8; 32] {
 }
 
 /// The per-particle random floats every scalar random draw and operator random reads.
-pub struct RandomTable(Vec<f32>);
+#[derive(Clone)]
+pub struct RandomTable(std::sync::Arc<[f32]>);
 
 impl RandomTable {
     /// Read out of Portal's own client.so. Any other build gets refused.
@@ -107,12 +108,13 @@ impl RandomTable {
                 .0
                 .iter()
                 .map(|&c| f32::from_le_bytes(c))
-                .collect(),
+                .collect::<Vec<_>>()
+                .into(),
         ))
     }
 
     pub fn from_values(values: Vec<f32>) -> Self {
-        RandomTable(values)
+        RandomTable(values.into())
     }
 
     pub fn get(&self, index: u32) -> f32 {

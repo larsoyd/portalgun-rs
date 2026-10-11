@@ -175,6 +175,9 @@ struct Faces {
     shown: String,
 }
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PortalViewsUpdated;
+
 pub struct FacesPlugin;
 
 impl Plugin for FacesPlugin {
@@ -187,6 +190,7 @@ impl Plugin for FacesPlugin {
             .add_systems(
                 PostUpdate,
                 draw_views
+                    .in_set(PortalViewsUpdated)
                     .before(CameraUpdateSystems)
                     .before(TransformSystems::Propagate),
             );
@@ -281,14 +285,20 @@ fn spawn_faces(
     mut commands: Commands,
     files: Res<Files>,
     portals: Res<Portals>,
-    main: Single<&Msaa, With<PlayerCamera>>,
+    main: Single<(Entity, &Msaa), With<PlayerCamera>>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<PortalMaterial>>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let depth = max_depth(STENCIL_DEPTH, STENCIL_BITS) as usize;
-    let msaa = **main;
+    let (main_entity, msaa) = *main;
+    let msaa = *msaa;
+    commands.entity(main_entity).insert((
+        RenderLayers::from_layers(&[0, MAIN_FACES, 32]),
+        crate::effects::ParticleView(32),
+        bevy::core_pipeline::prepass::DepthPrepass,
+    ));
     let blank = images.add(target(UVec2::ONE));
     let mask = match doubler_mask(&files).and_then(|name| texture::load(&files, &name)) {
         Ok(i) => images.add(i),
@@ -300,9 +310,11 @@ fn spawn_faces(
     };
     let doubler_image = images.add(target(UVec2::splat(DOUBLER_SIZE)));
     let doubler = view_camera(&mut commands, doubler_image.clone(), DOUBLER_ORDER, msaa);
-    commands
-        .entity(doubler)
-        .insert(RenderLayers::from_layers(&[0, MAIN_FACES]));
+    commands.entity(doubler).insert((
+        RenderLayers::from_layers(&[0, MAIN_FACES, 33]),
+        crate::effects::ParticleView(33),
+        bevy::core_pipeline::prepass::DepthPrepass,
+    ));
     let mut make = |c: Colour| -> Result<(Handle<Mesh>, Chain), String> {
         let look = overlay_look(&files, c)?;
         let noise = images.add(overlay_texture(&files, &look.noise)?);
@@ -344,9 +356,11 @@ fn spawn_faces(
                 let image = images.add(target(UVec2::ONE));
                 let order = DOUBLER_ORDER - (2 * level + c.index()) as isize;
                 let camera = view_camera(&mut commands, image.clone(), order, msaa);
-                commands
-                    .entity(camera)
-                    .insert(RenderLayers::from_layers(&[0, layer]));
+                commands.entity(camera).insert((
+                    RenderLayers::from_layers(&[0, layer, 32 + layer]),
+                    crate::effects::ParticleView(32 + layer),
+                    bevy::core_pipeline::prepass::DepthPrepass,
+                ));
                 chain.cameras.push(camera);
                 chain.images.push(image);
             }

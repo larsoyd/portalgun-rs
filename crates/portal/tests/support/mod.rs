@@ -30,12 +30,12 @@ pub fn particle(id: u32, creation: f32, life: f32) -> Particle {
     p
 }
 
-pub fn collection<'r>(
-    table: &'r RandomTable,
+pub fn collection(
+    table: &RandomTable,
     simd: SimdRandom,
     particles: Vec<Particle>,
     now: f32,
-) -> Collection<'r> {
+) -> Collection {
     Collection {
         particles,
         cur_time: now,
@@ -46,7 +46,7 @@ pub fn collection<'r>(
         seed: 0,
         op_offset: 0,
         kills: Vec::new(),
-        table,
+        table: table.clone(),
         simd,
         lock_fade: None,
         query_count: 0,

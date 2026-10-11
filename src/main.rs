@@ -49,6 +49,10 @@ fn main() -> ExitCode {
         Ok(i) => i,
         Err(e) => return refuse(&e.to_string()),
     };
+    let particles = match portalgun::effects::ParticleEffects::read(&install) {
+        Ok(p) => p,
+        Err(e) => return refuse(&e),
+    };
     let sounds = match Sounds::read(&install.search) {
         Ok(s) => s,
         Err(e) => return refuse(&e.to_string()),
@@ -99,6 +103,9 @@ fn main() -> ExitCode {
         .add_plugins(ViewPlugin)
         .add_plugins(FacesPlugin)
         .add_plugins(FiringPlugin)
+        .insert_resource(particles)
+        .add_plugins(portalgun::effects::EffectsPlugin)
+        .add_plugins(portalgun::impacts::PortalImpactsPlugin)
         .add_plugins(HudPlugin)
         .run();
     if exit.is_success() {
