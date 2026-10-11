@@ -145,15 +145,15 @@ pub fn funnel(v: Vec3, wish: [f32; 2], feet: Vec3, eye: Vec3, p: &Portal) -> Fun
     Funnel::Wish([wish[0] - v[0] + d[0] * 6.0, wish[1] - v[1] + d[1] * 6.0])
 }
 
-/// Half of a tick's gravity before the move, in double as the original does.
+/// Half of a tick's gravity before the move, in double, then CheckVelocity.
 /// Translated from 0x275c40 (decompiled, server.so)
 pub fn start_gravity(vz: f32, dt: f32) -> f32 {
-    (vz as f64 - GRAVITY as f64 * (dt as f64 * 0.5)) as f32
+    clamp_speed((vz as f64 - GRAVITY as f64 * (dt as f64 * 0.5)) as f32)
 }
 
 /// Translated from 0x275040 (decompiled, server.so)
 pub fn finish_gravity(vz: f32, dt: f32) -> f32 {
-    (vz as f64 - (GRAVITY * dt) as f64 * 0.5) as f32
+    clamp_speed((vz as f64 - (GRAVITY * dt) as f64 * 0.5) as f32)
 }
 
 /// The jump and the single player forward boost, which brakes above one and a half times the
@@ -192,10 +192,14 @@ pub fn leaves_ground(vz: f32) -> bool {
 
 /// Translated from 0x274e40 (decompiled, server.so)
 pub fn check_velocity(v: Vec3) -> Vec3 {
-    v.map(|c| match c.is_finite() {
+    v.map(clamp_speed)
+}
+
+fn clamp_speed(c: f32) -> f32 {
+    match c.is_finite() {
         true => c.clamp(-MAX_VELOCITY, MAX_VELOCITY),
         false => 0.0,
-    })
+    }
 }
 
 /// m_vecPunchAngle and its velocity.

@@ -312,3 +312,11 @@ fn velocity_is_clamped_to_3500_on_each_axis() {
     assert_eq!(check_velocity([f32::NAN, 1.0, 2.0]), [0.0, 1.0, 2.0]);
     assert_eq!(check_velocity([1.0, f32::INFINITY, 2.0]), [1.0, 0.0, 2.0]);
 }
+
+#[test]
+fn both_gravity_halves_end_inside_the_max_velocity() {
+    assert_eq!(finish_gravity(-3500.0, DT), -3500.0);
+    assert_eq!(start_gravity(-3500.0, DT), -3500.0);
+    assert_eq!(finish_gravity(-3499.0, DT), -3500.0);
+    assert!(close(finish_gravity(-3490.0, DT), -3494.5));
+}
