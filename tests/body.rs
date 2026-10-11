@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 use portal::install::{root, Install};
-use portalgun::bodyanim::{BodyAnimation, PlayerClips};
+use portalgun::bodyanim::{BodyAnimation, PlayerClips, Stance};
 use portalgun::visual::VisualHistory;
 use portalgun::walker::Walker;
 
@@ -68,12 +68,18 @@ fn takeoff_and_landing_preserve_the_previous_leg_pose_then_blend() {
     let walker = Walker::at([0.0; 3]);
     let visual = VisualHistory::new(&walker).sample(&walker, 0.0);
     let mut animation = BodyAnimation::default();
+    let air = Stance {
+        jumps: 1,
+        ..Stance::new(false, false)
+    };
+    let landed = Stance {
+        grounded: true,
+        ..air
+    };
     let standing = animation
-        .pose(&clips, &visual, true, false, 0.0, 0.0)
+        .pose(&clips, &visual, Stance::new(true, false), 0.0, 0.0)
         .unwrap();
-    let takeoff = animation
-        .pose(&clips, &visual, false, false, 0.016, 0.016)
-        .unwrap();
+    let takeoff = animation.pose(&clips, &visual, air, 0.016, 0.016).unwrap();
     for name in [
         "thigh_L", "knee_L", "ankle_L", "thigh_R", "knee_R", "ankle_R",
     ] {
@@ -83,25 +89,19 @@ fn takeoff_and_landing_preserve_the_previous_leg_pose_then_blend() {
             "takeoff snapped {name}"
         );
     }
-    let middle = animation
-        .pose(&clips, &visual, false, false, 0.116, 0.1)
-        .unwrap();
-    let airborne = animation
-        .pose(&clips, &visual, false, false, 0.216, 0.1)
-        .unwrap();
+    let middle = animation.pose(&clips, &visual, air, 0.116, 0.1).unwrap();
+    let airborne = animation.pose(&clips, &visual, air, 0.216, 0.1).unwrap();
     let knee = clips.bone("knee_L");
     assert!(!middle.bones[knee].abs_diff_eq(standing.bones[knee], 0.01));
     assert!(!middle.bones[knee].abs_diff_eq(airborne.bones[knee], 0.01));
     let landing = animation
-        .pose(&clips, &visual, true, false, 0.232, 0.016)
+        .pose(&clips, &visual, landed, 0.232, 0.016)
         .unwrap();
     assert!(
         airborne.bones[knee].abs_diff_eq(landing.bones[knee], 1e-5),
         "landing snapped"
     );
-    let landed = animation
-        .pose(&clips, &visual, true, false, 0.432, 0.2)
-        .unwrap();
+    let landed = animation.pose(&clips, &visual, landed, 0.432, 0.2).unwrap();
     assert!(!landed.bones[knee].abs_diff_eq(airborne.bones[knee], 0.01));
 }
 
@@ -112,27 +112,27 @@ fn idle_aim_and_fire_use_the_weapon_bone_and_crouch_changes_height() {
     let mut visual = VisualHistory::new(&walker).sample(&walker, 0.0);
     let mut animation = BodyAnimation::default();
     let idle = animation
-        .pose(&clips, &visual, true, false, 0.0, 0.0)
+        .pose(&clips, &visual, Stance::new(true, false), 0.0, 0.0)
         .unwrap();
     let gun = clips.bone("weapon_bone");
     let muzzle = idle.bones[gun].transform_point3(Vec3::new(0.0, 0.0, -21.0));
     assert!(muzzle.x > 15.0 && muzzle.z > 40.0);
     visual.angles.pitch = -40.0;
     let up = animation
-        .pose(&clips, &visual, true, false, 0.0, 0.0)
+        .pose(&clips, &visual, Stance::new(true, false), 0.0, 0.0)
         .unwrap();
     assert!(!up.bones[gun].abs_diff_eq(idle.bones[gun], 0.01));
     animation.fire(0.0);
     let fired = animation
-        .pose(&clips, &visual, true, false, 0.1, 0.1)
+        .pose(&clips, &visual, Stance::new(true, false), 0.1, 0.1)
         .unwrap();
     assert!(!fired.bones[gun].abs_diff_eq(up.bones[gun], 0.01));
     visual.angles.pitch = 0.0;
     animation
-        .pose(&clips, &visual, true, true, 1.0, 0.0)
+        .pose(&clips, &visual, Stance::new(true, true), 1.0, 0.0)
         .unwrap();
     let crouch = animation
-        .pose(&clips, &visual, true, true, 1.3, 0.3)
+        .pose(&clips, &visual, Stance::new(true, true), 1.3, 0.3)
         .unwrap();
     let head = clips.bone("head");
     assert!(crouch.bones[head].w_axis.z < idle.bones[head].w_axis.z - 10.0);
@@ -231,8 +231,7 @@ fn jump_duck_and_midair_crouch_toggles_keep_the_body_continuous() {
                 .pose(
                     &clips,
                     &visual,
-                    player.grounded,
-                    player.duck.ducked || player.duck.ducking,
+                    Stance::of(&player),
                     step as f32 * 0.015,
                     0.015,
                 )
@@ -284,8 +283,7 @@ fn jumping_from_crouch_keeps_the_body_above_the_floor() {
                 .pose(
                     &clips,
                     &visual,
-                    player.grounded,
-                    player.duck.ducked || player.duck.ducking,
+                    Stance::of(&player),
                     tick as f32 * 0.015,
                     0.015,
                 )
@@ -339,7 +337,7 @@ fn directional_walk_contacts_follow_the_actual_footstep_clock() {
                         });
                     }
                     let mut pose = animation
-                        .pose(&clips, &visual, true, crouch, now, 0.015)
+                        .pose(&clips, &visual, Stance::new(true, crouch), now, 0.015)
                         .unwrap();
                     portalgun::feet::ground(&clips, &mut pose, true, |_| Some(0.0));
                     if let Some(s) = step {
@@ -510,7 +508,7 @@ fn footsteps_stay_supported_when_starting_stopping_and_changing_stance() {
             });
         }
         let mut pose = animation
-            .pose(&clips, &visual, true, crouch, now, 0.015)
+            .pose(&clips, &visual, Stance::new(true, crouch), now, 0.015)
             .unwrap();
         portalgun::feet::ground(&clips, &mut pose, true, |_| Some(0.0));
         if let Some(s) = step {
@@ -521,4 +519,158 @@ fn footsteps_stay_supported_when_starting_stopping_and_changing_stance() {
         }
     }
     assert!(contacts > 10);
+}
+
+fn still(velocity: [f32; 3]) -> portalgun::visual::VisualPlayer {
+    let mut walker = Walker::at([0.0; 3]);
+    walker.velocity = velocity;
+    VisualHistory::new(&walker).sample(&walker, 0.0)
+}
+
+fn named(clips: &PlayerClips, name: &str) -> usize {
+    clips.mdl.sequence_named(name).unwrap()
+}
+
+#[test]
+fn falling_without_a_jump_event_keeps_the_ground_activity() {
+    let clips = clips();
+    let mut animation = BodyAnimation::default();
+    let air = Stance::new(false, false);
+    for (now, vz) in [(0.0, 0.0), (0.1, -100.0), (0.5, -500.0)] {
+        let pose = animation
+            .pose(&clips, &still([0.0, 0.0, vz]), air, now, 0.1)
+            .unwrap();
+        assert_eq!(
+            pose.sequence,
+            named(&clips, "idle_PORTALGUN"),
+            "now={now} vz={vz}"
+        );
+    }
+}
+
+#[test]
+fn a_jump_event_holds_jump_start_until_grounded_two_tenths_later() {
+    let clips = clips();
+    let mut animation = BodyAnimation::default();
+    let jump = named(&clips, "portalgun_standing_jump");
+    let idle = named(&clips, "idle_PORTALGUN");
+    let at = |grounded, jumps| Stance {
+        jumps,
+        ..Stance::new(grounded, false)
+    };
+    let sequence = |a: &mut BodyAnimation, s, now| {
+        a.pose(&clips, &still([0.0; 3]), s, now, 0.015)
+            .unwrap()
+            .sequence
+    };
+    assert_eq!(sequence(&mut animation, at(true, 0), 1.0), idle);
+    assert_eq!(sequence(&mut animation, at(false, 1), 1.015), jump);
+    assert_eq!(sequence(&mut animation, at(true, 1), 1.1), jump);
+    assert_eq!(sequence(&mut animation, at(true, 1), 1.2), jump);
+    assert_eq!(sequence(&mut animation, at(true, 1), 1.22), idle);
+    assert_eq!(sequence(&mut animation, at(false, 1), 1.3), idle);
+    assert_eq!(sequence(&mut animation, at(false, 2), 1.4), jump);
+    assert_eq!(sequence(&mut animation, at(false, 2), 2.0), jump);
+}
+
+#[test]
+fn rising_faster_than_300_is_airwalk_until_the_ground() {
+    let clips = clips();
+    let jump = named(&clips, "portalgun_standing_jump");
+    let idle = named(&clips, "idle_PORTALGUN");
+    for original in [false, true] {
+        let mut animation = BodyAnimation::default();
+        animation.original_airwalk = original;
+        let mut sequence = |vz, grounded, now| {
+            animation
+                .pose(
+                    &clips,
+                    &still([0.0, 0.0, vz]),
+                    Stance::new(grounded, false),
+                    now,
+                    0.015,
+                )
+                .unwrap()
+                .sequence
+        };
+        assert_eq!(
+            sequence(300.0, false, 0.0),
+            idle,
+            "exactly 300 is not airwalk"
+        );
+        let air = if original { 0 } else { jump };
+        assert_eq!(sequence(300.5, false, 0.015), air, "original={original}");
+        assert_eq!(
+            sequence(-200.0, false, 0.5),
+            air,
+            "airwalk stays until landing"
+        );
+        assert_eq!(sequence(0.0, true, 0.6), idle);
+    }
+}
+
+#[test]
+fn the_original_airwalk_shows_the_bind_pose() {
+    let clips = clips();
+    let mut animation = BodyAnimation::default();
+    animation.original_airwalk = true;
+    let mut pose = None;
+    for tick in 0..30 {
+        pose = Some(
+            animation
+                .pose(
+                    &clips,
+                    &still([0.0, 0.0, 400.0]),
+                    Stance::new(false, false),
+                    tick as f32 * 0.015,
+                    0.015,
+                )
+                .unwrap(),
+        );
+    }
+    let pose = pose.unwrap();
+    let knee = clips.bone("knee_L");
+    let mut bind = Mat4::IDENTITY;
+    let mut chain = vec![knee];
+    while let Some(parent) = clips.mdl.bones[*chain.last().unwrap()].parent {
+        chain.push(parent);
+    }
+    for &i in chain.iter().rev() {
+        let b = &clips.mdl.bones[i];
+        bind *= Mat4::from_rotation_translation(Quat::from_array(b.quat), Vec3::from(b.pos));
+    }
+    assert!(
+        pose.bones[knee].abs_diff_eq(bind, 1e-3),
+        "knee {:?} bind {:?}",
+        pose.bones[knee],
+        bind
+    );
+}
+
+#[test]
+fn the_crouch_fire_gesture_needs_a_finished_duck() {
+    let clips = clips();
+    let stand = named(&clips, "stand_fire_PORTALGUN");
+    let crouch = named(&clips, "crouch_fire_PORTALGUN");
+    for (ducked, ducking, gesture) in [
+        (false, true, stand),
+        (true, false, crouch),
+        (true, true, crouch),
+    ] {
+        let mut animation = BodyAnimation::default();
+        animation.fire(0.0);
+        let stance = Stance {
+            ducked,
+            ducking,
+            ..Stance::new(true, false)
+        };
+        let pose = animation
+            .pose(&clips, &still([0.0; 3]), stance, 0.05, 0.05)
+            .unwrap();
+        assert_eq!(
+            pose.gesture,
+            Some(gesture),
+            "ducked={ducked} ducking={ducking}"
+        );
+    }
 }

@@ -58,3 +58,14 @@ fn the_horizontal_fov_is_kept_at_four_by_three_so_wide_screens_see_more() {
         wide.vertical_fov().to_degrees()
     );
 }
+
+#[test]
+fn the_original_airwalk_pose_is_opt_in() {
+    assert!(!Settings::parse("").unwrap().original_airwalk);
+    assert!(
+        Settings::parse("original_airwalk = true")
+            .unwrap()
+            .original_airwalk
+    );
+    assert!(Settings::parse("original_airwalk = 1").is_err());
+}

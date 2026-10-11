@@ -45,6 +45,12 @@ joints, folding hands, and weapon bone: idle, directional movement, crouching,
 jumping, aiming and firing. The animation-state rules were traced in Ghidra;
 clip rates, movement distances, blend grids, layers and transition durations
 come from the model. Takeoff and landing blend from the previous pose.
+The jump clip starts on an actual jump and holds until 0.2 seconds have passed
+and you are on the ground, so walking off a ledge keeps the walk or idle clip.
+Rising faster than 300 units a second, as out of a floor portal, is Portal's
+airwalk state. Chell's model has no airwalk clip, and the game falls back to
+its first sequence on the bind pose. The app holds the jump clip there instead,
+and `original_airwalk = true` restores the game's pose.
 Movement and collision still use the existing Portal controller.
 
 The body and held gun render in both colours' recursive portal views, clipped
@@ -261,7 +267,7 @@ Deliberate deviations:
 | F11 | Toggle fullscreen |
 
 `settings.toml` beside where you run it sets `sensitivity`, `fov`, `msaa`
-(1, 2, 4 or 8), `fullscreen` and `vsync` (true or false), one `key = value`
+(1, 2, 4 or 8), `fullscreen`, `vsync` and `original_airwalk` (true or false), one `key = value`
 per line. A missing file uses defaults; an unknown key or bad value stops
 the program with the line number.
 `--settings <file>` reads another file.

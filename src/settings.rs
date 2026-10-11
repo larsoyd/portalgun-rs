@@ -12,6 +12,8 @@ pub struct Settings {
     pub msaa: u32,
     pub fullscreen: bool,
     pub vsync: bool,
+    /// the bind pose Portal shows while rising out of a portal, since the model has no airwalk clip
+    pub original_airwalk: bool,
 }
 
 impl Settings {
@@ -22,6 +24,7 @@ impl Settings {
             msaa: 4,
             fullscreen: true,
             vsync: false,
+            original_airwalk: false,
         };
         for (n, line) in text.lines().enumerate() {
             let line = line.trim();
@@ -37,6 +40,7 @@ impl Settings {
                 "fov" => s.fov = number()?.clamp(FOV_RANGE.0, FOV_RANGE.1),
                 "fullscreen" => s.fullscreen = boolean()?,
                 "vsync" => s.vsync = boolean()?,
+                "original_airwalk" => s.original_airwalk = boolean()?,
                 "msaa" => match value.trim() {
                     "1" | "2" | "4" | "8" => s.msaa = number()? as u32,
                     _ => return Err(format!("{}, msaa takes 1, 2, 4 or 8", at())),

@@ -7,6 +7,7 @@ use portal::mdl::Mdl;
 use portal::vpk::SearchPath;
 
 use crate::visual::VisualPlayer;
+use crate::walker::Walker;
 
 #[derive(Resource)]
 pub struct PlayerClips {
@@ -212,8 +213,37 @@ impl PlayerClips {
     }
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct Stance {
+    pub grounded: bool,
+    pub ducked: bool,
+    pub ducking: bool,
+    /// jump events raised so far
+    pub jumps: u64,
+}
+
+impl Stance {
+    pub fn new(grounded: bool, ducked: bool) -> Self {
+        Self {
+            grounded,
+            ducked,
+            ..default()
+        }
+    }
+
+    pub fn of(player: &Walker) -> Self {
+        Self {
+            grounded: player.grounded,
+            ducked: player.duck.ducked,
+            ducking: player.duck.ducking,
+            jumps: player.jumps,
+        }
+    }
+}
+
 #[derive(Resource, Default)]
 pub struct BodyAnimation {
+    pub original_airwalk: bool,
     sequence: Option<usize>,
     cycle: f32,
     from: Vec<BonePose>,
@@ -226,7 +256,27 @@ pub struct BodyAnimation {
     feet_yaw: Option<f32>,
     goal_yaw: f32,
     revision: u64,
+    jumps: u64,
+    jumping: bool,
+    first_jump_frame: bool,
+    jump_start: f32,
+    airwalk: bool,
+    restart: bool,
 }
+
+#[derive(Clone, Copy, PartialEq)]
+enum Activity {
+    Idle,
+    CrouchIdle,
+    Run,
+    CrouchWalk,
+    JumpStart,
+    Airwalk,
+}
+
+/// the sequence an activity the model lacks falls back to
+const FALLBACK: usize = 0;
+const STUDIO_DELTA: i32 = 0x4;
 
 #[derive(Clone, Copy)]
 pub struct Footfall {
@@ -243,6 +293,8 @@ pub struct AnimatedBody {
     pub yaw: f32,
     pub origin: Vec3,
     pub planted: Option<usize>,
+    pub sequence: usize,
+    pub gesture: Option<usize>,
 }
 
 impl BodyAnimation {
@@ -250,15 +302,55 @@ impl BodyAnimation {
         self.shot = Some(now);
     }
 
+    // Translated from 0x282dc0 (decompiled, client.so)
+    fn jump_activity(&mut self, rise: f32, grounded: bool, now: f32) -> Option<Activity> {
+        let mut activity = Activity::Idle;
+        if rise > 300.0 || self.airwalk {
+            if !grounded {
+                self.airwalk = true;
+                return Some(Activity::Airwalk);
+            }
+            self.airwalk = false;
+            self.restart = true;
+        } else {
+            if !self.jumping {
+                return None;
+            }
+            if self.first_jump_frame {
+                self.first_jump_frame = false;
+                self.restart = true;
+            } else if now - self.jump_start > 0.2 && grounded {
+                self.jumping = false;
+                self.restart = true;
+            }
+            if self.jumping {
+                activity = Activity::JumpStart;
+            }
+        }
+        (self.jumping || self.airwalk).then_some(activity)
+    }
+
+    fn main_sequence(&self, clips: &PlayerClips, activity: Activity) -> usize {
+        match activity {
+            Activity::Idle => clips.idle,
+            Activity::CrouchIdle => clips.crouch,
+            Activity::Run => clips.run,
+            Activity::CrouchWalk => clips.crouch_walk,
+            Activity::JumpStart => clips.jump,
+            Activity::Airwalk if self.original_airwalk => FALLBACK,
+            Activity::Airwalk => clips.jump,
+        }
+    }
+
     pub fn pose(
         &mut self,
         clips: &PlayerClips,
         visual: &VisualPlayer,
-        grounded: bool,
-        crouching: bool,
+        stance: Stance,
         now: f32,
         dt: f32,
     ) -> Result<AnimatedBody, String> {
+        let grounded = stance.grounded;
         let speed = visual.pose.velocity.truncate().length();
         let eye_yaw = visual.angles.yaw;
         let relocated = self.revision != visual.revision;
@@ -282,19 +374,27 @@ impl BodyAnimation {
         let yaw = angle(current + difference.clamp(-step, step));
         self.feet_yaw = Some(yaw);
         let aim = [-angle(eye_yaw - yaw), -visual.angles.pitch];
-        let seq = if !grounded {
-            clips.jump
-        } else if crouching {
-            if speed < 0.5 {
-                clips.crouch
-            } else {
-                clips.crouch_walk
-            }
-        } else if speed > 0.5 {
-            clips.run
-        } else {
-            clips.idle
-        };
+        if self.sequence.is_none() {
+            self.jumps = stance.jumps;
+        }
+        if self.jumps != stance.jumps {
+            // event 6 in 0x250a30 (decompiled, client.so)
+            self.jumps = stance.jumps;
+            self.jumping = true;
+            self.first_jump_frame = true;
+            self.jump_start = now;
+            self.restart = true;
+        }
+        // Translated from 0x250530, 0x2830c0 and 0x283020 (decompiled, client.so)
+        let activity = self
+            .jump_activity(visual.pose.velocity.z, grounded, now)
+            .unwrap_or(match (stance.ducked || stance.ducking, speed > 0.5) {
+                (true, _) if speed < 0.5 => Activity::CrouchIdle,
+                (true, _) => Activity::CrouchWalk,
+                (false, true) => Activity::Run,
+                (false, false) => Activity::Idle,
+            });
+        let seq = self.main_sequence(clips, activity);
         let direction = visual.pose.velocity.y.atan2(visual.pose.velocity.x) - eye_yaw.to_radians();
         let (sin, cos) = direction.sin_cos();
         let largest = sin.abs().max(cos.abs()).max(f32::EPSILON);
@@ -316,7 +416,10 @@ impl BodyAnimation {
             self.transition = 0.0;
             self.cycle = 0.0;
             self.sequence = Some(seq);
+        } else if self.restart {
+            self.cycle = 0.0;
         }
+        self.restart = false;
         let elapsed = if changed { 0.0 } else { dt };
         self.cycle += elapsed * clips.rate(seq, params);
         self.cycle = if clips.mdl.sequences[seq].looping {
@@ -331,7 +434,22 @@ impl BodyAnimation {
             let progress = ((now - step.at) / step.interval).clamp(0.0, 1.0);
             (if step.left { 0.0 } else { 0.5 }) + progress * 0.5
         });
-        let mut pose = clips.sample_sequence(seq, cycle, params, gait.is_some())?;
+        let mut pose = if clips.mdl.sequences[seq].flags & STUDIO_DELTA != 0 {
+            let mut bind: Vec<_> = clips
+                .mdl
+                .bones
+                .iter()
+                .map(|b| BonePose {
+                    pos: b.pos,
+                    quat: b.quat,
+                })
+                .collect();
+            let delta = clips.sequence(seq, cycle, [0.0; 2])?;
+            add(&mut bind, &delta, &clips.mdl.sequences[seq].weights);
+            bind
+        } else {
+            clips.sample_sequence(seq, cycle, params, gait.is_some())?
+        };
         clips.layers(seq, &mut pose, aim)?;
         self.transition += elapsed;
         let fade = clips.mdl.sequences[seq].fade_in;
@@ -342,10 +460,13 @@ impl BodyAnimation {
             pose = previous;
         }
         self.shown = pose.clone();
+        let mut gesture = None;
         if let Some(shot) = self.shot {
-            let fire = clips.fire[usize::from(crouching)];
+            // FL_DUCKING in 0x283140 (decompiled, client.so) is set and cleared with m_bDucked
+            let fire = clips.fire[usize::from(stance.ducked)];
             let cycle = (now - shot) * clips.rate(fire, [0.0; 2]);
             if cycle < 1.0 {
+                gesture = Some(fire);
                 let delta = clips.sequence(fire, cycle.max(0.0), [0.0; 2])?;
                 add(&mut pose, &delta, &clips.mdl.sequences[fire].weights);
             } else {
@@ -367,6 +488,8 @@ impl BodyAnimation {
             yaw,
             origin,
             planted,
+            sequence: seq,
+            gesture,
         })
     }
 }

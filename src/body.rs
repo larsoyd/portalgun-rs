@@ -370,6 +370,7 @@ fn animate(
     level: Option<Res<crate::scene::Level>>,
     portals: Option<Res<crate::faces::Portals>>,
     gait: Option<Res<crate::bodyanim::Gait>>,
+    config: Option<Res<crate::player::Config>>,
 ) {
     let (Some(rig), Some(clips)) = (rig, clips) else {
         return;
@@ -380,11 +381,11 @@ fn animate(
         .as_ref()
         .and_then(|l| crate::walker::body_support(feet.to_array(), l, linked.as_ref()));
     animation.footfall = gait.and_then(|g| g.0);
+    animation.original_airwalk = config.is_some_and(|c| c.0.original_airwalk);
     let mut pose = match animation.pose(
         &clips,
         &visual,
-        player.grounded,
-        player.duck.ducked || player.duck.ducking,
+        crate::bodyanim::Stance::of(&player.0),
         time.elapsed_secs(),
         time.delta_secs(),
     ) {

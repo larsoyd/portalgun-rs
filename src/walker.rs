@@ -75,6 +75,8 @@ pub struct Walker {
     pub fall: f32,
     /// set for the step a jump left the ground on
     pub jumped: bool,
+    /// jump animation events raised so far
+    pub jumps: u64,
     /// the fall speed, for the step the walker landed on
     pub landed: Option<f32>,
     /// jump held since the last jump or since leaving the ground, so holding it never repeats
@@ -97,6 +99,7 @@ impl Walker {
             ground: None,
             fall: 0.0,
             jumped: false,
+            jumps: 0,
             landed: None,
             jump_held: false,
             duck: Duck::default(),
@@ -231,6 +234,8 @@ impl Walker {
         self.grounded = false;
         self.ground = None;
         self.jumped = true;
+        // the animation event 6 Portal adds at 0x2ce350 (decompiled, server.so)
+        self.jumps += 1;
         self.duck.jump_timer = 510.0;
         self.duck.in_duck_jump = true;
         self.jump_held = true;

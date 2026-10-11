@@ -4,7 +4,7 @@
 use bevy::prelude::*;
 use portal::install::{root, Install};
 use portal::pair::Portal;
-use portalgun::bodyanim::{BodyAnimation, PlayerClips};
+use portalgun::bodyanim::{BodyAnimation, PlayerClips, Stance};
 use portalgun::chamber::Chamber;
 use portalgun::visual::VisualHistory;
 use portalgun::walker::{Input, Walker};
@@ -203,14 +203,7 @@ fn seeded_movement_keeps_the_rig_attached_through_duck_jump_and_portals() {
             animation.support =
                 portalgun::walker::body_support(feet.to_array(), &chamber, Some(&pair));
             let mut pose = animation
-                .pose(
-                    &clips,
-                    &visual,
-                    walker.grounded,
-                    walker.duck.ducked || walker.duck.ducking,
-                    now,
-                    dt,
-                )
+                .pose(&clips, &visual, Stance::of(&walker), now, dt)
                 .unwrap_or_else(|e| panic!("seed={seed} tick={tick}: {e}"));
             let probe = |at: Vec3| {
                 portalgun::walker::body_support(

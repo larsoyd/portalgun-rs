@@ -86,6 +86,33 @@ fn a_jump_leaves_the_ground_only_from_the_ground() {
 }
 
 #[test]
+fn each_jump_raises_one_animation_event_and_walking_off_raises_none() {
+    let c = chamber();
+    let mut w = Walker::at([0.0, 0.0, 0.0]);
+    run(&mut w, &c, Input::default(), 0.1);
+    let jump = Input {
+        jump: true,
+        ..Input::default()
+    };
+    run(&mut w, &c, jump, 0.3);
+    assert_eq!(w.jumps, 1, "held jump repeats the event");
+    run(&mut w, &c, Input::default(), 1.0);
+    run(
+        &mut w,
+        &c,
+        Input {
+            jump: true,
+            ..Input::default()
+        },
+        0.05,
+    );
+    assert_eq!(w.jumps, 2);
+    let mut ledge = Walker::at([0.0, 0.0, 40.0]);
+    run(&mut ledge, &c, Input::default(), 1.0);
+    assert_eq!(ledge.jumps, 0, "a fall is not a jump");
+}
+
+#[test]
 fn the_mouse_turns_by_sources_yaw_and_pitch_factors() {
     let mut w = Walker::at([0.0, 0.0, 0.0]);
     w.look(100.0, 50.0, 3.0);
