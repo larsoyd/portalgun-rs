@@ -7,7 +7,10 @@ use portal::movement::{
     ACCELERATE, AIR_ACCELERATE, MAX_SPEED, WALK_SPEED,
 };
 use portal::pair::{crossing, through_point, Portal, Vec3};
-use portal::teleport::{entered, exit_velocity, touching, view_through, Mover};
+use portal::teleport::{
+    entered, exit_velocity, fix_roll, touching, view_through, Mover, Reorient, RollFix,
+};
+use portal::viewbob::{angle_vectors, vector_angles, Angles};
 
 use crate::chamber::Chamber;
 use crate::collision::{self, Trace};
@@ -19,6 +22,7 @@ pub const HEIGHT: f32 = 72.0;
 pub const EYE: f32 = 64.0;
 /// the client's m_yaw and m_pitch defaults
 const MOUSE_FACTOR: f32 = 0.022;
+/// cl_pitchdown and cl_pitchup, both registered with 89 at 0x1cd3c0 in client.so
 const PITCH_LIMIT: f32 = 89.0;
 /// sv_stepsize's default
 const STEP: f32 = 18.0;
@@ -77,6 +81,8 @@ pub struct Walker {
     pub jumped: bool,
     /// jump animation events raised so far
     pub jumps: u64,
+    pub roll: f32,
+    pub reorient: Reorient,
     /// the fall speed, for the step the walker landed on
     pub landed: Option<f32>,
     /// jump held since the last jump or since leaving the ground, so holding it never repeats
@@ -100,6 +106,8 @@ impl Walker {
             fall: 0.0,
             jumped: false,
             jumps: 0,
+            roll: 0.0,
+            reorient: Reorient::default(),
             landed: None,
             jump_held: false,
             duck: Duck::default(),
@@ -119,28 +127,56 @@ impl Walker {
     }
 
     pub fn forward(&self) -> Vec3 {
-        let (sy, cy) = self.yaw.to_radians().sin_cos();
-        let (sp, cp) = self.pitch.to_radians().sin_cos();
-        [cp * cy, cp * sy, -sp]
+        angle_vectors(self.angles()).0
     }
 
-    /// AngleVectors with no roll
     pub fn right(&self) -> Vec3 {
-        let (sy, cy) = self.yaw.to_radians().sin_cos();
-        [sy, -cy, 0.0]
+        angle_vectors(self.angles()).1
     }
 
     pub fn up(&self) -> Vec3 {
-        let (sy, cy) = self.yaw.to_radians().sin_cos();
-        let (sp, cp) = self.pitch.to_radians().sin_cos();
-        [sp * cy, sp * sy, cp]
+        angle_vectors(self.angles()).2
     }
 
-    /// Mouse counts, right and down positive, as Source turns them.
+    pub fn angles(&self) -> Angles {
+        Angles {
+            pitch: self.pitch,
+            yaw: self.yaw,
+            roll: self.roll,
+        }
+    }
+
+    fn set_angles(&mut self, a: Angles) {
+        (self.pitch, self.yaw, self.roll) = (a.pitch, a.yaw, a.roll);
+    }
+
+    /// The view carried through a portal, roll and all.
+    pub fn turn(&mut self, from: &Portal, to: &Portal) {
+        let (f, u) = view_through(from, to, self.forward(), self.up());
+        self.set_angles(vector_angles(f, u));
+    }
+
+    /// The client's per-frame roll recovery, with cl_reorient_in_air at its default of 1.
+    pub fn fix_view(&mut self, dt: f32, coin: bool) {
+        let how = RollFix {
+            grounded: self.grounded,
+            in_air: true,
+            pitch_reorientation: false,
+            coin,
+            frametime: dt,
+        };
+        let a = self.angles();
+        let a = fix_roll(&mut self.reorient, a, how);
+        self.set_angles(a);
+    }
+
+    /// Mouse counts, right and down positive. Upside down both turn the other way.
+    /// Translated from 0x4fae50 (disassembly, client.so)
     pub fn look(&mut self, dx: f32, dy: f32, sensitivity: f32) {
-        self.yaw -= dx * sensitivity * MOUSE_FACTOR;
+        let flip = if self.reorient.upside_down { -1.0 } else { 1.0 };
+        self.yaw -= flip * dx * sensitivity * MOUSE_FACTOR;
         self.pitch =
-            (self.pitch + dy * sensitivity * MOUSE_FACTOR).clamp(-PITCH_LIMIT, PITCH_LIMIT);
+            (self.pitch + flip * dy * sensitivity * MOUSE_FACTOR).clamp(-PITCH_LIMIT, PITCH_LIMIT);
     }
 
     /// One tick of FullWalkMove, then the portal touch.
@@ -643,9 +679,7 @@ impl Walker {
         for normal in normals {
             self.velocity = collision::clip(self.velocity, normal);
         }
-        let (f, _) = view_through(from, to, self.forward(), self.up());
-        self.yaw = f[1].atan2(f[0]).to_degrees();
-        self.pitch = -f[2].clamp(-1.0, 1.0).asin().to_degrees();
+        self.turn(from, to);
         true
     }
 }

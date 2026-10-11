@@ -38,6 +38,46 @@ pub fn angle_vectors(a: Angles) -> (Vec3, Vec3, Vec3) {
     )
 }
 
+/// VectorAngles with an up vector, so roll comes back too.
+/// Translated from 0x634530 (decompiled, client.so)
+pub fn vector_angles(f: Vec3, up: Vec3) -> Angles {
+    let left = [
+        f[2] * up[1] - f[1] * up[2],
+        up[2] * f[0] - f[2] * up[0],
+        up[0] * f[1] - up[1] * f[0],
+    ];
+    let scale = 1.0 / (left.iter().map(|c| c * c).sum::<f32>() + 1e-10).sqrt();
+    let left = left.map(|c| c * scale);
+    let flat = f[0] * f[0] + f[1] * f[1];
+    let pitch = (-f[2]).atan2(flat.sqrt()).to_degrees();
+    if flat > 1e-6 {
+        Angles {
+            pitch,
+            yaw: f[1].atan2(f[0]).to_degrees(),
+            roll: left[2].atan2(left[1] * f[0] - left[0] * f[1]).to_degrees(),
+        }
+    } else {
+        Angles {
+            pitch,
+            yaw: (-left[0]).atan2(left[1]).to_degrees(),
+            roll: 0.0,
+        }
+    }
+}
+
+/// Translated from 0x640b50 (decompiled, client.so), applied as matrix times vector
+pub fn rotate_about(axis: Vec3, degrees: f32, v: Vec3) -> Vec3 {
+    let (s, c) = degrees.to_radians().sin_cos();
+    let [x, y, z] = axis;
+    let k = 1.0 - c;
+    let m = [
+        [x * x * k + c, x * y * k - s * z, x * z * k + s * y],
+        [y * x * k + s * z, y * y * k + c, y * z * k - s * x],
+        [z * x * k - s * y, z * y * k + s * x, z * z * k + c],
+    ];
+    m.map(|row| row[0] * v[0] + row[1] * v[1] + row[2] * v[2])
+}
+
 fn along(o: Vec3, d: Vec3, s: f32) -> Vec3 {
     [0, 1, 2].map(|i| o[i] + d[i] * s)
 }

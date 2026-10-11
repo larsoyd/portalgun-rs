@@ -74,7 +74,7 @@ impl Plugin for MovementPlugin {
                     )
                         .chain()
                         .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
-                    (interpolate, place_camera)
+                    (reorient, interpolate, place_camera)
                         .chain()
                         .in_set(RunFixedMainLoopSystems::AfterFixedMainLoop),
                 ),
@@ -329,6 +329,19 @@ fn read_footing(
             error!("[step] refused: surfaces reason={e}");
             exit.write(AppExit::error());
         }
+    }
+}
+
+fn reorient(time: Res<Time>, mut player: ResMut<Player>, mut seed: Local<u32>) {
+    // xorshift for RandomInt(0, 1), the engine's own random stream is not traced
+    *seed = if *seed == 0 { 0x9e37_79b9 } else { *seed };
+    *seed ^= *seed << 13;
+    *seed ^= *seed >> 17;
+    *seed ^= *seed << 5;
+    let roll = player.roll;
+    player.fix_view(time.delta_secs(), *seed & 1 == 1);
+    if roll != 0.0 && player.roll == 0.0 {
+        info!("[view] level after_roll={roll:.1}");
     }
 }
 

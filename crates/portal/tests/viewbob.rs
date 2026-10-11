@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 larsoyd
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-use portal::viewbob::{add_bob, angle_vectors, look_down, Angles, Bob, Lag};
+use portal::viewbob::{
+    add_bob, angle_vectors, look_down, rotate_about, vector_angles, Angles, Bob, Lag,
+};
 
 fn close(a: f32, b: f32, tol: f32) -> bool {
     (a - b).abs() <= tol
@@ -216,4 +218,41 @@ fn resetting_lag_does_not_pull_toward_the_preteleport_facing() {
     lag.apply(&mut origin, &mut turned, angles, 1.5, 1.0 / 180.0);
     assert!(close3(origin, [0.0; 3]));
     assert!(close3(lag.facing, angle_vectors(angles).0));
+}
+
+#[test]
+fn vector_angles_recovers_pitch_yaw_and_roll() {
+    for pitch in [-80.0, -30.0, 0.0, 45.0, 85.0] {
+        for yaw in [-170.0, -45.0, 0.0, 90.0, 135.0] {
+            for roll in [-179.0, -90.0, -10.0, 0.0, 30.0, 120.0, 179.0] {
+                let a = Angles { pitch, yaw, roll };
+                let (f, _, u) = angle_vectors(a);
+                let b = vector_angles(f, u);
+                assert!(
+                    close(a.pitch, b.pitch, 1e-2)
+                        && close(a.yaw, b.yaw, 1e-2)
+                        && close(a.roll, b.roll, 1e-2),
+                    "{a:?} {b:?}"
+                );
+            }
+        }
+    }
+    let straight_up = vector_angles([0.0, 0.0, 1.0], [-1.0, 0.0, 0.0]);
+    assert!(
+        close(straight_up.pitch, -90.0, 1e-3) && straight_up.roll == 0.0,
+        "{straight_up:?}"
+    );
+    assert!(close(straight_up.yaw, 0.0, 1e-3), "{straight_up:?}");
+}
+
+#[test]
+fn rotation_about_an_axis_is_right_handed() {
+    assert!(close3(
+        rotate_about([0.0, 0.0, 1.0], 90.0, [1.0, 0.0, 0.0]),
+        [0.0, 1.0, 0.0]
+    ));
+    assert!(close3(
+        rotate_about([1.0, 0.0, 0.0], -90.0, [0.0, 1.0, 0.0]),
+        [0.0, 0.0, -1.0]
+    ));
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 use crate::pair::{crossing, through_dir, Portal, Vec3};
+use crate::viewbob::{angle_vectors, rotate_about, vector_angles, Angles};
 
 pub const MIN_FLOOR_EXIT_PLAYER: f32 = 300.0;
 const MIN_FLOOR_TO_FLOOR_OBJECT: f32 = 225.0;
@@ -14,9 +15,6 @@ const HOLE_NEAR: f32 = 0.5;
 const HOLE_FAR: f32 = 500.0;
 const HOLE_SHRINK: f32 = 0.98;
 const TRIGGER_DEPTH: f32 = 64.0;
-const ROLL_RATE: f32 = 120.0;
-const ROLL_SETTLE: f32 = 60.0;
-const ROLL_ACCEL: f32 = 400.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Mover {
@@ -98,29 +96,70 @@ pub fn view_through(from: &Portal, to: &Portal, forward: Vec3, up: Vec3) -> (Vec
     (through_dir(from, to, forward), through_dir(from, to, up))
 }
 
-/// One step of the view roll easing back to level after a portal, in degrees. The rate
-/// climbs while the view is tipped over and settles otherwise.
-pub fn recover_roll(roll: f32, rate: f32, on_ground: bool, up_z: f32, dt: f32) -> (f32, f32) {
-    if roll == 0.0 {
-        return (0.0, 0.0);
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Reorient {
+    pub rate: f32,
+    pub upside_down: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RollFix {
+    pub grounded: bool,
+    pub in_air: bool,
+    pub pitch_reorientation: bool,
+    pub coin: bool,
+    pub frametime: f32,
+}
+
+/// The view's roll easing back to level after a portal, run every client frame.
+/// Translated from 0x550ac0 (decompiled, client.so)
+pub fn fix_roll(state: &mut Reorient, a: Angles, how: RollFix) -> Angles {
+    let (forward, right, up) = angle_vectors(a);
+    if a.roll == 0.0 {
+        *state = Reorient {
+            rate: 0.0,
+            upside_down: up[2] < 0.0,
+        };
+        return a;
     }
-    let cap = if on_ground {
-        2.0 * ROLL_RATE
+    let cap = if how.grounded { 240.0 } else { 120.0 };
+    let stuck = a.roll > 175.0 && forward[2] > 0.99;
+    if stuck {
+        state.rate = cap;
+    } else if !how.in_air && !how.grounded {
+        state.upside_down = up[2] < 0.0;
+        return a;
+    }
+    let ramp = 400.0 * how.frametime;
+    state.rate = if up[2] < 0.75 {
+        (state.rate + ramp).min(cap)
+    } else if state.rate > 60.0 {
+        (state.rate - ramp).max(60.0)
     } else {
-        ROLL_RATE
+        (state.rate + ramp).min(60.0)
     };
-    let rate = if up_z < 0.75 {
-        (rate + ROLL_ACCEL * dt).min(cap)
-    } else if rate > ROLL_SETTLE {
-        (rate - ROLL_ACCEL * dt).max(ROLL_SETTLE)
+    let step = state.rate * how.frametime;
+    let fixed = if (stuck || how.pitch_reorientation) && up[2] < 0.2 {
+        let turn = if forward[2] > 0.0 { -step } else { step };
+        vector_angles(
+            rotate_about(right, turn, forward),
+            rotate_about(right, turn, up),
+        )
     } else {
-        (rate + ROLL_ACCEL * dt).min(ROLL_SETTLE)
+        let roll = if a.roll == 180.0 && how.coin && !stuck && !how.pitch_reorientation {
+            -180.0
+        } else {
+            a.roll
+        };
+        Angles {
+            roll: if roll > 0.0 {
+                (roll - step).max(0.0)
+            } else {
+                (roll + step).min(0.0)
+            },
+            ..a
+        }
     };
-    let step = rate * dt;
-    let roll = if roll.abs() <= step {
-        0.0
-    } else {
-        roll - step * roll.signum()
-    };
-    (roll, if roll == 0.0 { 0.0 } else { rate })
+    state.upside_down = stuck && angle_vectors(fixed).2[2] < 0.0;
+    fixed
 }

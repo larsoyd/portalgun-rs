@@ -99,11 +99,7 @@ impl VisualHistory {
         VisualPlayer {
             pose: self.previous.interpolate(self.current, fraction),
             // Mouse look and portal turns are immediate, including across +/-180 degrees.
-            angles: Angles {
-                pitch: player.pitch,
-                yaw: player.yaw,
-                roll: 0.0,
-            },
+            angles: player.angles(),
             revision: self.revision,
             reset_revision: self.reset_revision,
             teleport_rotation: self.teleport_rotation,

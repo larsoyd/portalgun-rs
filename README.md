@@ -53,6 +53,11 @@ its first sequence on the bind pose. The app holds the jump clip there instead,
 and `original_airwalk = true` restores the game's pose.
 Movement and collision still use the existing Portal controller.
 
+A portal that turns you about its normal leaves the view rolled. As in the
+game, the roll eases back every frame, faster the more you are tipped and twice
+as fast on the ground, and mouse look turns the other way while you hang
+upside down.
+
 The body and held gun render in both colours' recursive portal views, clipped
 into matching halves while crossing an opening. Boots have soles and heels,
 and visual foot contacts follow the actual footstep sounds. Crouch jumps keep
@@ -232,7 +237,7 @@ Still stand-ins or estimates:
 - Walking through the wall behind a portal. The game builds its collision
   behind each portal, this sandbox carves the wall and sweeps the remaining
   movement against the exit geometry. Full linked-world collision, tilted
-  portal rims, saved-eye recovery and view-roll recovery remain incomplete.
+  portal rims and saved-eye recovery remain incomplete.
   Ordinary wall crossings and repeated floor-to-ceiling loops are covered by
   tests and graphical checks; arbitrary tilted transitions are not.
 - Where a portal fits: the fitting rules are ported but not yet checked against

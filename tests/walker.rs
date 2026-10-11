@@ -416,3 +416,49 @@ fn the_walker_reports_its_jump_landing_speed_and_ground() {
     assert!(!w.jumped, "no jump from the air");
     assert_eq!(w.ground, None);
 }
+
+#[test]
+fn a_portal_that_turns_the_view_about_its_normal_carries_roll() {
+    let from = Portal::new(
+        [0.0, 0.0, 64.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        (32.0, 54.0),
+    );
+    let to = Portal::new(
+        [0.0, 500.0, 64.0],
+        [0.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0],
+        (32.0, 54.0),
+    );
+    let mut w = Walker::at([0.0; 3]);
+    w.yaw = 180.0;
+    w.turn(&from, &to);
+    assert!((w.roll.abs() - 90.0).abs() < 1e-3, "roll={}", w.roll);
+    assert!((w.yaw - 90.0).abs() < 1e-3, "yaw={}", w.yaw);
+    for _ in 0..200 {
+        w.fix_view(0.01, false);
+    }
+    assert_eq!(w.roll, 0.0);
+}
+
+#[test]
+fn upside_down_mouse_look_turns_and_pitches_the_other_way() {
+    let mut w = Walker::at([0.0; 3]);
+    w.look(10.0, 10.0, 1.0);
+    let (yaw, pitch) = (w.yaw, w.pitch);
+    assert!(yaw < 0.0 && pitch > 0.0);
+    let mut w = Walker::at([0.0; 3]);
+    w.reorient.upside_down = true;
+    w.look(10.0, 10.0, 1.0);
+    assert_eq!((w.yaw, w.pitch), (-yaw, -pitch));
+}
+
+#[test]
+fn mouse_pitch_stops_at_cl_pitchdown_and_cl_pitchup() {
+    let mut w = Walker::at([0.0; 3]);
+    w.look(0.0, 1.0e6, 1.0);
+    assert_eq!(w.pitch, 89.0);
+    w.look(0.0, -1.0e6, 1.0);
+    assert_eq!(w.pitch, -89.0);
+}

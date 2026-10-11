@@ -4,9 +4,10 @@
 use portal::pair::Portal;
 use portal::placement::{HALF_HEIGHT, HALF_WIDTH};
 use portal::teleport::{
-    entered, exit_velocity, meets_opening, recover_roll, touching, view_through, Mover,
-    MAX_EXIT_SPEED, MIN_FLOOR_EXIT_PLAYER,
+    entered, exit_velocity, fix_roll, meets_opening, touching, view_through, Mover, Reorient,
+    RollFix, MAX_EXIT_SPEED, MIN_FLOOR_EXIT_PLAYER,
 };
+use portal::viewbob::{angle_vectors, Angles};
 
 const X: [f32; 3] = [1.0, 0.0, 0.0];
 const Y: [f32; 3] = [0.0, 1.0, 0.0];
@@ -158,25 +159,184 @@ fn the_view_turns_with_the_portal() {
     assert!(close(f, X) && close(u, Z), "{f:?} {u:?}");
 }
 
+fn air(dt: f32) -> RollFix {
+    RollFix {
+        grounded: false,
+        in_air: true,
+        pitch_reorientation: false,
+        coin: false,
+        frametime: dt,
+    }
+}
+
+fn tipped_view(pitch: f32, roll: f32) -> Angles {
+    Angles {
+        pitch,
+        yaw: 30.0,
+        roll,
+    }
+}
+
 #[test]
-fn roll_recovers_at_up_to_120_degrees_a_second() {
-    let (mut roll, mut rate) = (180.0, 0.0);
-    for _ in 0..60 {
-        (roll, rate) = recover_roll(roll, rate, false, 0.5, 1.0 / 60.0);
+fn a_level_view_clears_the_rate_and_is_not_upside_down() {
+    let mut state = Reorient {
+        rate: 77.0,
+        upside_down: true,
+    };
+    let a = fix_roll(&mut state, tipped_view(10.0, 0.0), air(0.01));
+    assert_eq!(a, tipped_view(10.0, 0.0));
+    assert_eq!(state, Reorient::default());
+}
+
+#[test]
+fn a_steep_roll_ramps_by_400_to_120_in_the_air_and_240_on_the_ground() {
+    for (grounded, cap) in [(false, 120.0), (true, 240.0)] {
+        let mut state = Reorient::default();
+        let mut a = tipped_view(0.0, 90.0);
+        a = fix_roll(
+            &mut state,
+            a,
+            RollFix {
+                grounded,
+                ..air(0.1)
+            },
+        );
+        assert!((state.rate - 40.0).abs() < 1e-3, "{}", state.rate);
+        assert!((a.roll - 86.0).abs() < 1e-3, "{}", a.roll);
+        for _ in 0..3 {
+            a = fix_roll(
+                &mut state,
+                a,
+                RollFix {
+                    grounded,
+                    ..air(0.1)
+                },
+            );
+        }
+        let ramp = (40.0_f32 + 120.0).min(cap);
+        assert!(
+            (state.rate - ramp).abs() < 1e-3,
+            "grounded={grounded} {}",
+            state.rate
+        );
+        for _ in 0..20 {
+            a = fix_roll(
+                &mut state,
+                a,
+                RollFix {
+                    grounded,
+                    ..air(0.1)
+                },
+            );
+        }
+        assert!(state.rate <= cap + 1e-3);
+        assert_eq!(a.roll, 0.0);
+        assert!(!state.upside_down);
     }
-    assert!(roll > 0.0 && roll < 180.0, "{roll}");
-    assert!(rate <= 120.0 && rate > 0.0, "{rate}");
-    for _ in 0..600 {
-        (roll, rate) = recover_roll(roll, rate, false, 0.5, 1.0 / 60.0);
-    }
-    assert_eq!((roll, rate), (0.0, 0.0));
-    let (r, _) = recover_roll(-30.0, 120.0, true, 0.5, 0.1);
-    assert!(r > -30.0, "negative roll comes back up {r}");
-    let (_, ground) = recover_roll(30.0, 200.0, true, 0.5, 0.1);
+}
+
+#[test]
+fn a_mild_roll_settles_the_rate_toward_60() {
+    let mut state = Reorient::default();
+    fix_roll(&mut state, tipped_view(0.0, 30.0), air(0.1));
+    assert!((state.rate - 40.0).abs() < 1e-3, "{}", state.rate);
+    fix_roll(&mut state, tipped_view(0.0, 30.0), air(0.1));
+    assert!((state.rate - 60.0).abs() < 1e-3, "{}", state.rate);
+    state.rate = 200.0;
+    let a = fix_roll(&mut state, tipped_view(0.0, -30.0), air(0.1));
+    assert!((state.rate - 160.0).abs() < 1e-3, "{}", state.rate);
     assert!(
-        ground > 120.0 && ground <= 240.0,
-        "on the ground the cap doubles {ground}"
+        (a.roll + 14.0).abs() < 1e-3,
+        "negative roll comes back up {}",
+        a.roll
     );
+    let mut state = Reorient::default();
+    for _ in 0..2 {
+        fix_roll(&mut state, tipped_view(0.0, 45.0), air(0.1));
+    }
+    assert!(
+        (state.rate - 80.0).abs() < 1e-3,
+        "up.z 0.71 still ramps {}",
+        state.rate
+    );
+}
+
+#[test]
+fn without_cl_reorient_in_air_an_airborne_roll_stays() {
+    let mut state = Reorient::default();
+    let how = RollFix {
+        in_air: false,
+        ..air(0.1)
+    };
+    let a = fix_roll(&mut state, tipped_view(0.0, 90.0), how);
+    assert_eq!(a.roll, 90.0);
+    assert_eq!(state.rate, 0.0);
+    let a = fix_roll(
+        &mut state,
+        tipped_view(0.0, 90.0),
+        RollFix {
+            grounded: true,
+            ..how
+        },
+    );
+    assert!(a.roll < 90.0);
+}
+
+#[test]
+fn exactly_180_takes_its_direction_from_the_coin() {
+    for (coin, sign) in [(false, 1.0), (true, -1.0)] {
+        let mut state = Reorient {
+            rate: 100.0,
+            upside_down: false,
+        };
+        let a = fix_roll(
+            &mut state,
+            tipped_view(0.0, 180.0),
+            RollFix { coin, ..air(0.1) },
+        );
+        assert!(
+            (a.roll - sign * 168.0).abs() < 1e-3,
+            "coin={coin} {}",
+            a.roll
+        );
+    }
+}
+
+#[test]
+fn upside_down_and_looking_up_pitches_about_the_view_right_axis() {
+    let mut state = Reorient::default();
+    let before = tipped_view(-85.0, 178.0);
+    let (_, right, _) = angle_vectors(before);
+    let a = fix_roll(&mut state, before, air(0.1));
+    assert_eq!(state.rate, 120.0);
+    let (forward, after_right, up) = angle_vectors(a);
+    let along = (0..3).map(|i| right[i] * after_right[i]).sum::<f32>();
+    assert!(along > 0.999, "the right axis is kept {along}");
+    let (old_forward, _, _) = angle_vectors(before);
+    let expected = portal::viewbob::rotate_about(right, -12.0, old_forward);
+    assert!(
+        (0..3).all(|i| (forward[i] - expected[i]).abs() < 1e-3),
+        "{forward:?} vs {expected:?}"
+    );
+    assert_eq!(state.upside_down, up[2] < 0.0);
+}
+
+#[test]
+fn a_networked_pitch_reorientation_pitches_when_the_up_is_below_0_2() {
+    let mut state = Reorient {
+        rate: 100.0,
+        upside_down: false,
+    };
+    let how = RollFix {
+        pitch_reorientation: true,
+        ..air(0.1)
+    };
+    let a = fix_roll(&mut state, tipped_view(0.0, 82.0), how);
+    let (_, _, up) = angle_vectors(tipped_view(0.0, 82.0));
+    assert!(up[2] > 0.1 && up[2] < 0.2);
+    assert!(a.pitch != 0.0, "{a:?}");
+    let b = fix_roll(&mut state, tipped_view(0.0, 40.0), how);
+    assert!(b.roll < 40.0 && b.pitch.abs() < 1e-3, "{b:?}");
 }
 
 #[test]
