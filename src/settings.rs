@@ -14,6 +14,11 @@ pub struct Settings {
     pub vsync: bool,
     /// the bind pose Portal shows while rising out of a portal, since the model has no airwalk clip
     pub original_airwalk: bool,
+    pub original_gun_lag: bool,
+    pub original_body_shadows: bool,
+    pub original_feet: bool,
+    pub original_gait: bool,
+    pub original_eye_gate: bool,
 }
 
 impl Settings {
@@ -25,6 +30,11 @@ impl Settings {
             fullscreen: true,
             vsync: false,
             original_airwalk: false,
+            original_gun_lag: false,
+            original_body_shadows: false,
+            original_feet: false,
+            original_gait: false,
+            original_eye_gate: false,
         };
         for (n, line) in text.lines().enumerate() {
             let line = line.trim();
@@ -41,6 +51,11 @@ impl Settings {
                 "fullscreen" => s.fullscreen = boolean()?,
                 "vsync" => s.vsync = boolean()?,
                 "original_airwalk" => s.original_airwalk = boolean()?,
+                "original_gun_lag" => s.original_gun_lag = boolean()?,
+                "original_body_shadows" => s.original_body_shadows = boolean()?,
+                "original_feet" => s.original_feet = boolean()?,
+                "original_gait" => s.original_gait = boolean()?,
+                "original_eye_gate" => s.original_eye_gate = boolean()?,
                 "msaa" => match value.trim() {
                     "1" | "2" | "4" | "8" => s.msaa = number()? as u32,
                     _ => return Err(format!("{}, msaa takes 1, 2, 4 or 8", at())),

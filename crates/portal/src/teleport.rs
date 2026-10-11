@@ -44,12 +44,16 @@ pub fn exit_velocity(from: &Portal, to: &Portal, v: Vec3, who: Mover) -> Vec3 {
 /// Whether a mover's centre is behind the plane with its box reaching into the hole
 /// behind the opening, or its move crossed the opening in one step.
 pub fn entered(p: &Portal, before: Vec3, centre: Vec3, half: Vec3) -> bool {
+    (p.local(centre)[0] < 0.0 && in_hole(p, centre, half)) || crossing(p, before, centre).is_some()
+}
+
+/// Whether a box reaches into the hole shape behind the opening, EntityIsInPortalHole.
+pub fn in_hole(p: &Portal, centre: Vec3, half: Vec3) -> bool {
     let l = p.local(centre);
     let reach =
         |axis: Vec3| half[0] * axis[0].abs() + half[1] * axis[1].abs() + half[2] * axis[2].abs();
     let meets = |c: f32, r: f32, lo: f32, hi: f32| c + r >= lo && c - r <= hi;
-    let in_hole = l[0] < 0.0
-        && meets(l[0], reach(p.forward), -HOLE_FAR, -HOLE_NEAR)
+    meets(l[0], reach(p.forward), -HOLE_FAR, -HOLE_NEAR)
         && meets(
             l[1],
             reach(p.right),
@@ -61,8 +65,7 @@ pub fn entered(p: &Portal, before: Vec3, centre: Vec3, half: Vec3) -> bool {
             reach(p.up),
             -p.half.1 * HOLE_SHRINK,
             p.half.1 * HOLE_SHRINK,
-        );
-    in_hole || crossing(p, before, centre).is_some()
+        )
 }
 
 /// Whether a mover is in the portal's trigger box, 64 Source units deep in front of it, with
@@ -162,4 +165,55 @@ pub fn fix_roll(state: &mut Reorient, a: Angles, how: RollFix) -> Angles {
     };
     state.upside_down = stuck && angle_vectors(fixed).2[2] < 0.0;
     fixed
+}
+
+/// Whether an axis-aligned box overlaps either triangle of the portal's quad and straddles its plane.
+/// Translated from 0x28a870 and 0x2debb0 (decompiled, client.so)
+pub fn box_meets_portal(p: &Portal, centre: Vec3, half: Vec3) -> bool {
+    let corner = |s: f32, t: f32| {
+        [0, 1, 2].map(|i| p.origin[i] + p.right[i] * s * p.half.0 + p.up[i] * t * p.half.1)
+    };
+    let [a, b, c, d] = [
+        corner(-1.0, -1.0),
+        corner(1.0, -1.0),
+        corner(1.0, 1.0),
+        corner(-1.0, 1.0),
+    ];
+    let straddles = {
+        let distance = dot(p.forward, p.origin);
+        let reach = reach(half, p.forward);
+        let middle = dot(p.forward, centre);
+        middle + reach >= distance && middle - reach < distance
+    };
+    straddles
+        && (triangle_meets_box([a, b, c], centre, half)
+            || triangle_meets_box([a, c, d], centre, half))
+}
+
+fn dot(a: Vec3, b: Vec3) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn triangle_meets_box(triangle: [Vec3; 3], centre: Vec3, half: Vec3) -> bool {
+    let v = triangle.map(|p| [0, 1, 2].map(|i| p[i] - centre[i]));
+    let separated = |axis: Vec3| {
+        let projected = v.map(|p| dot(p, axis));
+        let radius = reach(half, axis);
+        projected.iter().cloned().fold(f32::INFINITY, f32::min) > radius
+            || projected.iter().cloned().fold(f32::NEG_INFINITY, f32::max) < -radius
+    };
+    let unit = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+    if unit.iter().any(|&axis| separated(axis)) {
+        return false;
+    }
+    let edges = [0, 1, 2].map(|i| [0, 1, 2].map(|k| v[(i + 1) % 3][k] - v[i][k]));
+    !edges.iter().any(|e| {
+        unit.iter().any(|u| {
+            separated([
+                u[1] * e[2] - u[2] * e[1],
+                u[2] * e[0] - u[0] * e[2],
+                u[0] * e[1] - u[1] * e[0],
+            ])
+        })
+    })
 }

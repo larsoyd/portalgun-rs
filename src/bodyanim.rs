@@ -244,6 +244,8 @@ impl Stance {
 #[derive(Resource, Default)]
 pub struct BodyAnimation {
     pub original_airwalk: bool,
+    pub original_feet: bool,
+    pub original_gait: bool,
     sequence: Option<usize>,
     cycle: f32,
     from: Vec<BonePose>,
@@ -291,6 +293,8 @@ pub struct AnimatedBody {
     pub yaw: f32,
     pub origin: Vec3,
     pub planted: Option<usize>,
+    /// the original has no foot IK, DONTUSEIK set at 0x53f873 (disassembly, client.so)
+    pub foot_ik: bool,
     pub sequence: usize,
     pub gesture: Option<usize>,
 }
@@ -423,7 +427,7 @@ impl BodyAnimation {
         };
         let gait = self
             .footfall
-            .filter(|_| seq == clips.run || seq == clips.crouch_walk);
+            .filter(|_| !self.original_gait && (seq == clips.run || seq == clips.crouch_walk));
         let cycle = gait.map_or(self.cycle, |step| {
             let progress = ((now - step.at) / step.interval).clamp(0.0, 1.0);
             (if step.left { 0.0 } else { 0.5 }) + progress * 0.5
@@ -479,6 +483,7 @@ impl BodyAnimation {
             yaw,
             origin,
             planted,
+            foot_ik: !self.original_feet,
             sequence: seq,
             gesture,
         })

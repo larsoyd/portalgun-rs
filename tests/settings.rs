@@ -69,3 +69,26 @@ fn the_original_airwalk_pose_is_opt_in() {
     );
     assert!(Settings::parse("original_airwalk = 1").is_err());
 }
+
+#[test]
+fn every_original_behaviour_switch_is_off_by_default_and_parses() {
+    let s = Settings::parse("").unwrap();
+    assert!(
+        !s.original_gun_lag
+            && !s.original_body_shadows
+            && !s.original_feet
+            && !s.original_gait
+            && !s.original_eye_gate
+    );
+    let s = Settings::parse(
+        "original_gun_lag = true\noriginal_body_shadows = true\noriginal_feet = true\noriginal_gait = true\noriginal_eye_gate = true",
+    )
+    .unwrap();
+    assert!(
+        s.original_gun_lag
+            && s.original_body_shadows
+            && s.original_feet
+            && s.original_gait
+            && s.original_eye_gate
+    );
+}

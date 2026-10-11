@@ -11,6 +11,7 @@ use crate::bodyportal::{material, BodyMaterial, BodyPortalPlugin};
 
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::visibility::RenderLayers;
+use bevy::light::NotShadowCaster;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
@@ -127,12 +128,32 @@ impl Plugin for BodyPlugin {
         app.add_plugins(BodyPortalPlugin)
             .init_resource::<BodyAnimation>()
             .add_systems(Startup, spawn_body)
+            .add_systems(PostStartup, quiet_body)
             .add_systems(
                 PostUpdate,
                 animate
                     .in_set(BodyPoseUpdated)
                     .before(TransformSystems::Propagate),
             );
+    }
+}
+
+/// no shadow for the original player, 0x54c830 (decompiled, client.so)
+fn quiet_body(
+    mut commands: Commands,
+    config: Option<Res<crate::player::Config>>,
+    meshes: Query<(Entity, &RenderLayers), With<Mesh3d>>,
+    parents: Query<&ChildOf>,
+    gun: Query<(), With<HeldGun>>,
+) {
+    if !config.is_some_and(|c| c.0.original_body_shadows) {
+        return;
+    }
+    for (entity, layers) in &meshes {
+        let held = parents.iter_ancestors(entity).any(|a| gun.contains(a));
+        if *layers == RenderLayers::layer(BODY_LAYER) && !held {
+            commands.entity(entity).insert(NotShadowCaster);
+        }
     }
 }
 
@@ -378,7 +399,11 @@ fn animate(
     let feet = visual.pose.centre - Vec3::Z * visual.pose.half.z;
     let linked = portals.and_then(|p| p.linked());
     animation.footfall = gait.and_then(|g| g.0);
-    animation.original_airwalk = config.is_some_and(|c| c.0.original_airwalk);
+    if let Some(config) = config {
+        animation.original_airwalk = config.0.original_airwalk;
+        animation.original_feet = config.0.original_feet;
+        animation.original_gait = config.0.original_gait;
+    }
     let mut pose = match animation.pose(
         &clips,
         &visual,

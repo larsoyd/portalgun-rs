@@ -160,6 +160,11 @@ fn every_body_and_gun_mesh_is_on_the_portal_only_layer_and_follows_teleports() {
         .add_plugins(BodyPlugin);
     app.update();
     let world = app.world_mut();
+    let casting = world
+        .query_filtered::<Entity, (With<Mesh3d>, Without<bevy::light::NotShadowCaster>)>()
+        .iter(world)
+        .count();
+    assert!(casting > 40, "the body casts shadows by default");
     let mut count = 0;
     for layers in world
         .query_filtered::<&RenderLayers, With<Mesh3d>>()
@@ -690,4 +695,122 @@ fn feet_yaw_holds_until_squared_speed_passes_the_next_float_above_one() {
         .pose(&clips, &visual, Stance::new(true, false), 0.1, 0.1)
         .unwrap();
     assert_eq!(held.yaw, 0.0, "a creep at the threshold is still standing");
+}
+
+#[test]
+fn without_foot_ik_the_feet_keep_the_authored_pose() {
+    let clips = clips();
+    for ik in [true, false] {
+        let mut animation = BodyAnimation::default();
+        animation.original_feet = !ik;
+        let mut pose = animation
+            .pose(&clips, &still([0.0; 3]), Stance::new(true, false), 0.0, 0.0)
+            .unwrap();
+        let before = pose.bones.clone();
+        portalgun::feet::ground(&clips, &mut pose, true, |_| Some(6.0));
+        assert_eq!(pose.bones == before, !ik, "ik={ik}");
+    }
+}
+
+#[test]
+fn the_original_gait_ignores_the_footstep_clock() {
+    use portalgun::bodyanim::Footfall;
+    let clips = clips();
+    let walking = still([150.0, 0.0, 0.0]);
+    let step = Footfall {
+        left: false,
+        at: 0.0,
+        interval: 0.3,
+    };
+    let sample = |audio: bool, footfall: Option<Footfall>| {
+        let mut animation = BodyAnimation::default();
+        animation.original_gait = !audio;
+        animation.footfall = footfall;
+        let mut last = None;
+        for tick in 0..10 {
+            last = Some(
+                animation
+                    .pose(
+                        &clips,
+                        &walking,
+                        Stance::new(true, false),
+                        tick as f32 * 0.02,
+                        0.02,
+                    )
+                    .unwrap()
+                    .bones,
+            );
+        }
+        last.unwrap()
+    };
+    assert!(
+        sample(true, Some(step)) != sample(true, None),
+        "the gait follows the clock"
+    );
+    assert!(
+        sample(false, Some(step)) == sample(false, None),
+        "the original ignores it"
+    );
+}
+
+#[test]
+fn the_original_body_casts_no_shadows_but_its_held_gun_and_ghost_still_do() {
+    use bevy::camera::visibility::RenderLayers;
+    use bevy::light::NotShadowCaster;
+    use portalgun::body::{BodyPlugin, HeldGun, BODY_LAYER};
+    use portalgun::player::{Config, Player};
+    use portalgun::settings::Settings;
+    use portalgun::sound::Files;
+    let home = std::env::var("HOME").unwrap();
+    let install = Install::open(&root(None, None, std::path::Path::new(&home))).unwrap();
+    let walker = Walker::at([0.0; 3]);
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default(), TransformPlugin))
+        .init_asset::<Mesh>()
+        .init_asset::<Image>()
+        .init_asset::<StandardMaterial>()
+        .insert_resource(Files(install.search))
+        .insert_resource(Config(
+            Settings::parse("original_body_shadows = true").unwrap(),
+        ))
+        .insert_resource(VisualHistory::new(&walker).sample(&walker, 0.0))
+        .insert_resource(Player(walker))
+        .add_plugins(BodyPlugin);
+    app.update();
+    let world = app.world_mut();
+    let gun = world
+        .query_filtered::<Entity, With<HeldGun>>()
+        .single(world)
+        .unwrap();
+    let under_gun = |world: &World, mut e: Entity| loop {
+        if e == gun {
+            return true;
+        }
+        match world.get::<ChildOf>(e) {
+            Some(parent) => e = parent.parent(),
+            None => return false,
+        }
+    };
+    let meshes: Vec<_> = world
+        .query_filtered::<(Entity, &RenderLayers, Has<NotShadowCaster>), With<Mesh3d>>()
+        .iter(world)
+        .map(|(e, l, quiet)| (e, l.clone(), quiet))
+        .collect();
+    let (mut body, mut held, mut ghost) = (0, 0, 0);
+    for (e, layers, quiet) in meshes {
+        if layers == RenderLayers::layer(BODY_LAYER) && !under_gun(world, e) {
+            assert!(quiet, "body mesh casts a shadow");
+            body += 1;
+        } else if layers == RenderLayers::layer(BODY_LAYER) {
+            assert!(!quiet);
+            held += 1;
+        } else {
+            assert!(!quiet);
+            ghost += 1;
+        }
+    }
+    assert!(
+        body > 30 && held > 0 && ghost > 0,
+        "body={body} held={held} ghost={ghost}"
+    );
 }

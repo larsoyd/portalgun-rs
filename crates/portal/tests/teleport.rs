@@ -4,8 +4,8 @@
 use portal::pair::Portal;
 use portal::placement::{HALF_HEIGHT, HALF_WIDTH};
 use portal::teleport::{
-    entered, exit_velocity, fix_roll, meets_opening, touching, view_through, Mover, Reorient,
-    RollFix, MAX_EXIT_SPEED, MIN_FLOOR_EXIT_PLAYER,
+    box_meets_portal, entered, exit_velocity, fix_roll, meets_opening, touching, view_through,
+    Mover, Reorient, RollFix, MAX_EXIT_SPEED, MIN_FLOOR_EXIT_PLAYER,
 };
 use portal::viewbob::{angle_vectors, Angles};
 
@@ -387,5 +387,64 @@ fn a_box_meets_the_opening_only_across_its_plane_inside_its_edges() {
     assert!(
         !meets_opening(&p, [0.0, 0.0, HALF_HEIGHT + 40.0], ear),
         "above it"
+    );
+}
+
+#[test]
+fn a_box_meets_a_portal_only_where_it_straddles_its_two_triangles() {
+    let p = wall();
+    let half = [16.0, 16.0, 36.0];
+    let at = |x: f32, y: f32, z: f32| [x, y, z];
+    assert!(
+        box_meets_portal(&p, at(0.0, 0.0, 0.0), half),
+        "centred on the opening"
+    );
+    assert!(
+        box_meets_portal(&p, at(15.9, 0.0, 0.0), half),
+        "just reaching back through the plane"
+    );
+    assert!(
+        !box_meets_portal(&p, at(16.1, 0.0, 0.0), half),
+        "in front, not touching the plane"
+    );
+    assert!(
+        !box_meets_portal(&p, at(-16.1, 0.0, 0.0), half),
+        "behind it"
+    );
+    assert!(
+        box_meets_portal(&p, at(0.0, 47.9, 0.0), half),
+        "overlapping the side edge"
+    );
+    assert!(
+        !box_meets_portal(&p, at(0.0, 48.1, 0.0), half),
+        "beside the opening"
+    );
+    assert!(
+        !box_meets_portal(&p, at(0.0, 0.0, 90.1), half),
+        "above the opening"
+    );
+    assert!(
+        box_meets_portal(&p, at(0.0, 0.0, 89.9), half),
+        "overlapping the top edge"
+    );
+    const S: f32 = std::f32::consts::FRAC_1_SQRT_2;
+    let tipped = Portal::new([0.0; 3], [S, 0.0, S], [-S, 0.0, S], HALF);
+    assert!(box_meets_portal(&tipped, at(0.0, 0.0, 0.0), half));
+    assert!(
+        !box_meets_portal(&tipped, at(30.0, 0.0, 30.0), half),
+        "in front of a tilted portal"
+    );
+    let (f, u) = (1.0 / 3.0_f32.sqrt(), 1.0 / 6.0_f32.sqrt());
+    let skew = Portal::new([0.0; 3], [f, f, f], [-u, -u, 2.0 * u], HALF);
+    let reach = (16.0 + 16.0 + 36.0) * f;
+    let near = [0, 1, 2]
+        .map(|i| skew.right[i] * -19.25 + skew.up[i] * 6.3 + skew.forward[i] * (reach + 0.25));
+    assert!(
+        !box_meets_portal(&skew, near, half),
+        "a quarter unit in front of a skewed portal"
+    );
+    assert!(
+        !box_meets_portal(&skew, at(47.72, 47.64, -58.44), half),
+        "beside a skewed portal, separated only along an edge axis"
     );
 }

@@ -272,10 +272,22 @@ Deliberate deviations:
 | F11 | Toggle fullscreen |
 
 `settings.toml` beside where you run it sets `sensitivity`, `fov`, `msaa`
-(1, 2, 4 or 8), `fullscreen`, `vsync` and `original_airwalk` (true or false), one `key = value`
+(1, 2, 4 or 8), `fullscreen` and `vsync` (true or false), one `key = value`
 per line. A missing file uses defaults; an unknown key or bad value stops
 the program with the line number.
 `--settings <file>` reads another file.
+
+A few behaviours differ from the game on purpose. Each has a switch, off by
+default, that restores what Portal does:
+
+| Key | With `true` |
+|---|---|
+| `original_airwalk` | Rising out of a portal shows the model's bind pose, as the game does for its missing airwalk clip. |
+| `original_gun_lag` | The view model stops lagging while your hull touches a portal. |
+| `original_body_shadows` | Your body casts no shadow. Its held gun and its copy through a portal still do. |
+| `original_feet` | No foot fitting: the feet keep the animation's pose, since the game turns IK off for the player. |
+| `original_gait` | The walk cycle plays at the clip's own rate instead of following the footstep sounds. |
+| `original_eye_gate` | The camera passes through a portal on the game's hole test, including its one-sided ceiling check. |
 
 The app starts in borderless fullscreen at the desktop's resolution and refresh
 rate. `fullscreen = false` starts in a window. VSync defaults to off, using

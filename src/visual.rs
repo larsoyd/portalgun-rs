@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 use portal::pair::{through_dir, Portal};
-use portal::teleport::meets_opening;
+use portal::teleport::{in_hole, meets_opening};
 use portal::viewbob::{angle_vectors, Angles};
 
 use crate::units::{to_bevy, to_bevy_dir};
@@ -105,6 +105,7 @@ impl VisualHistory {
             // Mouse look and portal turns are immediate, including across +/-180 degrees.
             angles: player.angles(),
             punch: player.punch.angle,
+            original_eye_gate: false,
             revision: self.revision,
             reset_revision: self.reset_revision,
             teleport_rotation: self.teleport_rotation,
@@ -117,6 +118,7 @@ pub struct VisualPlayer {
     pub pose: Snapshot,
     pub angles: Angles,
     pub punch: [f32; 3],
+    pub original_eye_gate: bool,
     pub revision: u64,
     pub reset_revision: u64,
     pub teleport_rotation: Quat,
@@ -140,6 +142,21 @@ impl VisualPlayer {
                 continue;
             }
             let feet = self.pose.centre - Vec3::Z * self.pose.half.z;
+            if self.original_eye_gate {
+                // Translated from 0x541ac0 (decompiled, client.so), the extents are one sided
+                let foot = p.local(feet.to_array());
+                let ceiling = p.forward[2] < -0.01 && foot[0] > 0.0 && {
+                    let at = p.local(
+                        feet.lerp(self.pose.eye, foot[0] / (foot[0] - eye[0]))
+                            .to_array(),
+                    );
+                    p.half.0 >= at[1] && p.half.1 >= at[2]
+                };
+                if ceiling || in_hole(p, self.pose.centre.to_array(), self.pose.half.to_array()) {
+                    return Some(i);
+                }
+                continue;
+            }
             let foot = p.local(feet.to_array());
             let ceiling_eye = p.forward[2] < -0.01 && foot[0] > 0.0 && {
                 let t = foot[0] / (foot[0] - eye[0]);

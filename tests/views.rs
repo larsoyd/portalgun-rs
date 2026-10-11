@@ -188,3 +188,51 @@ fn the_camera_adds_the_view_punch_but_the_body_aim_does_not() {
         "{forward:?} vs {expected:?}"
     );
 }
+
+#[test]
+fn the_original_view_model_lag_stops_while_the_hull_touches_a_portal() {
+    use portalgun::visual::VisualHistory;
+    use portalgun::walker::Walker;
+    let pair = [wall(0.0, 1.0), wall(-400.0, -1.0)];
+    let near = Walker::at([-10.0, 0.0, 28.0]);
+    let far = Walker::at([200.0, 0.0, 28.0]);
+    let lag = |w: &Walker, original| {
+        portalgun::view::max_lag(original, &VisualHistory::new(w).sample(w, 0.0), Some(pair))
+    };
+    assert_eq!(lag(&near, true), 0.0);
+    assert_eq!(lag(&far, true), 1.5);
+    assert_eq!(lag(&near, false), 1.5);
+    assert_eq!(
+        portalgun::view::max_lag(true, &VisualHistory::new(&near).sample(&near, 0.0), None),
+        1.5
+    );
+}
+
+#[test]
+fn the_original_ceiling_eye_gate_checks_each_extent_on_one_side_only() {
+    use portalgun::visual::VisualHistory;
+    use portalgun::walker::Walker;
+    let ceiling = Portal::new(
+        [0.0, 0.0, 100.0],
+        [0.0, 0.0, -1.0],
+        [1.0, 0.0, 0.0],
+        (32.0, 54.0),
+    );
+    let pair = [ceiling, wall(-400.0, -1.0)];
+    let r = ceiling.right;
+    let feet = [r[0] * -60.0, r[1] * -60.0, 60.0];
+    let walker = Walker::at(feet);
+    let mut visual = VisualHistory::new(&walker).sample(&walker, 0.0);
+    assert!(visual.pose.eye.z > 100.0);
+    assert_eq!(visual.camera_portal(Some(pair)), None);
+    visual.original_eye_gate = true;
+    assert_eq!(visual.camera_portal(Some(pair)), Some(0));
+    let walker = Walker::at([-feet[0], -feet[1], 60.0]);
+    let mut visual = VisualHistory::new(&walker).sample(&walker, 0.0);
+    visual.original_eye_gate = true;
+    assert_eq!(
+        visual.camera_portal(Some(pair)),
+        None,
+        "the positive side is still bounded"
+    );
+}

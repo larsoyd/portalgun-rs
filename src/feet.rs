@@ -34,6 +34,9 @@ pub fn ground(
     grounded: bool,
     probe: impl Fn(Vec3) -> Option<f32>,
 ) {
+    if !pose.foot_ik {
+        return;
+    }
     let rotation = Quat::from_rotation_z(pose.yaw.to_radians());
     for side in 0..2 {
         let shoe = boot(clips, pose, side);

@@ -351,9 +351,11 @@ fn interpolate(
     time: Res<Time<Fixed>>,
     mut history: ResMut<VisualHistory>,
     mut visual: ResMut<VisualPlayer>,
+    config: Option<Res<Config>>,
 ) {
     history.synchronize(&player);
     *visual = history.sample(&player, time.overstep_fraction());
+    visual.original_eye_gate = config.is_some_and(|c| c.0.original_eye_gate);
 }
 
 fn place_camera(

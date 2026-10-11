@@ -12,6 +12,8 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use portal::mdl::Mdl;
 use portal::model::MeshData;
+use portal::pair::Portal;
+use portal::teleport::box_meets_portal;
 
 use portal::viewbob::{add_bob, angle_vectors, look_down, Angles, Bob, Lag};
 
@@ -29,7 +31,7 @@ pub const VIEW_LAYER: usize = 1;
 const VIEWMODEL_FOV: f32 = 54.0;
 /// zNearViewmodel, the immediate 1.0 SetUpView stores at 0x595a8c (disassembly, client.so)
 const VIEWMODEL_NEAR: f32 = 1.0;
-/// g_fMaxViewModelLag, kept active through portals
+/// g_fMaxViewModelLag, kept active through portals unless the original is asked for
 const MAX_LAG: f32 = 1.5;
 
 #[derive(Resource)]
@@ -41,12 +43,24 @@ pub struct Gun {
     motion: ViewMotion,
 }
 
-#[derive(Default)]
 pub struct ViewMotion {
     bob: Bob,
     lag: Lag,
     reset_revision: Option<u64>,
     teleport_rotation: Quat,
+    pub max_lag: f32,
+}
+
+impl Default for ViewMotion {
+    fn default() -> Self {
+        Self {
+            bob: Bob::default(),
+            lag: Lag::default(),
+            reset_revision: None,
+            teleport_rotation: Quat::IDENTITY,
+            max_lag: MAX_LAG,
+        }
+    }
 }
 
 #[derive(Resource, Default)]
@@ -59,6 +73,18 @@ impl Plugin for ViewPlugin {
         app.add_systems(PostStartup, spawn_view)
             .add_systems(Update, (settle_to_idle, pose_view).chain())
             .add_systems(PostUpdate, sway.before(TransformSystems::Propagate));
+    }
+}
+
+/// zero lag in the original while the hull touches a portal, 0x53cca0 via 0x27b200 (client.so)
+pub fn max_lag(original: bool, visual: &VisualPlayer, linked: Option<[Portal; 2]>) -> f32 {
+    let (centre, half) = (visual.pose.centre.to_array(), visual.pose.half.to_array());
+    let touching =
+        linked.is_some_and(|pair| pair.iter().any(|p| box_meets_portal(p, centre, half)));
+    if original && touching {
+        0.0
+    } else {
+        MAX_LAG
     }
 }
 
@@ -78,10 +104,14 @@ fn sway(
     gun: Option<ResMut<Gun>>,
     time: Res<Time>,
     visual: Res<VisualPlayer>,
+    portals: Option<Res<crate::faces::Portals>>,
+    config: Option<Res<Config>>,
     mut transforms: Query<&mut Transform>,
 ) {
     let Some(mut gun) = gun else { return };
     let gun = &mut *gun;
+    let original = config.is_some_and(|c| c.0.original_gun_lag);
+    gun.motion.max_lag = max_lag(original, &visual, portals.and_then(|p| p.linked()));
     let local = gun
         .motion
         .relative(&visual, time.elapsed_secs(), time.delta_secs());
@@ -110,7 +140,8 @@ impl ViewMotion {
             self.bob.vertical,
             self.bob.lateral,
         );
-        self.lag.apply(&mut at, &mut turned, angles, MAX_LAG, dt);
+        self.lag
+            .apply(&mut at, &mut turned, angles, self.max_lag, dt);
         eye_relative(eye, angles, at, turned)
     }
 }
