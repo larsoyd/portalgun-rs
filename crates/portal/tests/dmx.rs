@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::dmx::{parse, Value};
 
 /// A binary DMX version 2 file: a string table, then elements and their attributes.

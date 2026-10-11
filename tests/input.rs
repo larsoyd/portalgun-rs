@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::input::{ButtonState, InputPlugin};
 use bevy::prelude::*;

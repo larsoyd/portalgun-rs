@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::steps::{landing_volume, Step, Steps};
 
 const TICK: f32 = 0.015;

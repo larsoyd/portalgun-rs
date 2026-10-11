@@ -1,9 +1,10 @@
 [package]
 name = "portalgun"
-version = "0.9.0"
+version = "0.10.0"
 description = "Portal's portal gun in a Bevy test chamber, read from your own Portal install"
 edition.workspace = true
-license.workspace = true
+license = "PolyForm-Noncommercial-1.0.0 AND MIT"
+publish = false
 rust-version.workspace = true
 
 [dependencies]
@@ -19,7 +20,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 rust-version = "1.95"
 
 [profile.dev]

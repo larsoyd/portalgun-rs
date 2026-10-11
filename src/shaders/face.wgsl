@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // portal_refract_vs20 and the ps20b stage 2, kept in step with the portal crate's face math
 #define_import_path portalgun::face
 

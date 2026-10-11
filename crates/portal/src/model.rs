@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use crate::error::malformed;
 use crate::mdl::{Mdl, Reader, VERTEX_SIZE};
 use crate::{Error, Result};

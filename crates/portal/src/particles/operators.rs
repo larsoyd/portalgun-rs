@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 //! The operators Portal's particle files use, each from its Operate in client.so.
 
 use std::cmp::Ordering;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 /// fov_desired's default and range in the client
 const FOV_DEFAULT: f32 = 75.0;
 const FOV_RANGE: (f32, f32) = (75.0, 120.0);

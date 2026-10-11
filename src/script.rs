@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Action {
     Fire1,

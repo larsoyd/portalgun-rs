@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 //! A particle system definition and its running instance: Init (0x684d10) and Simulate (0x680830).
 
 use super::collection::{strength, Collection, ControlPoint, Fade, Particle, Vec3};

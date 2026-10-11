@@ -1,3 +1,8 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-FileCopyrightText: 2026 Funny-Bones and contributors
+
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 AND MIT
+
 // Rig geometry and segment posing adapted from Funny-Bones and contributors (MIT).
 // Copyright (c) 2026 Funny-Bones and contributors.
 pub use crate::bodyanim::BodyAnimation;

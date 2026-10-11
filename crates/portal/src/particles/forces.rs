@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 //! Forces and constraints, which only Movement Basic runs (C_OP_BasicMovement 0x666970).
 
 use super::collection::{Collection, Vec3};

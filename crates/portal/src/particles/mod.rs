@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 //! Source's particle system, the one Portal shipped. Rebuilt from its runtime in client.so.
 
 pub mod collection;

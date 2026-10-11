@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // the bind group derive leaves checks the compiler calls unused
 #![allow(dead_code)]
 

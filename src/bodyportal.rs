@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use bevy::asset::embedded_asset;
 use bevy::camera::primitives::{Aabb, MeshAabb};
 use bevy::camera::visibility::RenderLayers;

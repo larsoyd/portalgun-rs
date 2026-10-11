@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::crosshair::{
     font_tall, icon_uv, icons, paint, reticle_at, scale, GunState, Icon, Rings, Sprite,
 };

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::pair::Portal;
 use portal::placement::{HALF_HEIGHT, HALF_WIDTH};
 use portal::teleport::{

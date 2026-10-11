@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use crate::pair::{Portal, Vec3};
 
 /// sv_gravity, sv_friction, sv_stopspeed, sv_accelerate, sv_maxspeed, sv_maxvelocity defaults

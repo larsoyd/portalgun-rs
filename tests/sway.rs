@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use bevy::prelude::*;
 use portal::pair::Portal;
 use portal::viewbob::{angle_vectors, Angles};

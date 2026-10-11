@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use crate::pair::{crossing, through_dir, Portal, Vec3};
 
 pub const MIN_FLOOR_EXIT_PLAYER: f32 = 300.0;

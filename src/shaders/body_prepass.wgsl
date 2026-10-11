@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 #import bevy_pbr::{prepass_io, pbr_prepass_functions}
 
 @group(#{MATERIAL_BIND_GROUP}) @binding(100) var<uniform> plane: vec4<f32>;

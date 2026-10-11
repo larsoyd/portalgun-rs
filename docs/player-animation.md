@@ -149,8 +149,8 @@ BODY_FUZZ_COUNT=2048 cargo test -j 2 --test body_fuzz -- --test-threads=1 --noca
 ```
 
 The 2,048-seed run passed with crossings `[497, 506, 597, 419, 610]` across those
-five scenarios and 20,369 takeoffs, plus 614,400 clip samples. The earlier v0.8
-finite-transform fuzz checks missed visible defects; these results establish the
+five scenarios and 20,369 takeoffs, plus 614,400 clip samples. Finite-transform-only
+fuzz checks missed visible defects; these results establish the
 covered invariants, not absence of every possible regression.
 
 `tests/fixtures/player-floor-body.script` exercises an open floor entry, reverse

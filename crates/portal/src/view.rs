@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use crate::pair::{Portal, Vec3};
 
 /// r_portal_stencil_depth's default

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 //! The geometry of Portal's three particle renderers, as client.so builds it on the CPU.
 
 use super::collection::{Collection, Particle, Vec3};

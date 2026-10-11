@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // a portal face, the linked view in the stencil hole with PortalRefract stage 2 over it
 // at the last level it is the depth doubler instead, the screen copy masked by portal_mask
 #import bevy_pbr::forward_io::VertexOutput

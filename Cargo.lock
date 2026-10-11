@@ -4252,7 +4252,7 @@ version = "0.1.0"
 
 [[package]]
 name = "portalgun"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "bevy",
  "image",

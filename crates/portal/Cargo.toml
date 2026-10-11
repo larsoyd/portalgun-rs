@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Portal's gun and portals from the game's own files: VPK, MDL, VTF, PCF readers, the particle runtime and portal maths"
 edition.workspace = true
 license.workspace = true
+publish = false
 rust-version.workspace = true
 
 [dependencies]

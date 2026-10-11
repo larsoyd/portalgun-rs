@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use bevy::asset::AssetPlugin;
 use bevy::camera::CameraProjection;
 use bevy::prelude::*;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::placement::Surface;
 use portalgun::chamber::{Block, Chamber};
 use portalgun::walker::{Input, Walker};

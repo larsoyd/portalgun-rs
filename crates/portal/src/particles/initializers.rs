@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 //! The initializers Portal's particle files use, from their scalar and block paths in client.so.
 
 use super::collection::{Collection, Particle, Vec3};

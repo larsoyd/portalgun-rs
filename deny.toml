@@ -1,0 +1,28 @@
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT-0",
+    "Unicode-3.0",
+    "Zlib",
+]
+include-dev = true
+include-build = true
+# The inventory also covers licenses in inactive lock entries.
+unused-allowed-license = "allow"
+
+[licenses.private]
+ignore = false
+
+[[licenses.exceptions]]
+name = "portal"
+allow = ["PolyForm-Noncommercial-1.0.0"]
+
+[[licenses.exceptions]]
+name = "portalgun"
+allow = ["PolyForm-Noncommercial-1.0.0"]

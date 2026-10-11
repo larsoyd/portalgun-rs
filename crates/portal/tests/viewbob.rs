@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::viewbob::{add_bob, angle_vectors, look_down, Angles, Bob, Lag};
 
 fn close(a: f32, b: f32, tol: f32) -> bool {

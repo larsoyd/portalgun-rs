@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use bevy::math::Vec3;
 use portalgun::units::{from_bevy, to_bevy, to_bevy_dir, METRES_PER_UNIT};
 

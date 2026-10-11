@@ -20,3 +20,32 @@ It does not include Elden Ring skeleton or animation data.
 The held gun is Portal's `w_portalgun`, attached to the animated `weapon_bone`.
 Neither Valve assets nor derived animation data are committed. The upstream
 MIT license covers the adapted code, not Valve's assets.
+
+Original contributions by larsoyd are offered under PolyForm Noncommercial
+1.0.0. The upstream portions retain their MIT grant. The combined `src/body.rs`
+file declares `PolyForm-Noncommercial-1.0.0 AND MIT`; this does not offer an MIT
+alternative for all of the project's original code. See [license coverage](LICENSING.md).
+
+## Dependencies
+
+Dependencies retain their own licenses. The [locked dependency inventory](docs/dependency-licenses.csv)
+records exact versions, alternatives selected for compliance, obligations and
+evidence. It includes build dependencies, platform dependencies and inactive
+lock entries. Dependencies are downloaded by Cargo, not vendored here.
+
+Crate metadata does not cover every embedded font, shader, lookup table,
+protocol definition or test asset. See the [distribution policy](LICENSING.md#distribution-policy)
+for the notices and unresolved questions that must be addressed before binary
+or vendored distributions. No game data is included in source releases.
+
+## Game files and reference implementations
+
+Portal models, animations, textures, fonts, sounds and the particle random table
+are read from the user's original installation. They remain Valve's property
+and are not covered by the rig's MIT license or this project's PolyForm license.
+
+The [movement](docs/movement/README.md) and [particle](docs/particles/README.md)
+evidence identifies Source SDK and Portal-Base comparison sources. Those sources
+have separate terms; a citation does not grant redistribution rights. The
+project's grant covers its independently authored implementation and does not
+relicense Valve's code or other third-party expression.

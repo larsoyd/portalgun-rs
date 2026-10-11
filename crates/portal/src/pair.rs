@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 pub type Vec3 = [f32; 3];
 
 /// How far past the exit plane a carried point or ray starts again.

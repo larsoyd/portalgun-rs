@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 //! Reads the portal gun out of your own Portal install and does the maths for a linked pair.
 //! Nothing from the install gets copied into the repo. Not one byte.
 

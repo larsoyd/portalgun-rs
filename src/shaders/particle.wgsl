@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 #import bevy_pbr::mesh_functions
 #import bevy_pbr::mesh_view_bindings::view
 #ifdef DEPTH_PREPASS

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::gun_fx::{GunFx, Interp, State, SPRITE_SCALE};
 
 fn sprite<'a>(

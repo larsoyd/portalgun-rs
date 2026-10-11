@@ -333,16 +333,24 @@ cargo run -p portal --example portal_inspect -- "/path/to/Steam/steamapps/common
 
 ## A note on the data
 
-Nothing derived from Portal is committed or generated into the repository.
-Everything is read from your install each time the program starts. Please keep
-it that way in forks: share the code, and let each person read the data from
-the copy of the game they own.
+No Portal binaries, models, textures, sounds, fonts or animation data are
+bundled. The program reads them from your original, unmodified installation.
+Numerical movement measurements and implementation evidence are documented
+for testing. Please keep game assets out of forks too: share the code, and
+let each person read the data from the copy of the game they own.
 
 ## License
 
-The code is under the [MIT License](LICENSE). Adapted rig code retains its
-[upstream MIT notice](licenses/ELDEN-RING-Combat-Rewrite-MIT.txt); see
-[third-party credits](THIRD_PARTY.md).
+Original work in both crates is under the
+[PolyForm Noncommercial License 1.0.0](LICENSE). This is source-available
+software with noncommercial use terms. See [license coverage](LICENSING.md)
+and the [required notice](NOTICE).
+
+Adapted rig code retains its
+[upstream MIT notice](licenses/ELDEN-RING-Combat-Rewrite-MIT.txt). Dependencies
+keep their own licenses; see [third-party credits](THIRD_PARTY.md).
+
+Releases contain source only. Registry publishing is disabled for both crates.
 
 The licence covers this project's code only. It grants nothing over Portal or
 its files, which remain Valve's.

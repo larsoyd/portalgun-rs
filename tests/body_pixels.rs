@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use bevy::app::PluginsState;
 use bevy::camera::{RenderTarget, ScalingMode};
 use bevy::core_pipeline::prepass::DepthPrepass;

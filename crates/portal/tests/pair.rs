@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::pair::{crossing, through_dir, through_point, trace, Hit, Portal};
 
 const X: [f32; 3] = [1.0, 0.0, 0.0];

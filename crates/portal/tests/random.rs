@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::particles::random::{pow_fixed, sha256, RandomTable, SimdRandom, TABLE_OFFSET};
 
 fn hex(d: [u8; 32]) -> String {

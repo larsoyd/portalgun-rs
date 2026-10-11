@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 //! emit_continuously and emit_instantaneously from client.so.
 
 use super::collection::Collection;

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 //! Sprite sheets from a VTF's sheet resource, sampled as the client's CSheet (0x6883f0) builds them.
 
 use crate::error::malformed;

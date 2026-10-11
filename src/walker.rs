@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::movement::{
     accelerate, air_accelerate, check_velocity, command, finish_gravity, fling_guard, flinging,
     funnel, jump_on_surface, leaves_ground, start_gravity, surface_friction, wish, Funnel,

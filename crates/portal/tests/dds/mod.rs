@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 // reads back only what to_dds writes: block formats and masked uncompressed pixels
 
 #[derive(Debug, Clone, PartialEq)]
