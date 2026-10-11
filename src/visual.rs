@@ -96,8 +96,12 @@ impl VisualHistory {
     }
 
     pub fn sample(&self, player: &Walker, fraction: f32) -> VisualPlayer {
+        let mut pose = self.previous.interpolate(self.current, fraction);
+        // EyeFootPosition, translated from 0x541630 (decompiled, client.so)
+        let feet = pose.centre.z - pose.half.z;
+        pose.eye.z -= (pose.eye.z - feet) * player.roll.abs() * (0.75 / 180.0);
         VisualPlayer {
-            pose: self.previous.interpolate(self.current, fraction),
+            pose,
             // Mouse look and portal turns are immediate, including across +/-180 degrees.
             angles: player.angles(),
             revision: self.revision,

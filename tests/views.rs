@@ -142,3 +142,26 @@ fn recursive_portal_views_follow_the_interpolated_camera_in_the_same_frame() {
         }
     }
 }
+
+#[test]
+fn a_rolled_view_lowers_the_eye_toward_the_feet() {
+    use portalgun::visual::VisualHistory;
+    use portalgun::walker::Walker;
+    let mut walker = Walker::at([0.0, 0.0, 10.0]);
+    for (roll, ducked, height) in [
+        (0.0, false, 64.0),
+        (90.0, false, 40.0),
+        (-180.0, false, 16.0),
+        (45.0, true, 28.0 * (1.0 - 0.1875)),
+    ] {
+        walker.roll = roll;
+        walker.duck.ducked = ducked;
+        walker.duck.eye = if ducked { 28.0 } else { 64.0 };
+        let visual = VisualHistory::new(&walker).sample(&walker, 0.0);
+        assert!(
+            (visual.pose.eye.z - 10.0 - height).abs() < 1e-3,
+            "roll={roll} ducked={ducked} eye={}",
+            visual.pose.eye.z
+        );
+    }
+}
