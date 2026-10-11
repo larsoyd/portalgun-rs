@@ -859,3 +859,25 @@ fn body_shadow_improvement_can_be_enabled_and_disabled_without_respawning() {
         }
     }
 }
+
+#[test]
+fn feet_yaw_converges_on_the_raw_gap_and_overshoots_across_the_wrap() {
+    use portalgun::bodyanim::converge_yaw;
+    let close = |a: f32, b: f32| (a - b).abs() < 1e-3;
+    assert!(
+        close(converge_yaw(170.0, -170.0, 0.01), -177.2),
+        "the 340 raw gap saturates the rate"
+    );
+    assert!(
+        close(converge_yaw(179.0, -179.0, 0.1), 109.0),
+        "and steps 72 the short way round"
+    );
+    assert!(
+        close(converge_yaw(10.0, 9.99, 0.01), 10.0),
+        "inside one step it lands on the goal"
+    );
+    assert!(
+        close(converge_yaw(30.0, 0.0, 0.01), 3.6),
+        "30 of 60 runs at half rate"
+    );
+}

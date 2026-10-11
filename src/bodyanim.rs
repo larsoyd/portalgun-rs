@@ -370,10 +370,7 @@ impl BodyAnimation {
                 self.goal_yaw = angle(self.goal_yaw - difference.signum() * 45.0);
             }
         }
-        let current = self.feet_yaw.unwrap();
-        let difference = angle(self.goal_yaw - current);
-        let step = (difference.abs() / 60.0).clamp(0.01, 1.0) * 720.0 * dt;
-        let yaw = angle(current + difference.clamp(-step, step));
+        let yaw = converge_yaw(self.goal_yaw, self.feet_yaw.unwrap(), dt);
         self.feet_yaw = Some(yaw);
         let aim = [-angle(eye_yaw - yaw), -visual.angles.pitch];
         if self.sequence.is_none() {
@@ -501,6 +498,19 @@ fn global_bones(mdl: &Mdl, pose: &[BonePose]) -> Vec<Mat4> {
         );
     }
     bones
+}
+
+/// The rate and the snap read the raw gap, so a gap across 180 turns fast and can overshoot.
+/// Translated from 0x256370 (decompiled, client.so)
+pub fn converge_yaw(goal: f32, feet: f32, dt: f32) -> f32 {
+    let raw = goal - feet;
+    let step = (0.016_666_668 * raw.abs()).clamp(0.01, 1.0) * dt * 720.0;
+    let next = match step <= raw.abs() {
+        true if angle(raw) < 0.0 => feet - step,
+        true => feet + step,
+        false => goal,
+    };
+    angle(next)
 }
 
 fn angle(v: f32) -> f32 {
