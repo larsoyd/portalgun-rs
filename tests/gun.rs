@@ -186,3 +186,12 @@ fn firing_kicks_the_view_up_by_half_to_one_degree_and_sideways_up_to_one() {
         spread(1)
     );
 }
+
+#[test]
+fn the_fire_punch_draws_its_yaw_before_its_pitch() {
+    let mut rng = portalgun::random::Xorshift::default();
+    let mut draws = rng;
+    let yaw = draws.range(-1.0, 1.0);
+    let pitch = draws.range(-1.0, -0.5);
+    assert_eq!(portalgun::gun::fire_punch(&mut rng), [pitch, yaw, 0.0]);
+}
