@@ -8,8 +8,8 @@ use portal::movement::{
 };
 use portal::pair::{crossing, through_point, Portal, Vec3};
 use portal::teleport::{
-    entered, exit_velocity, fix_roll, in_front, keeps_leaving, nearer, touching, view_through,
-    Mover, Reorient, RollFix,
+    entered, exit_velocity, fix_roll, in_front, keeps_leaving, nearer, pitch_reorients, touching,
+    view_through, Mover, Reorient, RollFix,
 };
 use portal::viewbob::{angle_vectors, vector_angles, Angles};
 
@@ -100,6 +100,8 @@ pub struct Walker {
     categorize_on_spawn: bool,
     /// the portal whose simulator holds the player, m_hPortalEnvironment
     pub owner: Option<usize>,
+    /// set by each teleport, makes the roll recovery pitch instead
+    pub pitch_reorientation: bool,
     touching: [bool; 2],
     /// IN_DUCK forced by a tilted teleport until the next move ends
     forced_duck: bool,
@@ -132,6 +134,7 @@ impl Walker {
             surface: Surface::default(),
             categorize_on_spawn: true,
             owner: None,
+            pitch_reorientation: false,
             touching: [false; 2],
             forced_duck: false,
             stuck_count: 0,
@@ -184,7 +187,7 @@ impl Walker {
         let how = RollFix {
             grounded: self.grounded,
             in_air: true,
-            pitch_reorientation: false,
+            pitch_reorientation: self.pitch_reorientation,
             coin,
             frametime: dt,
         };
@@ -668,6 +671,8 @@ impl Walker {
             self.forced_duck = true;
             centre[2] += if from.forward[2] > 0.0 { -16.0 } else { 16.0 };
         }
+        // nothing can be carried in the sandbox, so a held object never clears it
+        self.pitch_reorientation = pitch_reorients(self.forward(), from, to.forward[2]);
         let offset = collision::sub(self.feet, centre);
         self.feet = collision::add(through_point(from, to, centre), offset);
         self.velocity = exit_velocity(from, to, self.velocity, Mover::Player);

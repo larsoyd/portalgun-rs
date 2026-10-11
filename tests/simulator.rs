@@ -312,3 +312,40 @@ fn a_player_in_solid_behind_the_plane_beside_the_hole_is_taken_and_freed() {
     assert_eq!(w.owner, Some(0), "the portal took the stuck player");
     assert!(!real_solid(&w, &c), "freed: {:?}", w.feet);
 }
+
+#[test]
+fn a_steep_look_into_a_floor_portal_with_a_ceiling_exit_sets_pitch_reorientation() {
+    let mut c = room();
+    c.blocks
+        .push(block([-200.0, 200.0, 300.0], [200.0, 600.0, 364.0]));
+    let ceiling = Portal::new(
+        [0.0, 400.0, 300.0],
+        [0.0, 0.0, -1.0],
+        [1.0, 0.0, 0.0],
+        (32.0, 54.0),
+    );
+    for (pitch, expected) in [(80.0, true), (0.0, false)] {
+        let mut w = Walker::at([0.0, 0.0, 100.0]);
+        w.pitch = pitch;
+        let crossed = idle(&mut w, &c, [floor_portal(), ceiling], 100);
+        assert_eq!(crossed, Some(0));
+        assert_eq!(w.pitch_reorientation, expected, "pitch {pitch}");
+    }
+}
+
+#[test]
+fn the_roll_recovery_pitches_while_the_flag_is_set() {
+    let rolled = |flag: bool| {
+        let mut w = Walker::at([0.0; 3]);
+        w.roll = 90.0;
+        w.pitch_reorientation = flag;
+        w.fix_view(0.1, false);
+        w.roll
+    };
+    assert!(rolled(false) < 90.0, "without the flag the roll eases back");
+    assert_ne!(
+        rolled(true),
+        rolled(false),
+        "with it the view pitches about its right axis instead"
+    );
+}

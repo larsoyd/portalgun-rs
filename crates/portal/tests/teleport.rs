@@ -5,7 +5,7 @@ use portal::pair::Portal;
 use portal::placement::{HALF_HEIGHT, HALF_WIDTH};
 use portal::teleport::{
     box_meets_portal, entered, exit_velocity, fix_roll, in_front, keeps_leaving, meets_opening,
-    nearer, touching, view_through, Mover, Reorient, RollFix, MAX_EXIT_SPEED,
+    nearer, pitch_reorients, touching, view_through, Mover, Reorient, RollFix, MAX_EXIT_SPEED,
     MIN_FLOOR_EXIT_PLAYER,
 };
 use portal::viewbob::{angle_vectors, Angles};
@@ -452,4 +452,79 @@ fn only_a_ceiling_portal_keeps_a_ducked_mover_behind_its_plane() {
     );
     let p = ceiling(-0.7071);
     assert!(!keeps_leaving(&p, below(&p), true), "not steep enough");
+}
+
+fn portal(forward: [f32; 3], up: [f32; 3]) -> Portal {
+    Portal::new([0.0; 3], forward, up, (32.0, 54.0))
+}
+
+fn flat(x: f32, y: f32, z: f32) -> [f32; 3] {
+    let len = (x * x + y * y + z * z).sqrt();
+    [x / len, y / len, z / len]
+}
+
+#[test]
+fn an_upright_portal_pitches_when_the_view_runs_along_its_forward() {
+    let wall = portal([1.0, 0.0, 0.0], [0.0, 0.0, 1.0]);
+    let exit = 0.0;
+    assert!(
+        pitch_reorients([-1.0, 0.0, 0.0], &wall, exit),
+        "straight in"
+    );
+    assert!(pitch_reorients(flat(-0.51, 0.86, 0.0), &wall, exit));
+    assert!(
+        !pitch_reorients(flat(-0.49, 0.87, 0.0), &wall, exit),
+        "glancing"
+    );
+    assert!(
+        pitch_reorients([0.0, 0.0, -1.0], &wall, exit),
+        "looking straight down"
+    );
+    let leaning = portal([1.0, 0.0, 0.0], flat(0.0, 0.15, 0.99));
+    assert!(
+        !pitch_reorients([-1.0, 0.0, 0.0], &leaning, exit),
+        "up.z not above 0.99"
+    );
+}
+
+#[test]
+fn floor_to_ceiling_pitches_only_for_a_steep_view() {
+    let floor = portal([0.0, 0.0, 1.0], [1.0, 0.0, 0.0]);
+    assert!(pitch_reorients(flat(1.0, 0.0, -1.1), &floor, -1.0));
+    assert!(
+        !pitch_reorients(flat(1.0, 0.0, -0.5), &floor, -1.0),
+        "f.z above -0.5"
+    );
+    assert!(
+        !pitch_reorients(flat(1.0, 0.0, -1.1), &floor, -0.99),
+        "exit not past 0.99"
+    );
+    assert!(
+        pitch_reorients(flat(1.0, 0.0, -1.1), &floor, 1.0),
+        "floor to floor too"
+    );
+}
+
+#[test]
+fn a_steep_exit_pitches_when_the_view_leans_along_the_entry_up() {
+    let floor = portal([0.0, 0.0, 1.0], [1.0, 0.0, 0.0]);
+    let toward_up = [1.0, 0.0, 0.0];
+    assert!(pitch_reorients(toward_up, &floor, 0.8));
+    assert!(
+        pitch_reorients(toward_up, &floor, 0.99),
+        "0.99 itself is included"
+    );
+    assert!(
+        !pitch_reorients(toward_up, &floor, 0.75),
+        "0.75 itself is not"
+    );
+    assert!(!pitch_reorients(toward_up, &floor, 0.995));
+    assert!(
+        !pitch_reorients([-1.0, 0.0, 0.0], &floor, 0.8),
+        "leaning away from up"
+    );
+    assert!(
+        !pitch_reorients([0.0, 1.0, 0.0], &floor, 0.8),
+        "square to up"
+    );
 }

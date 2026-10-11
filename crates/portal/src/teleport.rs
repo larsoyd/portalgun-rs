@@ -77,6 +77,30 @@ pub fn in_hole(p: &Portal, centre: Vec3, half: Vec3) -> bool {
         )
 }
 
+/// m_bPitchReorientation, from the view forward before a teleport. Holding an object clears it.
+/// Translated from 0x913d68 (decompiled, server.so)
+pub fn pitch_reorients(f: Vec3, from: &Portal, exit_z: f32) -> bool {
+    let len_sq = f[0] * f[0] + f[1] * f[1];
+    let r = match len_sq > 0.0 {
+        true => 1.0 / (len_sq + 1e-10).sqrt(),
+        false => 1.0,
+    };
+    let flat = [f[0] * r, f[1] * r, 0.0];
+    let along = |v: Vec3| v[0] * flat[0] + v[1] * flat[1] + v[2] * flat[2];
+    let (fwd, up) = (from.forward, from.up);
+    if up[2] > 0.99 {
+        let d = along(fwd);
+        if d > 0.5 || -0.5 > d || len_sq == 0.0 {
+            return true;
+        }
+    }
+    let steep = |z: f32| z > 0.99 || -0.99 > z;
+    if steep(fwd[2]) && steep(exit_z) && (-0.5 > f[2] || f[2] > 0.5) {
+        return true;
+    }
+    along(up) > 0.0 && 0.99 >= exit_z && exit_z > 0.75
+}
+
 /// Whether this portal may take a mover held by another, by the nearer origin.
 /// Translated from 0x917680 (decompiled, server.so)
 pub fn nearer(centre: Vec3, this: &Portal, holder: &Portal) -> bool {
