@@ -349,3 +349,23 @@ fn the_roll_recovery_pitches_while_the_flag_is_set() {
         "with it the view pitches about its right axis instead"
     );
 }
+
+#[test]
+fn a_hull_that_lands_behind_the_exit_plane_right_after_crossing_is_sent_back() {
+    let mut c = room();
+    c.blocks
+        .push(block([-200.0, 200.0, 300.0], [200.0, 600.0, 364.0]));
+    let ceiling = Portal::new(
+        [0.0, 400.0, 300.0],
+        [0.0, 0.0, -1.0],
+        [1.0, 0.0, 0.0],
+        (32.0, 54.0),
+    );
+    let pair = [floor_portal(), ceiling];
+    let mut w = Walker::at([0.0, 0.0, 30.0]);
+    assert_eq!(idle(&mut w, &c, pair, 100), Some(0));
+    // the exit's box must already know the player, so leaving it behind the plane sends it back
+    w.feet = [0.0, 400.0, 310.0];
+    w.velocity = [0.0; 3];
+    assert_eq!(w.step(&Input::default(), DT, &c, Some(pair)), Some(1));
+}

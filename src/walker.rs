@@ -607,10 +607,22 @@ impl Walker {
                 (false, false) => false,
             };
             if crossed {
+                self.relink(&pair);
                 return Some(i);
             }
         }
         None
+    }
+
+    /// After a teleport the player's touches are taken where it now stands.
+    fn relink(&mut self, pair: &[Portal; 2]) {
+        for (j, p) in pair.iter().enumerate() {
+            let now = touching(p, self.centre(), self.half());
+            if now && !self.touching[j] {
+                self.start_touch(j, pair);
+            }
+            self.touching[j] = now;
+        }
     }
 
     fn closer(&self, i: usize, pair: &[Portal; 2]) -> bool {
