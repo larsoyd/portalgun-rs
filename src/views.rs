@@ -26,7 +26,9 @@ pub fn view_clip_plane(plane: Plane, camera: &Transform) -> Vec4 {
     let on = n * plane.dist * METRES_PER_UNIT;
     let view_from_world = camera.to_matrix().inverse();
     let nv = view_from_world.transform_vector3(n).normalize();
-    nv.extend(-nv.dot(view_from_world.transform_point3(on)))
+    // An oblique plane crossing the eye makes the projection singular or clips the far side of the view.
+    let distance = nv.dot(view_from_world.transform_point3(on));
+    nv.extend(-distance.max(0.01 * METRES_PER_UNIT))
 }
 
 /// The side and near planes of a view in Source units. The far plane is at infinity.

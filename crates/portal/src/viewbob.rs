@@ -101,6 +101,10 @@ pub struct Lag {
 }
 
 impl Lag {
+    pub fn reset(&mut self, angles: Angles) {
+        self.facing = angle_vectors(angles).0;
+    }
+
     /// Translated from 0x20e540 (disassembled, client.so). max is 0 while touching a portal.
     pub fn apply(
         &mut self,

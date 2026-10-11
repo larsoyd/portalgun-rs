@@ -172,3 +172,260 @@ fn held_jump_waits_until_uncrouching_allows_the_jump() {
     }
     assert_eq!(app.world().resource::<Jumps>().0, 1);
 }
+
+#[test]
+fn visual_motion_advances_every_frame_at_60_120_and_180_hz() {
+    use portalgun::player::PlayerCamera;
+    use portalgun::visual::{VisualHistory, VisualPlayer};
+    for hz in [60.0, 120.0, 180.0] {
+        let mut app = app();
+        app.add_plugins(bevy::transform::TransformPlugin);
+        let camera = app
+            .world_mut()
+            .spawn((
+                PlayerCamera,
+                Transform::default(),
+                GlobalTransform::default(),
+            ))
+            .id();
+        let gun = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(0.1, -0.2, -0.3),
+                GlobalTransform::default(),
+                ChildOf(camera),
+            ))
+            .id();
+        key(&mut app, KeyCode::KeyW, true);
+        for _ in 0..30 {
+            frame(&mut app, 1.0 / hz);
+        }
+        let mut previous = app.world().resource::<VisualPlayer>().pose.eye;
+        for _ in 0..30 {
+            frame(&mut app, 1.0 / hz);
+            let visual = app.world().resource::<VisualPlayer>();
+            let current = visual.pose.eye;
+            assert!(
+                ((current - previous).length() - 150.0 / hz as f32).abs() < 0.002,
+                "hz={hz} delta={:?}",
+                current - previous
+            );
+            let authoritative = app.world().resource::<Player>();
+            let fraction = app.world().resource::<Time<Fixed>>().overstep_fraction();
+            assert_eq!(
+                current,
+                app.world()
+                    .resource::<VisualHistory>()
+                    .sample(authoritative, fraction)
+                    .pose
+                    .eye
+            );
+            let camera_pose = app.world().get::<Transform>(camera).unwrap();
+            assert_eq!(*camera_pose, visual.camera());
+            let gun_pose = app.world().get::<GlobalTransform>(gun).unwrap();
+            assert!(
+                (gun_pose.translation() - camera_pose.transform_point(Vec3::new(0.1, -0.2, -0.3)))
+                    .length()
+                    < 1e-5
+            );
+            previous = current;
+        }
+        assert_eq!(
+            app.world().resource::<Time<Fixed>>().timestep(),
+            Duration::from_millis(15)
+        );
+    }
+}
+
+#[test]
+fn zero_ticks_keep_endpoints_and_multiple_ticks_keep_only_the_latest_pair() {
+    use portalgun::visual::VisualPlayer;
+    let mut app = app();
+    key(&mut app, KeyCode::KeyW, true);
+    for _ in 0..20 {
+        frame(&mut app, 0.015);
+    }
+    let before = app.world().resource::<Player>().eye()[0];
+    frame(&mut app, 0.0075);
+    assert_eq!(app.world().resource::<Player>().eye()[0], before);
+    assert!((app.world().resource::<VisualPlayer>().pose.eye.x - (before - 1.125)).abs() < 0.001);
+    frame(&mut app, 0.045);
+    let after = app.world().resource::<Player>().eye()[0];
+    assert!((after - before - 6.75).abs() < 0.001);
+    assert!((app.world().resource::<VisualPlayer>().pose.eye.x - (after - 1.125)).abs() < 0.001);
+}
+
+#[test]
+fn scripted_look_move_jump_and_fire_are_sampled_before_the_fixed_loop() {
+    use portalgun::player::{Controls, Scripted};
+    use portalgun::script::Script;
+    use portalgun::visual::VisualPlayer;
+    let mut app = app();
+    app.insert_resource(Scripted(
+        Script::parse("0 look 90 0\n0 move 1 0\n0 jump\n0 fire1\n").unwrap(),
+    ));
+    frame(&mut app, 0.005);
+    assert_eq!(app.world().resource::<Player>().yaw, 90.0);
+    assert_eq!(app.world().resource::<VisualPlayer>().angles.yaw, 90.0);
+    assert!(app.world().resource::<Controls>().jump_pressed);
+    assert!(app.world().resource::<Controls>().fire1);
+    frame(&mut app, 0.010);
+    let player = app.world().resource::<Player>();
+    assert!(player.jumped);
+    assert!(player.velocity[1] > 0.0 && player.velocity[0].abs() < 1e-4);
+    assert!(!app.world().resource::<Controls>().jump_pressed);
+    assert!(
+        app.world().resource::<Controls>().fire1,
+        "movement must not consume firing"
+    );
+}
+
+#[test]
+fn mouse_look_affects_this_ticks_movement_and_zero_tick_frames() {
+    use bevy::input::mouse::MouseMotion;
+    use portalgun::player::Config;
+    use portalgun::settings::Settings;
+    use portalgun::visual::VisualPlayer;
+    let mut app = app();
+    app.insert_resource(Config(Settings::parse("").unwrap()));
+    key(&mut app, KeyCode::KeyW, true);
+    app.world_mut().write_message(MouseMotion {
+        delta: Vec2::new(-90.0 / (3.0 * 0.022), 0.0),
+    });
+    frame(&mut app, 0.015);
+    let player = app.world().resource::<Player>();
+    assert!(player.velocity[1] > 0.0 && player.velocity[0].abs() < 1e-4);
+    let before = player.feet;
+    app.world_mut().write_message(MouseMotion {
+        delta: Vec2::new(20.0, 10.0),
+    });
+    frame(&mut app, 0.001);
+    let player = app.world().resource::<Player>();
+    assert_eq!(player.feet, before);
+    assert!((player.yaw - 88.68).abs() < 0.001);
+    assert_eq!(
+        app.world().resource::<VisualPlayer>().angles.yaw,
+        player.yaw
+    );
+}
+
+#[test]
+fn a_teleport_in_an_earlier_tick_of_the_frame_resets_visual_history() {
+    use portal::pair::Portal;
+    use portalgun::portals::Colour;
+    use portalgun::visual::VisualPlayer;
+    let mut app = app();
+    let pair = [
+        Portal::new(
+            [0.0, 0.0, 100.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        ),
+        Portal::new(
+            [500.0, 0.0, 100.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        ),
+    ];
+    for (colour, portal) in Colour::ALL.into_iter().zip(pair) {
+        app.world_mut()
+            .resource_mut::<Portals>()
+            .place(colour, portal);
+    }
+    app.world_mut().resource_mut::<Player>().0 = Walker::at([-5.0, 0.0, 64.0]);
+    app.world_mut().resource_mut::<Player>().velocity = [1000.0, 0.0, 0.0];
+    frame(&mut app, 0.045);
+    let revision = app.world().resource::<VisualPlayer>().revision;
+    assert!(revision > 0);
+    assert!(app.world().resource::<VisualPlayer>().pose.eye.x >= 500.0);
+    assert!(app.world().resource::<Player>().feet[0] > 500.0);
+    frame(&mut app, 0.002);
+    assert_eq!(app.world().resource::<VisualPlayer>().revision, revision);
+    assert!(app.world().resource::<VisualPlayer>().pose.eye.x >= 500.0);
+    app.world_mut().resource_mut::<Player>().0 = Walker::at([-100.0, 0.0, 0.0]);
+    frame(&mut app, 0.001);
+    assert_eq!(app.world().resource::<VisualPlayer>().pose.eye.x, -100.0);
+    assert!(app.world().resource::<VisualPlayer>().revision > revision);
+}
+
+#[test]
+fn floor_ceiling_loops_keep_the_rendered_eye_inside_the_room() {
+    use portal::pair::Portal;
+    use portalgun::player::PlayerCamera;
+    use portalgun::portals::Colour;
+    use portalgun::units::from_bevy;
+    let mut app = app();
+    let camera = app
+        .world_mut()
+        .spawn((PlayerCamera, Transform::default()))
+        .id();
+    for (colour, z, normal) in [(Colour::Blue, 0.0, 1.0), (Colour::Orange, 384.0, -1.0)] {
+        app.world_mut().resource_mut::<Portals>().place(
+            colour,
+            Portal::new(
+                [0.0, 0.0, z],
+                [0.0, 0.0, normal],
+                [1.0, 0.0, 0.0],
+                (32.0, 54.0),
+            ),
+        );
+    }
+    app.world_mut().resource_mut::<Player>().0 = Walker::at([0.0, 0.0, 250.0]);
+    let mut crossings = 0;
+    let mut previous_z = 250.0;
+    for i in 0..900 {
+        frame(&mut app, 1.0 / 180.0);
+        let player = app.world().resource::<Player>();
+        crossings += usize::from(player.feet[2] > previous_z + 100.0);
+        previous_z = player.feet[2];
+        let eye = from_bevy(app.world().get::<Transform>(camera).unwrap().translation);
+        assert!(
+            (0.0..=384.0).contains(&eye[2]),
+            "frame {i}: eye={eye:?}, feet={:?}",
+            player.feet
+        );
+    }
+    assert!(crossings > 3, "exercise repeated crossings");
+}
+
+#[test]
+fn firing_on_a_zero_tick_frame_uses_authoritative_eye_and_current_look_once() {
+    use portal::install::{root, Install};
+    use portalgun::firing::{Firing, FiringPlugin};
+    use portalgun::gun::tracer_origin;
+    use portalgun::player::Controls;
+    use portalgun::sound::{Files, Sounds};
+    use portalgun::visual::VisualPlayer;
+    let mut app = app();
+    let dir = root(
+        None,
+        None,
+        std::path::Path::new(&std::env::var("HOME").unwrap()),
+    );
+    let install = Install::open(&dir).unwrap();
+    app.insert_resource(Sounds::read(&install.search).unwrap())
+        .insert_resource(Files(install.search))
+        .init_resource::<Assets<AudioSource>>()
+        .add_plugins(FiringPlugin);
+    key(&mut app, KeyCode::KeyW, true);
+    for _ in 0..20 {
+        frame(&mut app, 0.015);
+    }
+    app.world_mut().resource_mut::<Player>().yaw = 35.0;
+    app.world_mut().resource_mut::<Controls>().fire1 = true;
+    let expected = tracer_origin(app.world().resource::<Player>());
+    let feet = app.world().resource::<Player>().feet;
+    frame(&mut app, 0.002);
+    assert_eq!(app.world().resource::<Player>().feet, feet);
+    let eye = app.world().resource::<Player>().eye();
+    assert_ne!(
+        app.world().resource::<VisualPlayer>().pose.eye.to_array(),
+        eye
+    );
+    assert_eq!(app.world().resource::<Firing>().flying()[0].from, expected);
+    assert!(!app.world().resource::<Controls>().fire1);
+    frame(&mut app, 0.045);
+    assert_eq!(app.world().resource::<Firing>().flying().len(), 1);
+}

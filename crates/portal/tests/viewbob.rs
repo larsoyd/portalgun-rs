@@ -197,3 +197,20 @@ fn looking_down_pushes_the_gun_out() {
     );
     assert_eq!(up, [1.0; 3]);
 }
+
+#[test]
+fn resetting_lag_does_not_pull_toward_the_preteleport_facing() {
+    let mut lag = Lag {
+        facing: [-1.0, 0.0, 0.0],
+    };
+    let angles = Angles {
+        yaw: 90.0,
+        ..Default::default()
+    };
+    lag.reset(angles);
+    let mut origin = [0.0; 3];
+    let mut turned = angles;
+    lag.apply(&mut origin, &mut turned, angles, 1.5, 1.0 / 180.0);
+    assert!(close3(origin, [0.0; 3]));
+    assert!(close3(lag.facing, angle_vectors(angles).0));
+}

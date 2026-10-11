@@ -3,7 +3,7 @@
 
 use bevy::asset::{embedded_asset, RenderAssetUsages};
 use bevy::camera::visibility::{NoFrustumCulling, RenderLayers};
-use bevy::camera::{CameraProjection, Hdr, RenderTarget, SubCameraView};
+use bevy::camera::{CameraProjection, CameraUpdateSystems, Hdr, RenderTarget, SubCameraView};
 use bevy::core_pipeline::tonemapping::{DebandDither, Tonemapping};
 use bevy::image::{ImageAddressMode, ImageSampler};
 use bevy::math::Vec3A;
@@ -16,6 +16,7 @@ use bevy::render::render_resource::{
     SpecializedMeshPipelineError, TextureFormat,
 };
 use bevy::shader::{load_shader_library, ShaderRef};
+use bevy::window::PrimaryWindow;
 use portal::portal_face::{near, shader_time};
 use portal::view::{
     clip_plane, draws_doubler, max_depth, near_plane, remaining, render_fix, shows_view,
@@ -183,7 +184,12 @@ impl Plugin for FacesPlugin {
         app.add_plugins(MaterialPlugin::<PortalMaterial>::default())
             .init_resource::<Portals>()
             .add_systems(PostStartup, spawn_faces)
-            .add_systems(PostUpdate, draw_views.before(TransformSystems::Propagate));
+            .add_systems(
+                PostUpdate,
+                draw_views
+                    .before(CameraUpdateSystems)
+                    .before(TransformSystems::Propagate),
+            );
     }
 }
 
@@ -406,6 +412,7 @@ fn draw_views(
     mut portals: ResMut<Portals>,
     faces: Option<ResMut<Faces>>,
     main: Single<MainView, With<PlayerCamera>>,
+    window: Single<&Window, With<PrimaryWindow>>,
     mut cameras: Query<ViewCameras, Without<PlayerCamera>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
@@ -427,7 +434,11 @@ fn draw_views(
     }
     let moved = faces.seen != portals.changes;
     faces.seen = portals.changes;
-    let size = main_camera.physical_target_size().unwrap_or(UVec2::ONE);
+    let size = main_camera
+        .viewport
+        .as_ref()
+        .map_or_else(|| window.physical_size(), |v| v.physical_size)
+        .max(UVec2::ONE);
     let resized = size != faces.size;
     if resized {
         faces.size = size;
@@ -435,7 +446,8 @@ fn draw_views(
     }
     let depth = faces.depth;
     let linked = portals.linked();
-    let plain = plain(perspective);
+    let mut plain = plain(perspective);
+    plain.update(size.x as f32, size.y as f32);
     let doubler_projection = plain.get_clip_from_view();
     let mut any_doubler = false;
     let main_frustum = frustum_planes(&(plain.get_clip_from_view() * eye.to_matrix().inverse()));

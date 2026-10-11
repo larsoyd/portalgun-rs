@@ -9,22 +9,21 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use portal::mdl::Mdl;
 use portal::model::MeshData;
 
-use portal::teleport::touching;
 use portal::viewbob::{add_bob, angle_vectors, look_down, Angles, Bob, Lag};
 
-use crate::faces::Portals;
-use crate::player::{Config, Player, PlayerCamera};
+use crate::player::{Config, PlayerCamera};
 use crate::settings::horizontal_to_vertical;
 use crate::sound::Files;
 use crate::texture;
 use crate::units::METRES_PER_UNIT;
 use crate::viewanim::GunAnim;
 use crate::viewmodel::{bindposes, look, skin, Blend};
+use crate::visual::VisualPlayer;
 
 pub const VIEW_LAYER: usize = 1;
 /// viewmodel_fov's default in the client
 const VIEWMODEL_FOV: f32 = 54.0;
-/// g_fMaxViewModelLag away from portals
+/// g_fMaxViewModelLag, kept active through portals
 const MAX_LAG: f32 = 1.5;
 
 #[derive(Resource)]
@@ -33,8 +32,15 @@ pub struct Gun {
     pub anim: GunAnim,
     joints: Vec<Entity>,
     root: Entity,
+    motion: ViewMotion,
+}
+
+#[derive(Default)]
+pub struct ViewMotion {
     bob: Bob,
     lag: Lag,
+    reset_revision: Option<u64>,
+    teleport_rotation: Quat,
 }
 
 #[derive(Resource, Default)]
@@ -61,40 +67,45 @@ pub fn eye_relative(eye: [f32; 3], angles: Angles, at: [f32; 3], turned: Angles)
     Mat4::from_mat3_translation(e.transpose() * basis(turned), local)
 }
 
-/// Translated from 0x53cca0 and 0x20e9d0 (disassembled, client.so). The gun bobs with speed and
-/// trails the view, with no trailing while the player touches a portal.
+/// Translated from 0x53cca0 and 0x20e9d0 (disassembled, client.so), with continuous portal sway.
 fn sway(
     gun: Option<ResMut<Gun>>,
     time: Res<Time>,
-    player: Res<Player>,
-    portals: Res<Portals>,
+    visual: Res<VisualPlayer>,
     mut transforms: Query<&mut Transform>,
 ) {
     let Some(mut gun) = gun else { return };
     let gun = &mut *gun;
-    let angles = Angles {
-        pitch: player.pitch,
-        yaw: player.yaw,
-        roll: 0.0,
-    };
-    let eye = player.eye();
-    let touching = portals.linked().is_some_and(|l| {
-        l.iter()
-            .any(|p| touching(p, player.centre(), player.half()))
-    });
-    let max_lag = if touching { 0.0 } else { MAX_LAG };
-    let dt = time.delta_secs();
-    gun.bob.calc(player.velocity, time.elapsed_secs(), dt);
-    let (mut at, mut turned) = add_bob(
-        look_down(eye, angles),
-        angles,
-        gun.bob.vertical,
-        gun.bob.lateral,
-    );
-    gun.lag.apply(&mut at, &mut turned, angles, max_lag, dt);
+    let local = gun
+        .motion
+        .relative(&visual, time.elapsed_secs(), time.delta_secs());
     if let Ok(mut root) = transforms.get_mut(gun.root) {
-        let local = eye_relative(eye, angles, at, turned);
         *root = Transform::from_matrix(source_to_camera().to_matrix() * local);
+    }
+}
+
+impl ViewMotion {
+    pub fn relative(&mut self, visual: &VisualPlayer, now: f32, dt: f32) -> Mat4 {
+        let angles = visual.angles;
+        let eye = visual.pose.eye.to_array();
+        if self.reset_revision != Some(visual.reset_revision) {
+            self.lag.reset(angles);
+            self.bob.last = now;
+            self.reset_revision = Some(visual.reset_revision);
+        } else if self.teleport_rotation != visual.teleport_rotation {
+            let rotation = visual.teleport_rotation * self.teleport_rotation.inverse();
+            self.lag.facing = (rotation * Vec3::from(self.lag.facing)).to_array();
+        }
+        self.teleport_rotation = visual.teleport_rotation;
+        self.bob.calc(visual.pose.velocity.to_array(), now, dt);
+        let (mut at, mut turned) = add_bob(
+            look_down(eye, angles),
+            angles,
+            self.bob.vertical,
+            self.bob.lateral,
+        );
+        self.lag.apply(&mut at, &mut turned, angles, MAX_LAG, dt);
+        eye_relative(eye, angles, at, turned)
     }
 }
 
@@ -275,8 +286,7 @@ fn spawn_view(
         anim,
         joints,
         root,
-        bob: Bob::default(),
-        lag: Lag::default(),
+        motion: ViewMotion::default(),
     });
     commands.remove_resource::<GunMeshes>();
 }

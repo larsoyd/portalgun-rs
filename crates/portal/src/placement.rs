@@ -29,6 +29,10 @@ pub struct RayHit {
 
 pub trait World {
     fn cast(&self, from: Vec3, dir: Vec3, max: f32) -> Option<RayHit>;
+
+    fn clear_portal(&self, portal: &Portal) -> bool {
+        clear_in_front(self, portal)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -89,10 +93,16 @@ pub fn place(
     }
     let (forward, up) = orientation(hit.normal, dir);
     let shape = Portal::new(at, forward, up, (HALF_WIDTH, HALF_HEIGHT));
-    let fits = |p: &Portal| on_surface(world, p) && clear_in_front(world, p);
+    let fits = |p: &Portal| on_surface(world, p) && world.clear_portal(p);
+    let candidate = |r, u| {
+        let mut p = moved(&shape, r, u);
+        snap_to_floor(world, &mut p);
+        p
+    };
     let ok = |(r, u): (f32, f32)| {
-        let p = moved(&shape, r, u);
-        fits(&p) && !other.is_some_and(|o| overlaps(&p, o))
+        let p = candidate(r, u);
+        let d = [0, 1, 2].map(|i| p.origin[i] - at[i]);
+        dot(d, d) <= BUMP_LIMIT * BUMP_LIMIT && fits(&p) && !other.is_some_and(|o| overlaps(&p, o))
     };
     let found = std::iter::once((0.0, 0.0))
         .chain(rings())
@@ -112,8 +122,8 @@ pub fn place(
                 .min_by(|a, b| a.0.hypot(a.1).total_cmp(&b.0.hypot(b.1)))
                 .unwrap_or(coarse)
         });
-    let found = found.map(|(r, u)| moved(&shape, r, u));
-    let Some(mut portal) = found else {
+    let found = found.map(|(r, u)| candidate(r, u));
+    let Some(portal) = found else {
         let crowded = fits(&shape) && other.is_some_and(|o| overlaps(&shape, o));
         return (
             Placement::Failed(if crowded {
@@ -124,7 +134,6 @@ pub fn place(
             at,
         );
     };
-    snap_to_floor(world, &mut portal);
     let d = [0, 1, 2].map(|i| portal.origin[i] - at[i]);
     let m = 1.0 - dot(d, d) / (BUMP_LIMIT * BUMP_LIMIT);
     (
@@ -179,17 +188,21 @@ fn on_surface(world: &impl World, p: &Portal) -> bool {
     samples(p).all(|s| {
         world
             .cast(along(s, p.forward, PROBE), back, 2.0 * PROBE)
-            .is_some_and(|h| h.surface == Surface::Portalable)
+            .is_some_and(|h| {
+                h.surface == Surface::Portalable
+                    && dot(h.normal, p.forward) > 0.999
+                    && (h.distance - PROBE).abs() < 0.01
+            })
     })
 }
 
 /// nothing standing on the surface inside the opening, such as a wall meeting it in a corner
-fn clear_in_front(world: &impl World, p: &Portal) -> bool {
+fn clear_in_front(world: &(impl World + ?Sized), p: &Portal) -> bool {
     let centre = along(p.origin, p.forward, PROBE);
     samples(p).skip(1).all(|s| {
         let to = along(s, p.forward, PROBE);
         let d = [to[0] - centre[0], to[1] - centre[1], to[2] - centre[2]];
-        let len = dot(d, d).sqrt() + EDGE_SLACK;
+        let len = dot(d, d).sqrt();
         world.cast(centre, normalize(d), len).is_none()
     })
 }

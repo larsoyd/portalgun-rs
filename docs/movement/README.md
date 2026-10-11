@@ -1,5 +1,8 @@
 # Player movement reconstruction
 
+For the subsequent fixed/render separation, teleport-history policy and rotated floor-portal
+collision fix, see [render interpolation](render-interpolation.md).
+
 The audited starting HEAD was `aa6d848744bbc91656773516f93b202feca7a64d`, with a clean worktree. This work targets the pinned installed **Linux Portal binaries**, not a separately archived 2007 retail build. The running original identifies build 9862575.
 
 ## Audit of the previous controller

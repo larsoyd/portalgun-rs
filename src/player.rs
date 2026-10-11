@@ -12,11 +12,11 @@ use crate::scene::Level;
 use crate::script::{Action, Script};
 use crate::settings::Settings;
 use crate::sound::{Files, Sounds};
-use crate::units::{to_bevy, to_bevy_dir};
+use crate::visual::{VisualHistory, VisualPlayer};
 use crate::walker::{Input, Walker};
 
 /// Portal's server runs at 0.015 seconds a tick
-const TICK_HZ: f64 = 1.0 / 0.015;
+const TICK_SECONDS: f64 = 0.015;
 const SPAWN: [f32; 3] = [-320.0, -120.0, 0.0];
 /// seconds between walker position lines
 const WALK_LOG: f32 = 0.05;
@@ -54,15 +54,27 @@ impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
         let mut walker = Walker::at(SPAWN);
         walker.yaw = 20.0;
-        app.insert_resource(Player(walker))
-            .insert_resource(Time::<Fixed>::from_hz(TICK_HZ))
+        let history = VisualHistory::new(&walker);
+        app.insert_resource(history.sample(&walker, 0.0))
+            .insert_resource(history)
+            .insert_resource(Player(walker))
+            .insert_resource(Time::<Fixed>::from_seconds(TICK_SECONDS))
             .init_resource::<Controls>()
             .init_resource::<MovementResult>()
             .add_systems(
-                PreUpdate,
-                read_keys
-                    .after(bevy::input::InputSystems)
-                    .run_if(not(resource_exists::<Scripted>)),
+                RunFixedMainLoop,
+                (
+                    (
+                        read_keys.run_if(not(resource_exists::<Scripted>)),
+                        look.run_if(not(resource_exists::<Scripted>)),
+                        run_script.run_if(resource_exists::<Scripted>),
+                    )
+                        .chain()
+                        .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
+                    (interpolate, place_camera)
+                        .chain()
+                        .in_set(RunFixedMainLoopSystems::AfterFixedMainLoop),
+                ),
             )
             .add_systems(FixedUpdate, simulate);
     }
@@ -74,17 +86,7 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MovementPlugin)
             .add_systems(Startup, (spawn_camera, grab_cursor, read_footing))
-            .add_systems(FixedUpdate, walk.after(simulate))
-            .add_systems(
-                PreUpdate,
-                (
-                    look.after(bevy::input::InputSystems)
-                        .run_if(not(resource_exists::<Scripted>)),
-                    run_script.run_if(resource_exists::<Scripted>),
-                )
-                    .chain(),
-            )
-            .add_systems(Update, place_camera);
+            .add_systems(FixedUpdate, walk.after(simulate));
     }
 }
 
@@ -112,8 +114,14 @@ fn grab_cursor(mut cursor: Single<&mut CursorOptions>) {
     cursor.grab_mode = CursorGrabMode::Locked;
 }
 
-fn look(motion: Res<AccumulatedMouseMotion>, config: Res<Config>, mut player: ResMut<Player>) {
-    player.look(motion.delta.x, motion.delta.y, config.0.sensitivity);
+fn look(
+    motion: Res<AccumulatedMouseMotion>,
+    config: Option<Res<Config>>,
+    mut player: ResMut<Player>,
+) {
+    if let Some(config) = config {
+        player.look(motion.delta.x, motion.delta.y, config.0.sensitivity);
+    }
 }
 
 fn read_keys(
@@ -159,12 +167,14 @@ fn run_script(
 
 fn simulate(
     level: Res<Level>,
-    time: Res<Time>,
+    time: Res<Time<Fixed>>,
     portals: Res<Portals>,
     mut controls: ResMut<Controls>,
     mut player: ResMut<Player>,
     mut result: ResMut<MovementResult>,
+    mut history: ResMut<VisualHistory>,
 ) {
+    history.synchronize(&player);
     let pressed = std::mem::take(&mut controls.jump_pressed);
     let input = Input {
         forward: controls.forward,
@@ -174,6 +184,11 @@ fn simulate(
         crouch: controls.crouch,
     };
     result.0 = player.step(&input, time.delta_secs(), &level, portals.linked());
+    if let (Some(i), Some(pair)) = (result.0, portals.linked()) {
+        history.teleport(&player, &pair[i], &pair[1 - i]);
+    } else {
+        history.advance(&player, false);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -307,7 +322,22 @@ fn read_footing(
     }
 }
 
-fn place_camera(player: Res<Player>, mut camera: Single<&mut Transform, With<PlayerCamera>>) {
-    **camera = Transform::from_translation(to_bevy(player.eye()))
-        .looking_to(to_bevy_dir(player.forward()), Vec3::Y);
+fn interpolate(
+    player: Res<Player>,
+    time: Res<Time<Fixed>>,
+    mut history: ResMut<VisualHistory>,
+    mut visual: ResMut<VisualPlayer>,
+) {
+    history.synchronize(&player);
+    *visual = history.sample(&player, time.overstep_fraction());
+}
+
+fn place_camera(
+    visual: Res<VisualPlayer>,
+    portals: Res<Portals>,
+    camera: Option<Single<&mut Transform, With<PlayerCamera>>>,
+) {
+    if let Some(mut camera) = camera {
+        **camera = visual.portal_camera(portals.linked());
+    }
 }

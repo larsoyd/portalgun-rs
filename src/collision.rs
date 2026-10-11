@@ -19,7 +19,46 @@ pub fn trace(
     maxs: Vec3,
     solids: &[(usize, Vec3, Vec3)],
 ) -> Trace {
-    let delta = sub(end, start);
+    let brushes: Vec<_> = solids
+        .iter()
+        .map(|&(block, lo, hi)| (block, box_planes(lo, hi)))
+        .collect();
+    trace_brushes(start, end, mins, maxs, &brushes)
+}
+
+/// Convex solid half-space: dot(normal, point) <= distance.
+#[derive(Clone, Copy)]
+pub struct Plane {
+    pub normal: Vec3,
+    pub distance: f32,
+}
+
+pub fn box_planes(lo: Vec3, hi: Vec3) -> Vec<Plane> {
+    (0..3)
+        .flat_map(|axis| {
+            let mut normal = [0.0; 3];
+            normal[axis] = 1.0;
+            [
+                Plane {
+                    normal,
+                    distance: hi[axis],
+                },
+                Plane {
+                    normal: scale(normal, -1.0),
+                    distance: -lo[axis],
+                },
+            ]
+        })
+        .collect()
+}
+
+pub fn trace_brushes(
+    start: Vec3,
+    end: Vec3,
+    mins: Vec3,
+    maxs: Vec3,
+    solids: &[(usize, Vec<Plane>)],
+) -> Trace {
     let mut result = Trace {
         fraction: 1.0,
         end,
@@ -28,68 +67,58 @@ pub fn trace(
         all_solid: false,
         block: None,
     };
-    for &(block, lo, hi) in solids {
-        let lo = sub(lo, maxs);
-        let hi = sub(hi, mins);
-        let inside = (0..3).all(|i| start[i] > lo[i] && start[i] < hi[i]);
-        if inside {
-            result.start_solid = true;
-            result.all_solid |= (0..3).all(|i| end[i] > lo[i] && end[i] < hi[i]);
-            result.block = Some(block);
-            continue;
-        }
+    for (block, planes) in solids {
         let mut near = f32::NEG_INFINITY;
+        let mut entry = f32::NEG_INFINITY;
         let mut far = f32::INFINITY;
         let mut normal = [0.0; 3];
-        for i in 0..3 {
-            if delta[i] == 0.0 {
-                // Contact without motion into a face must allow sliding along it.
-                if start[i] <= lo[i] || start[i] >= hi[i] {
+        let mut inside = true;
+        let mut end_inside = true;
+        for plane in planes {
+            let support: f32 = (0..3)
+                .map(|i| {
+                    plane.normal[i]
+                        * if plane.normal[i] >= 0.0 {
+                            mins[i]
+                        } else {
+                            maxs[i]
+                        }
+                })
+                .sum();
+            let distance = plane.distance - support;
+            let a = dot(plane.normal, start) - distance;
+            let b = dot(plane.normal, end) - distance;
+            inside &= a < 0.0;
+            end_inside &= b < 0.0;
+            if a == b {
+                if a >= 0.0 {
                     far = f32::NEG_INFINITY;
-                    break;
                 }
-            } else {
-                let a = (lo[i] - start[i]) / delta[i];
-                let b = (hi[i] - start[i]) / delta[i];
-                if a.min(b) > near {
-                    near = a.min(b);
-                    normal = [0.0; 3];
-                    normal[i] = -delta[i].signum();
-                }
-                far = far.min(a.max(b));
-            }
-        }
-        if (0.0..=1.0).contains(&near) && near < far {
-            let mut entry = f32::NEG_INFINITY;
-            for i in 0..3 {
-                if delta[i] == 0.0 {
-                    continue;
-                }
-                let distance = if delta[i] > 0.0 {
-                    lo[i] - DIST_EPSILON - start[i]
-                } else {
-                    hi[i] + DIST_EPSILON - start[i]
-                };
-                let fraction = distance / delta[i];
+            } else if a > b {
+                near = near.max(a / (a - b));
+                let fraction = (a - DIST_EPSILON) / (a - b);
                 if fraction > entry {
                     entry = fraction;
-                    normal = [0.0; 3];
-                    normal[i] = -delta[i].signum();
+                    normal = plane.normal;
                 }
+            } else {
+                far = far.min(a / (a - b));
             }
-            let fraction = entry.max(0.0);
-            if fraction >= result.fraction {
-                continue;
-            }
-            result.fraction = fraction;
+        }
+        if inside {
+            result.start_solid = true;
+            result.all_solid |= end_inside;
+            result.block = Some(*block);
+        } else if (0.0..=1.0).contains(&near) && near < far && entry.max(0.0) < result.fraction {
+            result.fraction = entry.max(0.0);
             result.normal = normal;
-            result.block = Some(block);
+            result.block = Some(*block);
         }
     }
     if result.all_solid {
         result.fraction = 0.0;
     }
-    result.end = add(start, scale(delta, result.fraction));
+    result.end = add(start, scale(sub(end, start), result.fraction));
     result
 }
 

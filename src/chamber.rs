@@ -1,6 +1,7 @@
 use portal::keyvalues;
-use portal::pair::Vec3;
+use portal::pair::{Portal, Vec3};
 use portal::placement::{RayHit, Surface, World};
+use portal::view::{clip_poly, Plane};
 use portal::vpk::SearchPath;
 
 const WALL: &str = "concrete/concrete_modular_wall001a";
@@ -149,6 +150,26 @@ impl Block {
 }
 
 impl World for Chamber {
+    fn clear_portal(&self, p: &Portal) -> bool {
+        let (w, h) = p.half;
+        let corners = [(-w, -h), (w, -h), (w, h), (-w, h)].map(|(r, u)| p.world([0.05, r, u]));
+        // Clip the whole opening so buried corners and thin obstructions cannot escape ray samples.
+        self.blocks.iter().all(|b| {
+            let mut poly = corners.to_vec();
+            for axis in 0..3 {
+                for (sign, dist) in [(1.0, b.min[axis]), (-1.0, -b.max[axis])] {
+                    let mut normal = [0.0; 3];
+                    normal[axis] = sign;
+                    poly = clip_poly(&poly, &Plane { normal, dist }, 0.0);
+                    if poly.len() < 3 {
+                        return true;
+                    }
+                }
+            }
+            false
+        })
+    }
+
     fn cast(&self, from: Vec3, dir: Vec3, max: f32) -> Option<RayHit> {
         self.blocks
             .iter()

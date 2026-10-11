@@ -23,8 +23,6 @@ const STEP: f32 = 18.0;
 const GROUND_REACH: f32 = 2.0;
 /// a walk slower than this stops dead
 const MIN_WALK: f32 = 1.0;
-/// below this an opening's right axis counts as lined up with the world
-const TURNED: f32 = 1e-4;
 
 #[derive(Default)]
 pub struct Input {
@@ -277,7 +275,7 @@ impl Walker {
         linked: Option<&[Portal; 2]>,
         stationary: bool,
     ) -> Trace {
-        collision::trace(
+        collision::trace_brushes(
             if stationary { to } else { self.feet },
             to,
             [-HALF_WIDTH, -HALF_WIDTH, 0.0],
@@ -477,7 +475,7 @@ impl Walker {
         chamber: &Chamber,
         linked: Option<&[Portal; 2]>,
     ) -> Trace {
-        collision::trace(
+        collision::trace_brushes(
             from,
             to,
             [-HALF_WIDTH, -HALF_WIDTH, 0.0],
@@ -652,9 +650,8 @@ fn direction(w: [f32; 2]) -> (Vec3, f32) {
     }
 }
 
-/// The chamber's blocks by index. A linked portal carves its opening through the block it sits
-/// on, a stand-in for the collision the game builds behind each portal.
-fn solids(chamber: &Chamber, linked: Option<&[Portal; 2]>) -> Vec<(usize, Vec3, Vec3)> {
+/// Subtract each linked opening as four convex regions outside its right/up edges.
+fn solids(chamber: &Chamber, linked: Option<&[Portal; 2]>) -> Vec<(usize, Vec<collision::Plane>)> {
     chamber
         .blocks
         .iter()
@@ -664,50 +661,32 @@ fn solids(chamber: &Chamber, linked: Option<&[Portal; 2]>) -> Vec<(usize, Vec3, 
                 let q = [0, 1, 2].map(|i| p.origin[i] - p.forward[i]);
                 (0..3).all(|i| q[i] >= block.min[i] && q[i] <= block.max[i])
             });
-            on.fold(vec![(block.min, block.max)], |pieces, p| {
-                pieces
-                    .into_iter()
-                    .flat_map(|(lo, hi)| carve(lo, hi, p))
-                    .collect::<Vec<_>>()
-            })
+            on.fold(
+                vec![collision::box_planes(block.min, block.max)],
+                |pieces, p| {
+                    pieces
+                        .into_iter()
+                        .flat_map(|planes| {
+                            [(p.right, p.half.0), (p.up, p.half.1)]
+                                .into_iter()
+                                .flat_map(move |(axis, half)| {
+                                    let planes = planes.clone();
+                                    [-1.0, 1.0].map(|sign| {
+                                        let normal = collision::scale(axis, sign);
+                                        let mut outside = planes.clone();
+                                        outside.push(collision::Plane {
+                                            normal,
+                                            distance: collision::dot(normal, p.origin) - half,
+                                        });
+                                        outside
+                                    })
+                                })
+                        })
+                        .collect::<Vec<_>>()
+                },
+            )
             .into_iter()
-            .map(move |(lo, hi)| (n, lo, hi))
+            .map(move |planes| (n, planes))
         })
         .collect()
-}
-
-/// A block less a box of a portal's opening cut right through it along the portal's normal.
-/// An opening turned in its plane gets the largest square that fits inside it.
-fn carve(min: Vec3, max: Vec3, p: &Portal) -> Vec<(Vec3, Vec3)> {
-    let normal = (0..3)
-        .max_by(|&a, &b| p.forward[a].abs().total_cmp(&p.forward[b].abs()))
-        .unwrap_or(0);
-    let turn: Vec<f32> = (0..3)
-        .filter(|&i| i != normal)
-        .map(|i| p.right[i].abs())
-        .collect();
-    let reach = match turn.iter().copied().fold(1.0, f32::min) < TURNED {
-        true => [0, 1, 2].map(|i| p.right[i].abs() * p.half.0 + p.up[i].abs() * p.half.1),
-        false => [p.half.0.min(p.half.1) / turn.iter().sum::<f32>(); 3],
-    };
-    let mut cut_lo = [0, 1, 2].map(|i| p.origin[i] - reach[i]);
-    let mut cut_hi = [0, 1, 2].map(|i| p.origin[i] + reach[i]);
-    (cut_lo[normal], cut_hi[normal]) = (min[normal], max[normal]);
-    let (mut lo, mut hi) = (min, max);
-    let mut pieces = Vec::new();
-    for a in 0..3 {
-        if cut_lo[a] > lo[a] {
-            let mut top = hi;
-            top[a] = cut_lo[a].min(hi[a]);
-            pieces.push((lo, top));
-            lo[a] = top[a];
-        }
-        if cut_hi[a] < hi[a] {
-            let mut bottom = lo;
-            bottom[a] = cut_hi[a].max(lo[a]);
-            pieces.push((bottom, hi));
-            hi[a] = bottom[a];
-        }
-    }
-    pieces
 }

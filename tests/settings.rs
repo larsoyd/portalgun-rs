@@ -4,6 +4,17 @@ use portalgun::settings::Settings;
 fn an_empty_file_gives_portals_own_defaults() {
     let s = Settings::parse("").unwrap();
     assert_eq!((s.sensitivity, s.fov, s.msaa), (3.0, 75.0, 4));
+    assert!(s.fullscreen);
+    assert!(!s.vsync);
+}
+
+#[test]
+fn display_settings_allow_windowed_vsync_and_reject_invalid_booleans() {
+    let s = Settings::parse("fullscreen = false\nvsync = true").unwrap();
+    assert!(!s.fullscreen);
+    assert!(s.vsync);
+    assert!(Settings::parse("fullscreen = maybe").is_err());
+    assert!(Settings::parse("vsync = 180").is_err());
 }
 
 #[test]

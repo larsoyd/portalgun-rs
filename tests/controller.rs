@@ -398,3 +398,69 @@ fn an_obstructed_exit_cannot_place_the_player_inside_a_solid() {
     assert!(w.feet[0] < 0.0, "{:?}", w.feet);
     assert_eq!(w.velocity[0], 0.0);
 }
+
+#[test]
+fn rotated_floor_portals_keep_their_full_length_for_jump_entries() {
+    use portal::pair::Portal;
+    for degrees in [0f32, 20.0, 45.0, 70.0, 90.0] {
+        let (s, c) = degrees.to_radians().sin_cos();
+        let pair = [
+            Portal::new([0.0; 3], [0.0, 0.0, 1.0], [c, s, 0.0], (32.0, 54.0)),
+            Portal::new(
+                [300.0, 0.0, 200.0],
+                [-1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0],
+                (32.0, 54.0),
+            ),
+        ];
+        // The entire 32-unit hull fits at this offset along the portal's long axis.
+        let mut w = Walker::at([c * 25.0, s * 25.0, 0.0]);
+        w.step(&Input::default(), DT, &floor(), None);
+        w.step(
+            &Input {
+                jump: true,
+                jump_pressed: true,
+                ..Default::default()
+            },
+            DT,
+            &floor(),
+            None,
+        );
+        let mut crossed = false;
+        for _ in 0..100 {
+            if w.step(&Input::default(), DT, &floor(), Some(pair))
+                .is_some()
+            {
+                crossed = true;
+                break;
+            }
+        }
+        assert!(crossed, "rotation={degrees} feet={:?}", w.feet);
+    }
+}
+
+#[test]
+fn rotated_openings_still_support_hulls_that_overlap_the_rim() {
+    use portal::pair::Portal;
+    for degrees in [20f32, 45.0, 70.0] {
+        let (s, c) = degrees.to_radians().sin_cos();
+        let pair = [
+            Portal::new([0.0; 3], [0.0, 0.0, 1.0], [c, s, 0.0], (32.0, 54.0)),
+            Portal::new(
+                [300.0, 0.0, 200.0],
+                [-1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0],
+                (32.0, 54.0),
+            ),
+        ];
+        let mut w = Walker::at([c * 50.0, s * 50.0, 50.0]);
+        for _ in 0..100 {
+            assert_eq!(w.step(&Input::default(), DT, &floor(), Some(pair)), None);
+        }
+        assert!(
+            w.grounded && w.feet[2] >= 0.0,
+            "rotation={degrees} feet={:?}",
+            w.feet
+        );
+    }
+}

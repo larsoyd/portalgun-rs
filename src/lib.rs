@@ -1,6 +1,7 @@
 pub mod args;
 pub mod chamber;
 pub mod collision;
+pub mod display;
 pub mod faces;
 pub mod firing;
 pub mod gun;
@@ -19,4 +20,5 @@ pub mod view;
 pub mod viewanim;
 pub mod viewmodel;
 pub mod views;
+pub mod visual;
 pub mod walker;

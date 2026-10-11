@@ -1,0 +1,13 @@
+1 look 160 0
+1.1 fire1
+1.7 look 180 70
+1.8 fire2
+2.5 move 1 0
+4.8 move 0 0
+5 look 0 -70
+5.5 move 1 0
+7.0 jump
+8.5 move 0 1
+10 move 0 0
+10.5 crouch 1
+11.2 crouch 0

@@ -146,3 +146,52 @@ fn each_block_knows_its_materials_surface() {
         .unwrap();
     assert_eq!(metal.surfaceprop, "metal");
 }
+
+#[test]
+fn placements_beside_the_ledge_do_not_bury_the_opening_in_it() {
+    let c = chamber();
+    for y in [-63.9, -60.0, -48.0, -33.0] {
+        for z in [32.0, 54.0, 64.0, 100.0, 128.1, 140.0] {
+            let (placement, _) = place(&c, [0.0, y, z], [1.0, 0.0, 0.0], 1000.0, None);
+            if let Placement::Placed { portal: p, .. } = placement {
+                for r in -32..=32 {
+                    for u in -54..=54 {
+                        let q = p.world([0.1, r as f32, u as f32]);
+                        assert!(
+                            !c.blocks.iter().any(|b| (0..3)
+                                .all(|i| q[i] > b.min[i] + 0.01 && q[i] < b.max[i] - 0.01)),
+                            "shot y={y} z={z}, portal={p:?}, buried point={q:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn portal_clearance_checks_thin_obstructions_between_the_ray_samples() {
+    use portal::pair::Portal;
+    use portalgun::chamber::Block;
+    let p = Portal::new(
+        [0.0, 0.0, 54.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        (32.0, 54.0),
+    );
+    let mut c = Chamber {
+        blocks: vec![Block {
+            min: [-1.0, 7.0, 20.0],
+            max: [10.0, 8.0, 30.0],
+            material: "",
+            surface: Surface::Rejects,
+            surfaceprop: "default".into(),
+        }],
+    };
+    assert!(!c.clear_portal(&p));
+    c.blocks[0].max[0] = 0.0;
+    assert!(c.clear_portal(&p), "support behind the opening is allowed");
+    c.blocks[0].min = [-1.0, -100.0, -10.0];
+    c.blocks[0].max = [100.0, 100.0, 0.0];
+    assert!(c.clear_portal(&p), "the bottom can sit flush on the floor");
+}

@@ -29,8 +29,8 @@ need your own copy of Portal, which the program reads at startup.
 - Walking bobs and sways the gun the way `C_BasePortalCombatWeapon` does: a
   0.45 second up and down cycle and a 0.9 second side to side one, growing with
   speed up to 320, plus the lag that trails the gun behind a turn and the push
-  out of the way when you look down. The lag switches off while you touch a
-  portal.
+  out of the way when you look down. Sway continues through portals, with its
+  saved direction rotated through the crossing so it does not snap to centre.
 
 TODO: the glow sprites and beams, the stream and impact particles, the pickup
 and hold animations, and the fizzle effects for shots that cannot land.
@@ -43,8 +43,9 @@ and hold animations, and the fizzle effects for shots that cannot land.
   with the game's own noise and colour ramps, and opens over half a second.
   Moving one portal turns its partner to static.
 - Each linked portal shows the view out of its partner, rendered by its own
-  camera with the game's clip plane half a unit behind the exit. Views nest two
-  deep, `r_portal_stencil_depth`'s default, and the deepest level shows full
+  camera with the game's clip plane half a unit behind the exit. At the eye,
+  the renderer holds it 0.01 units ahead to keep the projection invertible.
+  Views nest two deep, `r_portal_stencil_depth`'s default, and the deepest level shows full
   static or, when the two portals face each other, the game's depth doubler,
   which repeats last frame's screen down the tunnel.
 - A view is drawn only when the game would draw it: linked, not full static,
@@ -62,11 +63,15 @@ cheaper culling the game uses for nested views.
   speed and view carried over. Exit speed is capped at 1000 and a floor exit
   pushes you up at least 300, as `CProp_Portal::TeleportTouchingEntity` does.
   A portal counts as a floor when its normal points up by more than 0.7071.
+- The camera follows the eye through an opening independently of the body
+  centre, including ceiling exits and crouch transitions.
 
 ### Moving
 
 Walking, falling and jumping follow `CGameMovement` and `CPortalGameMovement`
-in `server.so`, one 15 ms tick at a time:
+in `server.so`, one 15 ms tick at a time. Rendering interpolates movement between
+ticks while mouse look stays immediate, so high refresh rates do not repeat the
+same player position between simulation updates:
 
 - On the ground: friction 4 with a stop speed of 100, acceleration 10 toward
   where you are heading, and a walking speed of 150, `hl2_walkspeed`.
@@ -190,12 +195,21 @@ Still stand-ins or estimates:
 - Walking through the wall behind a portal. The game builds its collision
   behind each portal, this sandbox carves the wall and sweeps the remaining
   movement against the exit geometry. Full linked-world collision, tilted
-  portal rims and portal camera interpolation remain incomplete.
+  portal rims, saved-eye recovery and view-roll recovery remain incomplete.
+  Ordinary wall crossings and repeated floor-to-ceiling loops are covered by
+  tests and graphical checks; arbitrary tilted transitions are not.
 - Where a portal fits: the fitting rules are ported but not yet checked against
   `VerifyPortalPlacement`.
 - Sound is not positional yet.
 
 Deliberate deviations:
+
+- Gun sway stays active through portals. The original disables turn lag while
+  the player intersects a portal surface; keeping it active avoids an abrupt
+  return to the centred pose during a turn.
+- Movement rendering uses a one-tick interpolation buffer. Teleports reset its
+  position endpoints while carrying the gun's facing through the portal. This
+  does not reproduce Source's complete saved-eye or prediction history.
 
 - Nested portal views are culled by the whole view instead of the game's
   narrower frustum through the portal. The picture is the same, a nested view
@@ -213,11 +227,19 @@ Deliberate deviations:
 | Ctrl | Crouch |
 | Left mouse button | Fire blue |
 | Right mouse button | Fire orange |
+| F11 | Toggle fullscreen |
 
-`settings.toml` beside where you run it sets `sensitivity`, `fov` and `msaa`
-(1, 2, 4 or 8), one `key = value` per line. A missing file means Portal's
-defaults, an unknown key or bad value stops the program with the line number.
+`settings.toml` beside where you run it sets `sensitivity`, `fov`, `msaa`
+(1, 2, 4 or 8), `fullscreen` and `vsync` (true or false), one `key = value`
+per line. A missing file uses defaults; an unknown key or bad value stops
+the program with the line number.
 `--settings <file>` reads another file.
+
+The app starts in borderless fullscreen at the desktop's resolution and refresh
+rate. `fullscreen = false` starts in a window. VSync defaults to off, using
+mailbox presentation when supported; `vsync = true` enables it. Actual frame
+rate depends on rendering cost. The terminal reports physical resolution,
+monitor refresh rate and frame timings under `[display]`.
 
 `--script <file>` plays timed actions instead of the keyboard and mouse, one
 per line as seconds, action and arguments: `fire1`, `fire2`, `jump`,

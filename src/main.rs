@@ -5,10 +5,11 @@ use bevy::prelude::*;
 use portal::install::{root, Install};
 use portalgun::args::Args;
 use portalgun::chamber::Chamber;
+use portalgun::display::{self, DisplayPlugin};
 use portalgun::faces::FacesPlugin;
 use portalgun::firing::FiringPlugin;
 use portalgun::hud::{HudPlugin, InstallRoot};
-use portalgun::icon::{self, GameIcon, APP_ID};
+use portalgun::icon::{self, GameIcon};
 use portalgun::player::{Config, PlayerPlugin, Scripted};
 use portalgun::run::RunPlugin;
 use portalgun::scene::{Level, ScenePlugin};
@@ -76,13 +77,10 @@ fn main() -> ExitCode {
     }
     let exit = app
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "portalgun".into(),
-                name: Some(APP_ID.into()),
-                ..default()
-            }),
+            primary_window: Some(display::window(&settings)),
             ..default()
         }))
+        .add_plugins(DisplayPlugin)
         .add_plugins(RunPlugin {
             shots: args.shots,
             quit_after: args.quit_after,

@@ -90,3 +90,52 @@ fn frustum_planes_come_out_in_source_units() {
 fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
+
+#[test]
+fn the_linked_projection_stays_invertible_as_the_eye_reaches_the_exit_clip_plane() {
+    use bevy::camera::CameraProjection;
+    let exit = Portal::new([0.0; 3], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0], (32.0, 54.0));
+    for distance in [0.1, 0.49, 0.5, 0.51, 1.0, 4.0] {
+        let camera = Transform::from_translation(to_bevy([0.0, 0.0, -distance]));
+        let projection = PerspectiveProjection {
+            aspect_ratio: 3440.0 / 1440.0,
+            near_clip_plane: view_clip_plane(clip_plane(&exit), &camera),
+            ..default()
+        };
+        let clip = projection.get_clip_from_view();
+        assert!(
+            clip.inverse().is_finite(),
+            "singular projection at distance {distance}"
+        );
+        let point = camera
+            .to_matrix()
+            .inverse()
+            .transform_point3(to_bevy([300.0, 0.0, 100.0]));
+        let ndc = clip.project_point3(point);
+        assert!(
+            (0.0..=1.0).contains(&ndc.z),
+            "room clipped at distance {distance}: {ndc}"
+        );
+    }
+}
+
+#[test]
+fn recursive_portal_views_follow_the_interpolated_camera_in_the_same_frame() {
+    use portalgun::visual::VisualHistory;
+    use portalgun::walker::Walker;
+    let (a, b) = (wall(-384.0, 1.0), floor());
+    let mut player = Walker::at([-300.0, 0.0, 0.0]);
+    let mut history = VisualHistory::new(&player);
+    player.feet = [-297.0, 2.0, 1.0];
+    history.advance(&player, false);
+    for fraction in [0.0, 0.5, 1.0] {
+        let visual = history.sample(&player, fraction);
+        let mut camera = visual.camera().to_matrix();
+        let mut eye = visual.pose.eye.to_array();
+        for _ in 0..3 {
+            camera = through(&a, &b) * camera;
+            eye = through_point(&a, &b, eye);
+            assert!(close(camera.w_axis.truncate(), to_bevy(eye)));
+        }
+    }
+}
