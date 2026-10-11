@@ -129,6 +129,7 @@ impl Plugin for BodyPlugin {
             .init_resource::<BodyAnimation>()
             .add_systems(Startup, spawn_body)
             .add_systems(PostStartup, quiet_body)
+            .add_systems(Update, quiet_body)
             .add_systems(
                 PostUpdate,
                 animate
@@ -146,13 +147,18 @@ fn quiet_body(
     parents: Query<&ChildOf>,
     gun: Query<(), With<HeldGun>>,
 ) {
-    if !config.is_some_and(|c| c.0.original_body_shadows) {
+    let Some(config) = config else { return };
+    if !config.is_changed() {
         return;
     }
     for (entity, layers) in &meshes {
         let held = parents.iter_ancestors(entity).any(|a| gun.contains(a));
         if *layers == RenderLayers::layer(BODY_LAYER) && !held {
-            commands.entity(entity).insert(NotShadowCaster);
+            if config.0.original_body_shadows {
+                commands.entity(entity).insert(NotShadowCaster);
+            } else {
+                commands.entity(entity).remove::<NotShadowCaster>();
+            }
         }
     }
 }

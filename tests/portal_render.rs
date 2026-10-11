@@ -246,6 +246,15 @@ fn crossing_the_camera_plane_hides_only_the_first_recursive_body_view() {
 
 #[test]
 fn falling_through_floor_portals_updates_body_visibility_in_the_same_frame() {
+    floor_visibility(false);
+}
+
+#[test]
+fn original_camera_gate_keeps_floor_crossing_visibility_in_the_same_frame() {
+    floor_visibility(true);
+}
+
+fn floor_visibility(original: bool) {
     use bevy::camera::visibility::RenderLayers;
     use bevy::input::InputPlugin;
     use bevy::time::TimeUpdateStrategy;
@@ -261,6 +270,9 @@ fn falling_through_floor_portals_updates_body_visibility_in_the_same_frame() {
     let install = Install::open(&root(None, None, Path::new(&home))).unwrap();
     let chamber = Chamber::test_chamber(&install.search).unwrap();
     let mut app = App::new();
+    let mut settings = portalgun::settings::Settings::parse("").unwrap();
+    settings.original_eye_gate = original;
+    app.insert_resource(portalgun::player::Config(settings));
     app.add_plugins((
         MinimalPlugins,
         AssetPlugin::default(),

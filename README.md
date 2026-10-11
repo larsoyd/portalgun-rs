@@ -7,6 +7,10 @@ The gun, the portals and moving through them are read from Portal's own
 binaries and files rather than tuned by eye. Where a value could not be found
 in the game, it is marked as an estimate instead of being made up.
 
+Original behavior is the default. New behavior work starts with decompilation
+and Ghidra evidence. Optional improvements stay off until you enable them in
+**Esc → Options → Improvements**; incomplete ports remain documented as limitations.
+
 This is a fan project for study. It is not affiliated with or endorsed by
 Valve. Nothing from the game is in this repository, only code: to run it you
 need your own copy of Portal, which the program reads at startup.
@@ -29,8 +33,8 @@ need your own copy of Portal, which the program reads at startup.
 - Walking bobs and sways the gun the way `C_BasePortalCombatWeapon` does: a
   0.45 second up and down cycle and a 0.9 second side to side one, growing with
   speed up to 320, plus the lag that trails the gun behind a turn and the push
-  out of the way when you look down. Sway continues through portals, with its
-  saved direction rotated through the crossing so it does not snap to centre.
+  out of the way when you look down. Turn lag stops while the hull touches a
+  portal, as in the game. Continuous sway is an optional improvement.
 
 Portal placement now dispatches the original success and supported failure
 particle graphs. Refraction children remain unsupported. TODO: the gun's glow
@@ -49,8 +53,8 @@ The jump clip starts on an actual jump and holds until 0.2 seconds have passed
 and you are on the ground, so walking off a ledge keeps the walk or idle clip.
 Rising faster than 300 units a second, as out of a floor portal, is Portal's
 airwalk state. Chell's model has no airwalk clip, and the game falls back to
-its first sequence on the bind pose. The app holds the jump clip there instead,
-and `original_airwalk = true` restores the game's pose.
+its first sequence on the bind pose. This is the default here too; the Options
+menu can enable holding the jump clip instead.
 Movement and collision still use the existing Portal controller.
 
 A portal that turns you about its normal leaves the view rolled. As in the
@@ -60,9 +64,10 @@ upside down.
 
 The body and held gun render in both colours' recursive portal views, clipped
 into matching halves while crossing an opening. Boots have soles and heels,
-and visual foot contacts follow the actual footstep sounds. Crouch jumps keep
-the body above its support surface. The separate first-person gun and arms do
-not cast world shadows.
+and the default feet and gait follow the authored animation. Floor fitting and
+matching the walk cycle to footstep sounds are optional improvements. The direct
+player body casts no shadow by default; its held gun and portal copy still do.
+The separate first-person gun and arms do not cast world shadows.
 
 Capsule proportions, ground fitting and sound-synchronized gait are adaptations;
 full Source foot IK and animation-layer history are not reproduced. See
@@ -246,9 +251,8 @@ Still stand-ins or estimates:
 
 Deliberate deviations:
 
-- Gun sway stays active through portals. The original disables turn lag while
-  the player intersects a portal surface; keeping it active avoids an abrupt
-  return to the centred pose during a turn.
+- Optional continuous gun sway keeps lag active through portals, avoiding the
+  original's abrupt return to the centred pose while touching an opening.
 - Movement rendering uses a one-tick interpolation buffer. Teleports reset its
   position endpoints while carrying the gun's facing through the portal. This
   does not reproduce Source's complete saved-eye or prediction history.
@@ -270,6 +274,7 @@ Deliberate deviations:
 | Left mouse button | Fire blue |
 | Right mouse button | Fire orange |
 | F11 | Toggle fullscreen |
+| Esc | Open or hide the pause menu |
 
 `settings.toml` beside where you run it sets `sensitivity`, `fov`, `msaa`
 (1, 2, 4 or 8), `fullscreen` and `vsync` (true or false), one `key = value`
@@ -277,8 +282,22 @@ per line. A missing file uses defaults; an unknown key or bad value stops
 the program with the line number.
 `--settings <file>` reads another file.
 
-A few behaviours differ from the game on purpose. Each has a switch, off by
-default, that restores what Portal does:
+Press **Esc → Options** for the Improvements checkboxes. All are unchecked by
+default. Changes are staged: **Apply** saves them and keeps Options open, **OK**
+saves and closes Options, and **Cancel** discards changes since the last Apply.
+**Use original behavior** unchecks all improvements without changing display or
+mouse settings. Apply/OK write the selected settings file and take effect in the
+current session. A save failure leaves the active settings unchanged.
+
+Opening the menu pauses simulation and releases the cursor. Resume or Esc
+returns to play without passing the menu click, jump key or mouse movement into
+the game. Esc hides an open Options window while retaining its pending choices
+for reopening. Quit asks for confirmation. The menu supports mouse, arrow keys,
+Tab and Enter/Space. See [menu behavior and evidence](docs/menu.md).
+
+The existing file keys remain compatible. Each now defaults to `true`; setting
+one to `false` explicitly enables its corresponding improvement. Existing files
+with explicit choices retain them. Missing keys use original behavior:
 
 | Key | With `true` |
 |---|---|
@@ -342,6 +361,7 @@ cargo run -p portal --example portal_inspect -- "/path/to/Steam/steamapps/common
 | `crates/portal/` | The engine-free crate: file readers, particles, portal maths, player movement. |
 | `src/main.rs` | Startup. Finds and checks the install, then opens the window. |
 | `src/args.rs`, `src/settings.rs`, `src/script.rs` | Flags, the settings file and timed scripts. |
+| `src/options.rs`, `src/menu.rs` | Staged improvement settings and the Escape menu. |
 | `src/units.rs` | Source units to Bevy metres, the only place that converts. |
 | `src/chamber.rs`, `src/scene.rs` | The test chamber and its drawing. |
 | `src/body.rs`, `src/bodyanim.rs` | The capsule rig, Portal animation clips and held world gun, visible in portals. |

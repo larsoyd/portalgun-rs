@@ -814,3 +814,48 @@ fn the_original_body_casts_no_shadows_but_its_held_gun_and_ghost_still_do() {
         "body={body} held={held} ghost={ghost}"
     );
 }
+
+#[test]
+fn body_shadow_improvement_can_be_enabled_and_disabled_without_respawning() {
+    use bevy::camera::visibility::RenderLayers;
+    use bevy::light::NotShadowCaster;
+    use portalgun::body::{BodyPlugin, BODY_LAYER};
+    use portalgun::player::{Config, Player};
+    use portalgun::settings::Settings;
+    use portalgun::sound::Files;
+    let home = std::env::var("HOME").unwrap();
+    let install = Install::open(&root(None, None, std::path::Path::new(&home))).unwrap();
+    let walker = Walker::at([0.0; 3]);
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default(), TransformPlugin))
+        .init_asset::<Mesh>()
+        .init_asset::<Image>()
+        .init_asset::<StandardMaterial>()
+        .insert_resource(Files(install.search))
+        .insert_resource(Config(Settings::parse("").unwrap()))
+        .insert_resource(VisualHistory::new(&walker).sample(&walker, 0.0))
+        .insert_resource(Player(walker))
+        .add_plugins(BodyPlugin);
+    app.update();
+    let body: Vec<Entity> = app
+        .world_mut()
+        .query_filtered::<(Entity, &RenderLayers), (With<Mesh3d>, With<NotShadowCaster>)>()
+        .iter(app.world())
+        .filter(|(_, layers)| **layers == RenderLayers::layer(BODY_LAYER))
+        .map(|(e, _)| e)
+        .collect();
+    assert!(body.len() > 30);
+    for original in [false, true, false] {
+        app.world_mut()
+            .resource_mut::<Config>()
+            .0
+            .original_body_shadows = original;
+        app.update();
+        for &entity in &body {
+            assert_eq!(
+                app.world().get::<NotShadowCaster>(entity).is_some(),
+                original
+            );
+        }
+    }
+}

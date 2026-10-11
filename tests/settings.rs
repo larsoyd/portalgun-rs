@@ -60,8 +60,8 @@ fn the_horizontal_fov_is_kept_at_four_by_three_so_wide_screens_see_more() {
 }
 
 #[test]
-fn the_original_airwalk_pose_is_opt_in() {
-    assert!(!Settings::parse("").unwrap().original_airwalk);
+fn the_original_airwalk_pose_is_the_default() {
+    assert!(Settings::parse("").unwrap().original_airwalk);
     assert!(
         Settings::parse("original_airwalk = true")
             .unwrap()
@@ -71,24 +71,24 @@ fn the_original_airwalk_pose_is_opt_in() {
 }
 
 #[test]
-fn every_original_behaviour_switch_is_off_by_default_and_parses() {
+fn every_original_behaviour_switch_is_on_by_default_and_parses() {
     let s = Settings::parse("").unwrap();
-    assert!(
-        !s.original_gun_lag
-            && !s.original_body_shadows
-            && !s.original_feet
-            && !s.original_gait
-            && !s.original_eye_gate
-    );
-    let s = Settings::parse(
-        "original_gun_lag = true\noriginal_body_shadows = true\noriginal_feet = true\noriginal_gait = true\noriginal_eye_gate = true",
-    )
-    .unwrap();
     assert!(
         s.original_gun_lag
             && s.original_body_shadows
             && s.original_feet
             && s.original_gait
             && s.original_eye_gate
+    );
+    let s = Settings::parse(
+        "original_gun_lag = false\noriginal_body_shadows = false\noriginal_feet = false\noriginal_gait = false\noriginal_eye_gate = false",
+    )
+    .unwrap();
+    assert!(
+        !s.original_gun_lag
+            && !s.original_body_shadows
+            && !s.original_feet
+            && !s.original_gait
+            && !s.original_eye_gate
     );
 }

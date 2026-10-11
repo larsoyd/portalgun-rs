@@ -290,6 +290,13 @@ fn mouse_look_affects_this_ticks_movement_and_zero_tick_frames() {
     use portalgun::settings::Settings;
     use portalgun::visual::VisualPlayer;
     let mut app = app();
+    let home = std::env::var("HOME").unwrap();
+    app.insert_resource(portalgun::hud::InstallRoot(portal::install::root(
+        None,
+        None,
+        std::path::Path::new(&home),
+    )))
+    .init_resource::<Assets<Font>>();
     app.insert_resource(Config(Settings::parse("").unwrap()));
     key(&mut app, KeyCode::KeyW, true);
     app.world_mut().write_message(MouseMotion {
@@ -431,4 +438,292 @@ fn firing_on_a_zero_tick_frame_uses_authoritative_eye_and_current_look_once() {
     assert!(!app.world().resource::<Controls>().fire1);
     frame(&mut app, 0.045);
     assert_eq!(app.world().resource::<Firing>().flying().len(), 1);
+}
+
+fn menu_app() -> App {
+    use portalgun::menu::{MenuPlugin, SettingsPath};
+    use portalgun::player::Config;
+    use portalgun::settings::Settings;
+    let mut app = app();
+    let home = std::env::var("HOME").unwrap();
+    app.insert_resource(portalgun::hud::InstallRoot(portal::install::root(
+        None,
+        None,
+        std::path::Path::new(&home),
+    )))
+    .init_resource::<Assets<Font>>();
+    app.insert_resource(Config(Settings::parse("").unwrap()))
+        .insert_resource(SettingsPath(
+            std::env::temp_dir().join(format!("portal-input-{}.toml", std::process::id())),
+        ))
+        .add_plugins(MenuPlugin);
+    app.world_mut().spawn(bevy::window::CursorOptions {
+        visible: false,
+        grab_mode: bevy::window::CursorGrabMode::Locked,
+        ..default()
+    });
+    frame(&mut app, 0.015);
+    app
+}
+
+fn tap(app: &mut App, code: KeyCode) {
+    key(app, code, true);
+    frame(app, 0.015);
+    key(app, code, false);
+    frame(app, 0.015);
+}
+
+#[test]
+fn escape_pauses_movement_frees_mouse_and_resume_does_not_fire_or_jump() {
+    use bevy::window::{CursorGrabMode, CursorOptions};
+    use portalgun::menu::Menu;
+    use portalgun::options::Page;
+    use portalgun::player::Controls;
+    let mut app = menu_app();
+    key(&mut app, KeyCode::KeyW, true);
+    frame(&mut app, 0.015);
+    tap(&mut app, KeyCode::Escape);
+    let at = app.world().resource::<Player>().feet;
+    let yaw = app.world().resource::<Player>().yaw;
+    let clock = app.world().resource::<Time<Virtual>>().elapsed();
+    assert_eq!(app.world().resource::<Menu>().options.page, Page::Pause);
+    assert!(app.world().resource::<Time<Virtual>>().is_paused());
+    let cursor = app
+        .world_mut()
+        .query::<&CursorOptions>()
+        .single(app.world())
+        .unwrap();
+    assert!(cursor.visible);
+    assert_eq!(cursor.grab_mode, CursorGrabMode::None);
+    key(&mut app, KeyCode::ControlLeft, true);
+    app.world_mut()
+        .write_message(bevy::input::mouse::MouseMotion {
+            delta: Vec2::new(50.0, 20.0),
+        });
+    for _ in 0..20 {
+        frame(&mut app, 0.015);
+    }
+    assert_eq!(app.world().resource::<Player>().feet, at);
+    assert_eq!(app.world().resource::<Player>().yaw, yaw);
+    assert_eq!(app.world().resource::<Time<Virtual>>().elapsed(), clock);
+    key(&mut app, KeyCode::ControlLeft, false);
+    key(&mut app, KeyCode::KeyW, false);
+    frame(&mut app, 0.015);
+    tap(&mut app, KeyCode::Escape);
+    assert_eq!(app.world().resource::<Menu>().options.page, Page::Closed);
+    assert!(!app.world().resource::<Time<Virtual>>().is_paused());
+    let controls = app.world().resource::<Controls>();
+    assert!(!controls.fire1 && !controls.fire2 && !controls.jump_pressed && !controls.jump);
+    let cursor = app
+        .world_mut()
+        .query::<&CursorOptions>()
+        .single(app.world())
+        .unwrap();
+    assert!(!cursor.visible);
+    assert_eq!(cursor.grab_mode, CursorGrabMode::Locked);
+}
+
+#[test]
+fn options_keyboard_toggles_are_staged_and_cancel_does_not_apply() {
+    use portalgun::menu::Menu;
+    use portalgun::options::Page;
+    use portalgun::player::Config;
+    let mut app = menu_app();
+    tap(&mut app, KeyCode::Escape);
+    tap(&mut app, KeyCode::ArrowDown);
+    tap(&mut app, KeyCode::Enter);
+    assert_eq!(app.world().resource::<Menu>().options.page, Page::Options);
+    tap(&mut app, KeyCode::Space);
+    assert!(
+        !app.world()
+            .resource::<Menu>()
+            .options
+            .draft
+            .as_ref()
+            .unwrap()
+            .original_airwalk
+    );
+    assert!(app.world().resource::<Config>().0.original_airwalk);
+    // Cancel follows the six toggles, Restore and OK.
+    for _ in 0..8 {
+        tap(&mut app, KeyCode::ArrowDown);
+    }
+    tap(&mut app, KeyCode::Enter);
+    assert_eq!(app.world().resource::<Menu>().options.page, Page::Pause);
+    assert!(app.world().resource::<Config>().0.original_airwalk);
+}
+
+#[test]
+fn space_used_to_resume_cannot_become_a_jump_on_the_following_frame() {
+    let mut app = menu_app();
+    tap(&mut app, KeyCode::Escape);
+    key(&mut app, KeyCode::Space, true);
+    for _ in 0..5 {
+        frame(&mut app, 0.015);
+    }
+    assert!(app.world().resource::<Player>().grounded);
+    assert_eq!(app.world().resource::<Player>().jumps, 0);
+}
+
+#[test]
+fn escape_resumes_with_options_pending_and_quit_requires_confirmation() {
+    use portalgun::menu::Menu;
+    use portalgun::options::Page;
+    let mut app = menu_app();
+    tap(&mut app, KeyCode::Escape);
+    tap(&mut app, KeyCode::ArrowDown);
+    tap(&mut app, KeyCode::Enter);
+    tap(&mut app, KeyCode::Space);
+    tap(&mut app, KeyCode::Escape);
+    assert_eq!(app.world().resource::<Menu>().options.page, Page::Closed);
+    assert!(!app.world().resource::<Time<Virtual>>().is_paused());
+    tap(&mut app, KeyCode::Escape);
+    assert_eq!(app.world().resource::<Menu>().options.page, Page::Options);
+    assert!(
+        !app.world()
+            .resource::<Menu>()
+            .options
+            .draft
+            .as_ref()
+            .unwrap()
+            .original_airwalk
+    );
+    for _ in 0..8 {
+        tap(&mut app, KeyCode::ArrowDown);
+    }
+    tap(&mut app, KeyCode::Enter);
+    tap(&mut app, KeyCode::ArrowDown);
+    tap(&mut app, KeyCode::Enter);
+    assert_eq!(app.world().resource::<Menu>().options.page, Page::Quit);
+    assert!(app.world().resource::<Time<Virtual>>().is_paused());
+    assert!(app.world().resource::<Messages<AppExit>>().is_empty());
+    tap(&mut app, KeyCode::Escape);
+    assert_eq!(app.world().resource::<Menu>().options.page, Page::Pause);
+    assert!(app.world().resource::<Messages<AppExit>>().is_empty());
+}
+
+#[test]
+fn menu_mouse_commands_wait_for_release_and_dragging_out_cancels() {
+    use portalgun::menu::{Menu, MenuAction};
+    use portalgun::options::{Improvement, Page};
+    let mut app = menu_app();
+    tap(&mut app, KeyCode::Escape);
+    let button = app
+        .world_mut()
+        .query::<(Entity, &MenuAction)>()
+        .iter(app.world())
+        .find(|(_, action)| matches!(action, MenuAction::Options))
+        .unwrap()
+        .0;
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Interaction::Pressed);
+    frame(&mut app, 0.015);
+    assert_eq!(app.world().resource::<Menu>().options.page, Page::Options);
+    let button = app
+        .world_mut()
+        .query::<(Entity, &MenuAction)>()
+        .iter(app.world())
+        .find(|(_, action)| matches!(action, MenuAction::Toggle(Improvement::Feet)))
+        .unwrap()
+        .0;
+    let original = |app: &App| {
+        app.world()
+            .resource::<Menu>()
+            .options
+            .draft
+            .as_ref()
+            .unwrap()
+            .original_feet
+    };
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Interaction::Pressed);
+    frame(&mut app, 0.015);
+    assert!(original(&app));
+    app.world_mut().entity_mut(button).insert(Interaction::None);
+    frame(&mut app, 0.015);
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Interaction::Hovered);
+    frame(&mut app, 0.015);
+    assert!(original(&app));
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Interaction::Pressed);
+    frame(&mut app, 0.015);
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Interaction::Hovered);
+    frame(&mut app, 0.015);
+    assert!(!original(&app));
+}
+
+#[test]
+fn options_keyboard_waits_for_release_before_toggling() {
+    use portalgun::menu::Menu;
+    let mut app = menu_app();
+    tap(&mut app, KeyCode::Escape);
+    tap(&mut app, KeyCode::ArrowDown);
+    tap(&mut app, KeyCode::Enter);
+    key(&mut app, KeyCode::Space, true);
+    frame(&mut app, 0.015);
+    assert!(
+        app.world()
+            .resource::<Menu>()
+            .options
+            .draft
+            .as_ref()
+            .unwrap()
+            .original_airwalk
+    );
+    key(&mut app, KeyCode::Space, false);
+    frame(&mut app, 0.015);
+    assert!(
+        !app.world()
+            .resource::<Menu>()
+            .options
+            .draft
+            .as_ref()
+            .unwrap()
+            .original_airwalk
+    );
+}
+
+#[test]
+fn a_menu_click_pressed_and_released_in_one_frame_is_not_lost() {
+    use bevy::input::mouse::MouseButtonInput;
+    use portalgun::menu::{Menu, MenuAction};
+    use portalgun::options::Improvement;
+    let mut app = menu_app();
+    tap(&mut app, KeyCode::Escape);
+    tap(&mut app, KeyCode::ArrowDown);
+    tap(&mut app, KeyCode::Enter);
+    let button = app
+        .world_mut()
+        .query::<(Entity, &MenuAction)>()
+        .iter(app.world())
+        .find(|(_, action)| matches!(action, MenuAction::Toggle(Improvement::Feet)))
+        .unwrap()
+        .0;
+    for state in [ButtonState::Pressed, ButtonState::Released] {
+        app.world_mut().write_message(MouseButtonInput {
+            button: MouseButton::Left,
+            state,
+            window: Entity::PLACEHOLDER,
+        });
+    }
+    app.world_mut()
+        .entity_mut(button)
+        .insert(Interaction::Pressed);
+    frame(&mut app, 0.015);
+    assert!(
+        !app.world()
+            .resource::<Menu>()
+            .options
+            .draft
+            .as_ref()
+            .unwrap()
+            .original_feet
+    );
 }

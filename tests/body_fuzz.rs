@@ -32,6 +32,15 @@ fn seeds() -> std::ops::Range<u64> {
 
 #[test]
 fn seeded_movement_keeps_the_rig_attached_through_duck_jump_and_portals() {
+    movement_rig(false);
+}
+
+#[test]
+fn original_defaults_keep_the_rig_attached_through_duck_jump_and_portals() {
+    movement_rig(true);
+}
+
+fn movement_rig(original: bool) {
     let home = std::env::var("HOME").unwrap();
     let install = Install::open(&root(None, None, std::path::Path::new(&home))).unwrap();
     let chamber = Chamber::test_chamber(&install.search).unwrap();
@@ -123,6 +132,9 @@ fn seeded_movement_keeps_the_rig_attached_through_duck_jump_and_portals() {
         walker.yaw = 180.0;
         let mut history = VisualHistory::new(&walker);
         let mut animation = BodyAnimation::default();
+        animation.original_airwalk = original;
+        animation.original_feet = original;
+        animation.original_gait = original;
         let mut input = Input::default();
         let mut trail = Vec::new();
         let mut now = 0.0;
@@ -198,7 +210,8 @@ fn seeded_movement_keeps_the_rig_attached_through_duck_jump_and_portals() {
             if rng.next() < 0.06 {
                 animation.fire(now);
             }
-            let visual = history.sample(&walker, accumulator / 0.015);
+            let mut visual = history.sample(&walker, accumulator / 0.015);
+            visual.original_eye_gate = original;
             let feet = visual.pose.centre - Vec3::Z * visual.pose.half.z;
             let support = portalgun::walker::body_support(feet.to_array(), &chamber, Some(&pair));
             let mut pose = animation
@@ -228,7 +241,7 @@ fn seeded_movement_keeps_the_rig_attached_through_duck_jump_and_portals() {
             for side in 0..2 {
                 let boot = portalgun::feet::boot(&clips, &pose, side);
                 let at = pose.origin + yaw * boot.w_axis.truncate();
-                if let Some(floor) = probe(at) {
+                if let Some(floor) = probe(at).filter(|_| !original) {
                     let bottom = pose.origin.z + portalgun::feet::sole(boot);
                     assert!(bottom >= floor - 0.1,
                         "foot underground seed={seed} tick={tick} side={side} sole={bottom} floor={floor} trail={trail:?}");

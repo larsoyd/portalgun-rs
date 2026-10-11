@@ -74,13 +74,15 @@ impl Plugin for MovementPlugin {
                         run_script.run_if(resource_exists::<Scripted>),
                     )
                         .chain()
+                        .run_if(crate::menu::playing)
                         .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
                     (reorient, interpolate, place_camera)
                         .chain()
+                        .run_if(crate::menu::playing)
                         .in_set(RunFixedMainLoopSystems::AfterFixedMainLoop),
                 ),
             )
-            .add_systems(FixedUpdate, simulate);
+            .add_systems(FixedUpdate, simulate.run_if(crate::menu::playing));
     }
 }
 
@@ -91,7 +93,10 @@ impl Plugin for PlayerPlugin {
         app.add_plugins(MovementPlugin)
             .init_resource::<crate::bodyanim::Gait>()
             .add_systems(Startup, (spawn_camera, grab_cursor, read_footing))
-            .add_systems(FixedUpdate, walk.after(simulate));
+            .add_systems(
+                FixedUpdate,
+                walk.after(simulate).run_if(crate::menu::playing),
+            );
     }
 }
 

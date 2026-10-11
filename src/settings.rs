@@ -5,7 +5,7 @@
 const FOV_DEFAULT: f32 = 75.0;
 const FOV_RANGE: (f32, f32) = (75.0, 120.0);
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     pub sensitivity: f32,
     pub fov: f32,
@@ -29,12 +29,12 @@ impl Settings {
             msaa: 4,
             fullscreen: true,
             vsync: false,
-            original_airwalk: false,
-            original_gun_lag: false,
-            original_body_shadows: false,
-            original_feet: false,
-            original_gait: false,
-            original_eye_gate: false,
+            original_airwalk: true,
+            original_gun_lag: true,
+            original_body_shadows: true,
+            original_feet: true,
+            original_gait: true,
+            original_eye_gate: true,
         };
         for (n, line) in text.lines().enumerate() {
             let line = line.trim();
@@ -64,6 +64,47 @@ impl Settings {
             }
         }
         Ok(s)
+    }
+
+    pub fn save(&self, path: &std::path::Path) -> Result<(), String> {
+        use std::io::Write;
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let mut name = path.as_os_str().to_os_string();
+        name.push(format!(
+            ".{}.{}.tmp",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let temporary = std::path::PathBuf::from(name);
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let save = || -> std::io::Result<()> {
+            writeln!(
+                file,
+                "sensitivity = {}\nfov = {}\nmsaa = {}\nfullscreen = {}\nvsync = {}",
+                self.sensitivity, self.fov, self.msaa, self.fullscreen, self.vsync
+            )?;
+            for (key, value) in [
+                ("original_airwalk", self.original_airwalk),
+                ("original_gun_lag", self.original_gun_lag),
+                ("original_body_shadows", self.original_body_shadows),
+                ("original_feet", self.original_feet),
+                ("original_gait", self.original_gait),
+                ("original_eye_gate", self.original_eye_gate),
+            ] {
+                writeln!(file, "{key} = {value}")?;
+            }
+            file.sync_all()?;
+            std::fs::rename(&temporary, path)
+        }();
+        if save.is_err() {
+            let _ = std::fs::remove_file(&temporary);
+        }
+        save.map_err(|e| format!("{}: {e}", path.display()))
     }
 
     pub fn vertical_fov(&self) -> f32 {

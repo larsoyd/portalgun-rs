@@ -99,6 +99,8 @@ fn main() -> ExitCode {
         .insert_resource(Level(chamber))
         .add_plugins(ScenePlugin)
         .insert_resource(Config(settings))
+        .insert_resource(portalgun::menu::SettingsPath(args.settings.clone()))
+        .add_plugins(portalgun::menu::MenuPlugin)
         .insert_resource(GameIcon(game_icon))
         .add_systems(Update, icon::set_window_icon)
         .add_plugins(PlayerPlugin)

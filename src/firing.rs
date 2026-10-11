@@ -22,7 +22,7 @@ impl Plugin for FiringPlugin {
         app.add_message::<crate::impacts::PortalImpact>()
             .init_resource::<Firing>()
             .add_systems(Startup, |mut gun: ResMut<Firing>| gun.deploy(0.0))
-            .add_systems(Update, (fire, land).chain());
+            .add_systems(Update, (fire, land).chain().run_if(crate::menu::playing));
     }
 }
 

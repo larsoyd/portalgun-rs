@@ -85,8 +85,8 @@ local transforms; the linked root applies the portal transform. Camera layers
 implement the complementary direct/ghost visibility rules. Stale planes and the
 linked copy are cleared when the body leaves the opening.
 
-World-body shadows remain a deliberate rendering enhancement, including the
-held world gun. The camera-attached gun and arms cast no shadow and receive none.
+Direct player-body shadows are an optional rendering enhancement, off by default.
+The held world gun and the portal ghost retain their shadows. The camera-attached gun and arms cast no shadow and receive none.
 This avoids the duplicate gun/arm silhouettes without claiming identical Source
 shadow rendering.
 
@@ -96,9 +96,9 @@ Chell's animation model has `ACT_MP_JUMP_START_primary` but no airwalk, float or
 land sequence. A landing gesture therefore plays nothing. Airwalk selects
 sequence 0, `head_rot_z`, a one-frame head delta with no activity, on the bind
 pose. The game shows that pose while rising faster than 300 out of a portal. By
-default the app holds the jump clip instead, and `original_airwalk = true`
-restores the game's pose. The initial value of the `head_rot_z` parameter and the
-address of the bind-pose setup are still open. At value 0 the delta is identity.
+default the app uses that pose. The Options menu can enable holding the jump
+clip instead (`original_airwalk = false`). The initial `head_rot_z` value and
+the address of the bind-pose setup are still open. At value 0 the delta is identity.
 
 ## Feet, crouch jumps and cadence
 
@@ -109,14 +109,15 @@ collision brushes: a linked floor opening is not treated as solid ground.
 
 Each foot has a sole and heel. The toe bases are mirrored in the installed model,
 so the two boot orientations differ. A two-bone leg solve preserves segment
-lengths while fitting a low or planted sole to its support surface. This is a
+lengths while fitting a low or planted sole to its support surface when the
+optional floor fitting is enabled. It is off by default. This is a
 capsule-rendering adaptation, not Source's full IK solver, foot locking, compressed
 IK error tracks or terrain-slope alignment. Ground probes are per foot and respect
 portal openings.
 
 The movement audio keeps Portal's existing 400/300 ms timer, plus 100 ms while
 crouched. Each emitted walking footstep records its side, time and interval. The
-visual gait follows those events. Each directional clip is phase-mapped separately
+optional synchronized gait follows those events. Each directional clip is phase-mapped separately
 before grid blending: its contact marker is the descending toe entry into the
 three-unit support band after the swing peak. Short contact constraints keep the
 sounding foot supported during stance transitions. These synchronization rules
