@@ -47,12 +47,15 @@ clip rates, movement distances, blend grids, layers and transition durations
 come from the model. Takeoff and landing blend from the previous pose.
 Movement and collision still use the existing Portal controller.
 
-The body and held gun render in both colours' recursive portal views. The
-first-person camera retains its separate animated view model. Capsule radii
-and the head are the credited rig's stand-ins. The body relocates with the
-player at a crossing; there is no split body clone on the other side while
-straddling an opening. Full Source foot IK and animation-layer history are
-not reproduced. See [animation evidence and limits](docs/player-animation.md).
+The body and held gun render in both colours' recursive portal views, clipped
+into matching halves while crossing an opening. Boots have soles and heels,
+and visual foot contacts follow the actual footstep sounds. Crouch jumps keep
+the body above its support surface. The separate first-person gun and arms do
+not cast world shadows.
+
+Capsule proportions, ground fitting and sound-synchronized gait are adaptations;
+full Source foot IK and animation-layer history are not reproduced. See
+[animation evidence and limits](docs/player-animation.md).
 
 See [third-party credits](THIRD_PARTY.md) for the upstream revision and MIT
 notice. No Elden Ring installation or data is needed.

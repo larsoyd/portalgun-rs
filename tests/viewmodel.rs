@@ -124,3 +124,43 @@ fn world_gun_loads_with_its_own_material_search_path_and_forward_muzzle() {
     let muzzle = mdl.attachments.iter().find(|a| a.name == "muzzle").unwrap();
     assert!(muzzle.local[2][3] < -20.0);
 }
+
+#[test]
+fn first_person_gun_and_arms_neither_cast_nor_receive_world_shadows() {
+    use bevy::light::{NotShadowCaster, NotShadowReceiver};
+    use bevy::mesh::skinning::SkinnedMeshInverseBindposes;
+    use bevy::prelude::*;
+    use portalgun::player::{Config, PlayerCamera};
+    use portalgun::settings::Settings;
+    use portalgun::sound::Files;
+    use portalgun::view::{GunMeshes, ViewPlugin};
+    use portalgun::visual::VisualHistory;
+    use portalgun::walker::Walker;
+    let install = install();
+    let (mdl, meshes) = read_gun(&install.search).unwrap();
+    let walker = Walker::at([0.0; 3]);
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default(), TransformPlugin))
+        .init_asset::<Mesh>()
+        .init_asset::<Image>()
+        .init_asset::<StandardMaterial>()
+        .init_asset::<SkinnedMeshInverseBindposes>()
+        .insert_resource(Files(install.search))
+        .insert_resource(Config(Settings::parse("").unwrap()))
+        .insert_resource(GunMeshes(mdl, meshes))
+        .insert_resource(VisualHistory::new(&walker).sample(&walker, 0.0))
+        .add_plugins(ViewPlugin);
+    app.world_mut()
+        .spawn((Camera3d::default(), PlayerCamera, Msaa::Off));
+    app.update();
+    let world = app.world_mut();
+    let parts: Vec<_> = world
+        .query_filtered::<(Has<NotShadowCaster>, Has<NotShadowReceiver>), With<Mesh3d>>()
+        .iter(world)
+        .collect();
+    assert_eq!(parts.len(), 3);
+    assert!(
+        parts.iter().all(|&(cast, receive)| cast && receive),
+        "viewmodel shadows: {parts:?}"
+    );
+}

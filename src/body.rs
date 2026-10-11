@@ -2,6 +2,7 @@
 // Copyright (c) 2026 Funny-Bones and contributors.
 pub use crate::bodyanim::BodyAnimation;
 use crate::bodyanim::PlayerClips;
+use crate::bodyportal::{material, BodyMaterial, BodyPortalPlugin};
 
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::visibility::RenderLayers;
@@ -100,6 +101,7 @@ struct Rig {
     head: Entity,
     gun: Entity,
     hands: Vec<HandPiece>,
+    boots: [Entity; 2],
 }
 
 struct HandPiece {
@@ -110,13 +112,22 @@ struct HandPiece {
     across: [usize; 2],
 }
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct BodyPoseUpdated;
+
 pub struct BodyPlugin;
 
 impl Plugin for BodyPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<BodyAnimation>()
+        app.add_plugins(BodyPortalPlugin)
+            .init_resource::<BodyAnimation>()
             .add_systems(Startup, spawn_body)
-            .add_systems(PostUpdate, animate.before(TransformSystems::Propagate));
+            .add_systems(
+                PostUpdate,
+                animate
+                    .in_set(BodyPoseUpdated)
+                    .before(TransformSystems::Propagate),
+            );
     }
 }
 
@@ -124,7 +135,7 @@ fn spawn_body(
     mut commands: Commands,
     files: Res<Files>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<BodyMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -136,18 +147,18 @@ fn spawn_body(
             return;
         }
     };
-    let armour = materials.add(StandardMaterial {
+    let armour = materials.add(material(StandardMaterial {
         base_color: Color::srgb(0.36, 0.38, 0.43),
         perceptual_roughness: 0.6,
         metallic: 0.4,
         ..default()
-    });
-    let cloth = materials.add(Color::srgb(0.42, 0.16, 0.13));
-    let steel = materials.add(Color::srgb(0.85, 0.87, 0.9));
+    }));
+    let cloth = materials.add(material(Color::srgb(0.42, 0.16, 0.13).into()));
+    let steel = materials.add(material(Color::srgb(0.85, 0.87, 0.9).into()));
     let root = commands
         .spawn((PlayerBody, Transform::default(), Visibility::Inherited))
         .id();
-    let mut part = |parent: Entity, mesh: Mesh, material: &Handle<StandardMaterial>, at: Vec3| {
+    let mut part = |parent: Entity, mesh: Mesh, material: &Handle<BodyMaterial>, at: Vec3| {
         commands
             .spawn((
                 Mesh3d(meshes.add(mesh)),
@@ -192,6 +203,14 @@ fn spawn_body(
         })
         .collect();
     let mut hands = Vec::new();
+    let boots = [0, 1].map(|_| {
+        part(
+            root,
+            Cuboid::from_size(crate::feet::BOOT_SIZE * METRES_PER_UNIT).into(),
+            &armour,
+            Vec3::ZERO,
+        )
+    });
     for side in ["L", "R"] {
         let bone = |name: &str| clips.bone(&format!("{name}_{side}"));
         let across = [bone("index_base"), bone("mid_base")];
@@ -235,6 +254,11 @@ fn spawn_body(
     let head = commands
         .spawn((Transform::default(), Visibility::Inherited, ChildOf(root)))
         .id();
+    for (side, entity) in boots.iter().enumerate() {
+        commands
+            .entity(*entity)
+            .insert(Name::new(format!("Player boot {side}")));
+    }
     for (mesh, material, at) in [
         (Mesh::from(Sphere::new(0.115)), armour, Vec3::Y * 0.09),
         (
@@ -278,6 +302,7 @@ fn spawn_body(
         head,
         gun,
         hands,
+        boots,
     });
 }
 
@@ -286,7 +311,7 @@ fn spawn_gun(
     parent: Entity,
     files: &Files,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
+    materials: &mut Assets<BodyMaterial>,
     images: &mut Assets<Image>,
 ) -> Result<(), String> {
     let (mdl, pieces) = crate::viewmodel::read_model(files, "models/weapons/w_portalgun")?;
@@ -316,11 +341,11 @@ fn spawn_gun(
         .with_inserted_indices(Indices::U32(skin.indices));
         commands.spawn((
             Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(materials.add(StandardMaterial {
+            MeshMaterial3d(materials.add(material(StandardMaterial {
                 base_color_texture: Some(texture),
                 perceptual_roughness: 0.6,
                 ..default()
-            })),
+            }))),
             RenderLayers::layer(BODY_LAYER),
             ChildOf(parent),
         ));
@@ -328,6 +353,7 @@ fn spawn_gun(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn animate(
     rig: Option<Res<Rig>>,
     clips: Option<Res<PlayerClips>>,
@@ -336,11 +362,20 @@ fn animate(
     player: Res<Player>,
     time: Res<Time>,
     mut transforms: Query<&mut Transform>,
+    level: Option<Res<crate::scene::Level>>,
+    portals: Option<Res<crate::faces::Portals>>,
+    gait: Option<Res<crate::bodyanim::Gait>>,
 ) {
     let (Some(rig), Some(clips)) = (rig, clips) else {
         return;
     };
-    let pose = match animation.pose(
+    let feet = visual.pose.centre - Vec3::Z * visual.pose.half.z;
+    let linked = portals.and_then(|p| p.linked());
+    animation.support = level
+        .as_ref()
+        .and_then(|l| crate::walker::body_support(feet.to_array(), l, linked.as_ref()));
+    animation.footfall = gait.and_then(|g| g.0);
+    let mut pose = match animation.pose(
         &clips,
         &visual,
         player.grounded,
@@ -354,6 +389,12 @@ fn animate(
             return;
         }
     };
+    if let Some(level) = level {
+        crate::feet::ground(&clips, &mut pose, player.grounded, |at| {
+            let from = Vec3::new(at.x, at.y, feet.z.max(at.z));
+            crate::walker::body_support(from.to_array(), &level, linked.as_ref())
+        });
+    }
     let names = [
         "hips",
         "spine_mid",
@@ -420,6 +461,12 @@ fn animate(
         t.translation *= METRES_PER_UNIT;
         t
     };
+    for (side, entity) in rig.boots.iter().enumerate() {
+        if let Ok(mut t) = transforms.get_mut(*entity) {
+            *t = Transform::from_matrix(basis * crate::feet::boot(&clips, &pose, side));
+            t.translation *= METRES_PER_UNIT;
+        }
+    }
     let feet = pose.origin;
     for (entity, transform) in [
         (

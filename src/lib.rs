@@ -1,10 +1,12 @@
 pub mod args;
 pub mod body;
 pub mod bodyanim;
+pub mod bodyportal;
 pub mod chamber;
 pub mod collision;
 pub mod display;
 pub mod faces;
+pub mod feet;
 pub mod firing;
 pub mod gun;
 pub mod hud;

@@ -121,6 +121,14 @@ impl VisualPlayer {
     pub fn portal_camera(&self, linked: Option<[Portal; 2]>) -> Transform {
         let camera = self.camera();
         let Some(pair) = linked else { return camera };
+        match self.camera_portal(Some(pair)) {
+            Some(i) => Transform::from_matrix(through(&pair[i], &pair[1 - i]) * camera.to_matrix()),
+            None => camera,
+        }
+    }
+
+    pub fn camera_portal(&self, linked: Option<[Portal; 2]>) -> Option<usize> {
+        let pair = linked?;
         for (i, p) in pair.iter().enumerate() {
             let eye = p.local(self.pose.eye.to_array());
             if eye[0] >= 0.0 {
@@ -137,10 +145,10 @@ impl VisualPlayer {
             if ceiling_eye
                 || meets_opening(p, self.pose.centre.to_array(), self.pose.half.to_array())
             {
-                return Transform::from_matrix(through(p, &pair[1 - i]) * camera.to_matrix());
+                return Some(i);
             }
         }
-        camera
+        None
     }
 
     pub fn camera(&self) -> Transform {

@@ -418,7 +418,12 @@ fn plain(p: &PerspectiveProjection) -> PerspectiveProjection {
 }
 
 type MainView<'a> = (&'a Transform, &'a Projection, &'a Camera);
-type ViewCameras<'a> = (&'a mut Transform, &'a mut Projection, &'a mut Camera);
+type ViewCameras<'a> = (
+    &'a mut Transform,
+    &'a mut Projection,
+    &'a mut Camera,
+    &'a mut RenderLayers,
+);
 
 #[allow(clippy::too_many_arguments)]
 fn draw_views(
@@ -432,6 +437,7 @@ fn draw_views(
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<PortalMaterial>>,
     mut visibility: Query<&mut Visibility>,
+    visual: Option<Res<crate::visual::VisualPlayer>>,
 ) {
     let Some(faces) = faces else { return };
     let faces = faces.into_inner();
@@ -460,6 +466,7 @@ fn draw_views(
     }
     let depth = faces.depth;
     let linked = portals.linked();
+    let crossed_eye = visual.is_some_and(|v| v.camera_portal(linked).is_some());
     let mut plain = plain(perspective);
     plain.update(size.x as f32, size.y as f32);
     let doubler_projection = plain.get_clip_from_view();
@@ -511,9 +518,16 @@ fn draw_views(
                         &frustum,
                     )
                 });
-            let Ok((mut t, mut proj, mut camera)) = cameras.get_mut(chain.cameras[level - 1])
+            let Ok((mut t, mut proj, mut camera, mut layers)) =
+                cameras.get_mut(chain.cameras[level - 1])
             else {
                 continue;
+            };
+            // Translated from 0x54d060 (decompiled, client.so).
+            *layers = if level == 1 && crossed_eye {
+                layers.clone().without(crate::body::BODY_LAYER)
+            } else {
+                layers.clone().with(crate::body::BODY_LAYER)
             };
             if camera.is_active != shown[level] {
                 camera.is_active = shown[level];
@@ -587,7 +601,7 @@ fn draw_views(
         report.push(format!("{}={levels}", format!("{c:?}").to_lowercase()));
         any_doubler |= usable && linked.is_some() && 1.0 > fade.statics;
     }
-    if let Ok((mut t, mut proj, mut camera)) = cameras.get_mut(faces.doubler.0) {
+    if let Ok((mut t, mut proj, mut camera, _)) = cameras.get_mut(faces.doubler.0) {
         *t = *eye;
         *proj = Projection::custom(Kept(plain.clone()));
         if camera.is_active != any_doubler {

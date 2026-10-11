@@ -57,81 +57,109 @@ translation and identity rotation. Bone 255 terminates an empty track.
 The model's material uses the empty entry in its material search directories,
 so the loader now searches every declared directory.
 
-## Rendering adaptations and limits
+## Crossing and shadow evidence
 
-The body layer is visible to both recursive portal-camera chains and chamber
-lights. The main and first-person cameras exclude it. The depth doubler copies
-the main view, whose portal surfaces already contain the body.
+Further read-only analysis used client MCP port 8765 and the already analyzed
+scratch server project on port 8766. A redundant fresh server analysis was
+stopped; the valid existing scratch project supplied the server decompilation.
 
-The rig uses interpolated movement and resets its facing on teleport revisions.
-Automatic jump-duck raises collision feet by 36 units while preserving the eye.
-The visual body origin follows the interpolated eye, with standing/crouched
-eye height blended over the same transition as the pose. This also prevents
-midair crouch presses and crouched landings from popping the rig by 36 units.
-This is a rendering adaptation to this controller's hull representation, not
-a claim of identical Source render-origin handling.
+| Client address | Contract |
+|---|---|
+| `0x54d060`, `0x563890`, `0x5638b0` | The local direct body is hidden outside portal views and at recursion depth 1 while the camera is transformed through a portal. |
+| `0x551ac0`, `0x552190` | Camera crossing sets/resets the transformed-camera state. |
+| `0x5562a0`, `0x35c530`, `0x54c690` | Intersecting geometry receives an entrance clip plane and a separately clipped linked copy. Biases are 0.3 and 0.75 Source units; candidate centres below signed distance −5 are rejected. |
+| `0x54bc50` | The linked copy transforms the original bone matrices rather than advancing a separate animation. |
+| `0x54c4c0` | Local-body/held-weapon ghosts draw in the main view when the camera is not transformed, in the first recursive view when it is, and in deeper recursive views. |
+| `0x340080` → `0x362790` → `0x361d00` | Live render origin follows the entity origin; selecting an animation does not subtract a different eye height. |
+| `0x21f390`, `0x21f3b0` | First-person viewmodels neither cast shadows nor receive projected textures. |
+| `0x54c830`, `0x344e70` | The direct Portal player casts no shadow; portal ghosts inherit the base animating shadow path. |
 
-A seeded regression also exposed a movement bug: unducking can lower the hull
-centre across a floor portal before travel starts. The crossing sweep now saves
-the centre before duck processing so this crossing cannot be lost. The reduced
-case starts a crouched hull at feet `[-250, 0, -15]` in a floor opening; releasing
-crouch must teleport to the linked ceiling instead of falling below the room.
+The Bevy renderer clips actual body, boot and gun fragments in both colour and
+depth/shadow passes. It uses transformed bounds of every rendered mesh, including
+the held gun, to find portal intersections. This substitutes the capsule meshes'
+bounds for the original model-hitbox/simulator intersection. The two copies share
+local transforms; the linked root applies the portal transform. Camera layers
+implement the complementary direct/ghost visibility rules. Stale planes and the
+linked copy are cleared when the body leaves the opening.
 
-The capsule proportions and head remain a stylized stand-in. Full Source foot
-IK, sequence-transition history, all gesture-slot rules, arbitrary included-model
-remapping, external animation blocks and a split portal-straddling body are not
-implemented. The decoded animation poses and attachment replace the previous
-procedural stance; this does not claim a complete 1:1 Source animation renderer.
+World-body shadows remain a deliberate rendering enhancement, including the
+held world gun. The camera-attached gun and arms cast no shadow and receive none.
+This avoids the duplicate gun/arm silhouettes without claiming identical Source
+shadow rendering.
 
-## Validation
+## Feet, crouch jumps and cadence
 
-`tests/body.rs` checks installed clip grids and section boundaries, aim and
-firing, crouch height, both legs through takeoff and landing, the automatic
-jump-duck and midair crouch body-origin continuity, mesh render layers, and relocation on a
-teleport revision. `tests/portal_render.rs` checks all recursive cameras include
-the body while the main and screen-copy views exclude it.
+Grounded body origin now follows interpolated collision feet. Airborne poses keep
+the eye-height reference from takeoff, so a crouched jump does not replace 28 with
+64 and sink the rig by 36 units. Portal revisions reset that reference. A support
+probe prevents an airborne hull adjustment from pushing the visible body below
+solid ground. Probes use the controller's carved collision brushes: a linked
+floor opening is not treated as solid ground.
 
-`tests/fixtures/player-body.script` places perpendicular portals, then crouches,
-jumps, fires and walks through a portal for graphical checks. Screenshots are
-runtime artifacts outside the repository.
+Each foot has a sole and heel. The toe bases are mirrored in the installed model,
+so the two boot orientations differ. A two-bone leg solve preserves segment
+lengths while fitting a low or planted sole to its support surface. This is a
+capsule-rendering adaptation, not Source's full IK solver, foot locking, compressed
+IK error tracks or terrain-slope alignment. Ground probes are per foot and respect
+portal openings.
 
-### Seeded regression testing
+The movement audio keeps Portal's existing 400/300 ms timer, plus 100 ms while
+crouched. Each emitted walking footstep records its side, time and interval. The
+visual gait follows those events. Each directional clip is phase-mapped separately
+before grid blending: its contact marker is the descending toe entry into the
+three-unit support band after the swing peak. Short contact constraints keep the
+sounding foot supported during stance transitions. These synchronization rules
+are deliberate adaptations; the installed sequences contain no footstep events.
 
-`tests/body_fuzz.rs` runs 128 seeds by default. Each seed drives 600 movement and
-animation steps through wall-to-wall, floor-to-wall or ceiling-to-floor portals,
-with randomized jumping, crouching, aim, movement, fire and render time steps
-from 1/240 second to 0.2 seconds. Assertions check chamber containment, bounded
-stance-height changes, valid camera/bone transforms and plausible bone lengths.
-A second test samples 300 random sequence/grid/cycle combinations per seed,
-including clamped values outside the authored ranges. Missing game data fails
-the tests rather than skipping them.
+The earlier extra speed/ground-speed playback multiplier was removed. Helper
+`0x250740` exists, but its use by the inspected Portal update path was not
+established. `0x2572d0` writes playback 1 in an ordinary local-draw branch;
+that branch alone does not prove the cadence of first-person portal views.
+The authored movement blend scaling at `0x255f20` remains in use.
 
-Replay a seed or run a larger corpus:
+The capsule proportions and head remain stylized. Full Source IK, event-latched
+jump/airwalk state, gesture-slot history, arbitrary included-model remapping and
+external animation blocks remain outside this implementation. Installed poses and
+attachments are decoded; this is not a claim of a complete 1:1 Source renderer.
+
+## Regression coverage
+
+Tests cover actual boot mesh contact, crouched takeoff/landing, both directional
+feet against real audio timers, stop/start and stance changes, and first-person
+shadow components. Portal tests exercise real scheduled floor-to-wall,
+floor-to-floor and floor-to-ceiling traversal at 240/60 Hz and 45 ms frames,
+standing/crouched, with 150/700-unit initial fall speeds. They check both original
+and linked-copy camera layers in the same frame as movement.
+
+Split-body tests cover complementary planes, original bias boundaries, every body
+and held-gun mesh, shared pose transforms, and clearing stale clipping. The GPU
+pixel test renders geometry behind the clipped body and checks both colour and
+depth clipping in either direction; finite matrices alone cannot prove this.
+
+The seeded movement corpus uses a real 15 ms simulation accumulator with render
+steps from 240 Hz through 200 ms hitches. Five scenarios cover wall pairs,
+floor/wall, ceiling/floor, floor/ceiling and floor/floor. Assertions include
+portal-aware sole/support clearance, chamber containment and valid bone transforms.
+A separate corpus seeks random animation sections, grids and cycles. Missing game
+data or a failed GPU renderer is a hard failure.
 
 ```sh
-BODY_FUZZ_SEED=26 BODY_FUZZ_COUNT=1 cargo test --test body_fuzz -- --nocapture
-BODY_FUZZ_COUNT=2048 cargo test --test body_fuzz -- --nocapture
+BODY_FUZZ_SEED=26 BODY_FUZZ_COUNT=1 cargo test -j 2 --test body_fuzz -- --test-threads=1 --nocapture
+BODY_FUZZ_COUNT=2048 cargo test -j 2 --test body_fuzz -- --test-threads=1 --nocapture
 ```
 
-The initial wall-only seed 1 reproduced a 36-unit rig pop when pressing crouch
-in midair. Expanded seed 26 reproduced the missed unduck crossing described
-above. Both were reproduced before fixes and have focused regression tests in
-`tests/body.rs` and `tests/walker.rs`. Bind-pose bone lengths were initially
-checked too strictly: valid authored tracks alter translation, so the fuzz
-check uses a broad collapse/stretch bound rather than claiming rigid lengths.
+The 2,048-seed run passed with crossings `[497, 506, 597, 419, 610]` across those
+five scenarios and 20,369 takeoffs, plus 614,400 clip samples. The earlier v0.8
+finite-transform fuzz checks missed visible defects; these results establish the
+covered invariants, not absence of every possible regression.
 
-The pre-release corpus of 2,048 seeds passed 1,228,800 movement/animation steps
-and 614,400 clip samples. It exercised 802 wall-pair crossings, 814 floor/wall
-crossings and 1,007 ceiling/floor crossings, with 21,106 takeoffs. These are
-regression checks for the covered invariants, not proof of exact Source fidelity.
+`tests/fixtures/player-floor-body.script` exercises an open floor entry, reverse
+crossing and crouched jump in the rendered game. `player-body.script` exercises
+wall views, walking, firing and stance changes. Runtime screenshots remain outside
+the repository. The headless app exits successfully; Gamescope still reports a
+shutdown crash after the app exits, so wrapper teardown is not a clean pass.
 
-Four focused mutation checks also failed as expected: choosing the wrong final
-animation section, advancing a new clip on its first frame, snapping stance
-height, and capturing the portal sweep after duck processing. All four failures
-were assertion failures in the relevant tests, not compilation failures.
-
-The v0.8.0 release build completed the scripted portal/crouch/jump/fire/crossing
-run with application exit 0. Captures show the rig and held gun in the recursive
-views. The headless Gamescope wrapper crashed during shutdown after the app
-exited; this is a harness limitation, not a clean wrapper teardown. These checks
-do not establish pixel-identical animation or full Source foot placement.
+Fourteen targeted mutation checks were caught by assertion failures, including
+wrong clip biases, camera gates, shadow participation, gait timing, planted-foot
+constraints and disabled GPU colour/depth clipping. No compilation failure or
+timeout was counted as a successful detection.

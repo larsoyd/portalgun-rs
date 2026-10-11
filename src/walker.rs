@@ -652,6 +652,20 @@ fn direction(w: [f32; 2]) -> (Vec3, f32) {
 }
 
 /// Subtract each linked opening as four convex regions outside its right/up edges.
+pub fn body_support(at: Vec3, chamber: &Chamber, linked: Option<&[Portal; 2]>) -> Option<f32> {
+    let trace = collision::trace_brushes(
+        [at[0], at[1], at[2] + GROUND_REACH],
+        [at[0], at[1], at[2] - HEIGHT],
+        [0.0; 3],
+        [0.0; 3],
+        &solids(chamber, linked),
+    );
+    trace
+        .block
+        .filter(|_| trace.normal[2] > 0.7)
+        .map(|i| chamber.blocks[i].max[2])
+}
+
 fn solids(chamber: &Chamber, linked: Option<&[Portal; 2]>) -> Vec<(usize, Vec<collision::Plane>)> {
     chamber
         .blocks

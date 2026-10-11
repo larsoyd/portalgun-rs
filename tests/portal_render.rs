@@ -151,3 +151,239 @@ fn particle_view_layers_are_isolated_for_main_recursive_and_screen_copy_views() 
         }
     }
 }
+
+#[test]
+fn crossing_the_camera_plane_hides_only_the_first_recursive_body_view() {
+    use bevy::camera::visibility::RenderLayers;
+    use portalgun::body::BODY_LAYER;
+    use portalgun::effects::ParticleView;
+    use portalgun::visual::VisualHistory;
+    use portalgun::walker::Walker;
+    let home = std::env::var("HOME").unwrap();
+    let install = Install::open(&root(None, None, Path::new(&home))).unwrap();
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        TransformPlugin,
+        WindowPlugin::default(),
+    ))
+    .init_asset::<Image>()
+    .init_asset::<Mesh>()
+    .init_asset::<Shader>()
+    .init_resource::<ManualTextureViews>()
+    .insert_resource(Files(install.search))
+    .add_plugins((
+        CameraPlugin,
+        FacesPlugin,
+        portalgun::bodyportal::BodyPortalPlugin,
+    ));
+    let main = app
+        .world_mut()
+        .spawn((Camera3d::default(), PlayerCamera, Msaa::Off))
+        .id();
+    for normal in [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 0.0, -1.0]] {
+        let up = if normal[0] == 1.0 {
+            [0.0, 0.0, 1.0]
+        } else {
+            [1.0, 0.0, 0.0]
+        };
+        let from = Portal::new([0.0; 3], normal, up, (32.0, 54.0));
+        let to = Portal::new(
+            [384.0, 0.0, 64.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        );
+        for ducked in [false, true] {
+            for distance in [2.0, 0.001, 0.0, -0.001, -2.0, 2.0] {
+                let mut player = Walker::at([0.0; 3]);
+                player.duck.ducked = ducked;
+                player.duck.eye = if ducked { 28.0 } else { 64.0 };
+                let mut visual = VisualHistory::new(&player).sample(&player, 0.0);
+                visual.pose.eye = Vec3::from(normal) * distance;
+                visual.pose.centre =
+                    visual.pose.eye - Vec3::Z * (player.duck.eye - visual.pose.half.z);
+                {
+                    let mut portals = app.world_mut().resource_mut::<Portals>();
+                    portals.place(Colour::Blue, from);
+                    portals.place(Colour::Orange, to);
+                }
+                *app.world_mut().get_mut::<Transform>(main).unwrap() =
+                    visual.portal_camera(Some([from, to]));
+                app.insert_resource(visual);
+                app.update();
+                let world = app.world_mut();
+                for (view, layers) in world.query::<(&ParticleView, &RenderLayers)>().iter(world) {
+                    let expected = match view.0 {
+                        35 | 36 => distance >= 0.0,
+                        37 | 38 => true,
+                        _ => false,
+                    };
+                    assert_eq!(
+                        layers.intersects(&RenderLayers::layer(BODY_LAYER)),
+                        expected,
+                        "normal={normal:?} ducked={ducked} distance={distance} view={}",
+                        view.0
+                    );
+                    let ghost = match view.0 {
+                        32 | 33 => distance >= 0.0,
+                        35 | 36 => distance < 0.0,
+                        _ => true,
+                    };
+                    assert_eq!(
+                        layers.intersects(&RenderLayers::layer(portalgun::bodyportal::GHOST_LAYER)),
+                        ghost
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn falling_through_floor_portals_updates_body_visibility_in_the_same_frame() {
+    use bevy::camera::visibility::RenderLayers;
+    use bevy::input::InputPlugin;
+    use bevy::time::TimeUpdateStrategy;
+    use portalgun::body::BODY_LAYER;
+    use portalgun::chamber::Chamber;
+    use portalgun::effects::ParticleView;
+    use portalgun::player::{MovementPlugin, Player};
+    use portalgun::scene::Level;
+    use portalgun::visual::{VisualHistory, VisualPlayer};
+    use portalgun::walker::Walker;
+    use std::time::Duration;
+    let home = std::env::var("HOME").unwrap();
+    let install = Install::open(&root(None, None, Path::new(&home))).unwrap();
+    let chamber = Chamber::test_chamber(&install.search).unwrap();
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        TransformPlugin,
+        WindowPlugin::default(),
+        InputPlugin,
+    ))
+    .init_asset::<Image>()
+    .init_asset::<Mesh>()
+    .init_asset::<Shader>()
+    .init_resource::<ManualTextureViews>()
+    .insert_resource(Files(install.search))
+    .insert_resource(Level(chamber))
+    .add_plugins((
+        CameraPlugin,
+        FacesPlugin,
+        MovementPlugin,
+        portalgun::bodyportal::BodyPortalPlugin,
+    ));
+    let main = app
+        .world_mut()
+        .spawn((Camera3d::default(), PlayerCamera, Msaa::Off))
+        .id();
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO));
+    app.update();
+    let floor = Portal::new(
+        [0.0, -120.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0],
+        (32.0, 54.0),
+    );
+    let exits = [
+        Portal::new(
+            [-384.0, -120.0, 54.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        ),
+        Portal::new(
+            [-250.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 1.0, 0.0],
+            (32.0, 54.0),
+        ),
+        Portal::new(
+            [-250.0, 0.0, 384.0],
+            [0.0, 0.0, -1.0],
+            [0.0, 1.0, 0.0],
+            (32.0, 54.0),
+        ),
+    ];
+    let mut hidden_frames = [0; 3];
+    let mut teleports = [0; 3];
+    for (exit, to) in exits.into_iter().enumerate() {
+        for crouch in [false, true] {
+            for fall in [150.0, 700.0] {
+                for dt in [1.0 / 240.0, 1.0 / 60.0, 0.045] {
+                    let mut player = Walker::at([0.0, -120.0, 80.0]);
+                    player.velocity[2] = -fall;
+                    player.pitch = 85.0;
+                    player.duck.ducked = crouch;
+                    player.duck.eye = if crouch { 28.0 } else { 64.0 };
+                    let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+                    if crouch {
+                        keys.press(KeyCode::ControlLeft);
+                    } else {
+                        keys.release(KeyCode::ControlLeft);
+                    }
+                    app.insert_resource(VisualHistory::new(&player));
+                    app.insert_resource(Player(player));
+                    {
+                        let mut portals = app.world_mut().resource_mut::<Portals>();
+                        portals.place(Colour::Blue, floor);
+                        portals.place(Colour::Orange, to);
+                    }
+                    let mut saw_crossing = false;
+                    for _ in 0..(0.8 / dt) as usize {
+                        app.insert_resource(TimeUpdateStrategy::ManualDuration(
+                            Duration::from_secs_f64(dt),
+                        ));
+                        app.update();
+                        let world = app.world_mut();
+                        let visual = *world.resource::<VisualPlayer>();
+                        saw_crossing |= visual.revision > 0;
+                        let camera = world.get::<Transform>(main).unwrap();
+                        let transformed = !camera
+                            .translation
+                            .abs_diff_eq(visual.camera().translation, 0.0001);
+                        hidden_frames[exit] += usize::from(transformed);
+                        for (view, layers) in
+                            world.query::<(&ParticleView, &RenderLayers)>().iter(world)
+                        {
+                            let visible = layers.intersects(&RenderLayers::layer(BODY_LAYER));
+                            let ghost = layers.intersects(&RenderLayers::layer(
+                                portalgun::bodyportal::GHOST_LAYER,
+                            ));
+                            assert_eq!(
+                                ghost,
+                                match view.0 {
+                                    32 | 33 => !transformed,
+                                    35 | 36 => transformed,
+                                    _ => true,
+                                }
+                            );
+                            match view.0 {
+                                35 | 36 => assert_eq!(
+                                    visible, !transformed,
+                                    "exit={exit} crouch={crouch} fall={fall} dt={dt}"
+                                ),
+                                37 | 38 => assert!(visible),
+                                _ => assert!(!visible),
+                            }
+                        }
+                    }
+                    assert!(
+                        saw_crossing,
+                        "no teleport exit={exit} crouch={crouch} fall={fall} dt={dt}"
+                    );
+                    teleports[exit] += 1;
+                }
+            }
+        }
+    }
+    assert!(
+        hidden_frames[2] > 0,
+        "ceiling exit never transformed the camera: {hidden_frames:?}"
+    );
+    eprintln!("floor crossings={teleports:?} transformed camera frames={hidden_frames:?}");
+}

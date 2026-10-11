@@ -2,6 +2,7 @@ use bevy::asset::RenderAssetUsages;
 use bevy::camera::visibility::{NoFrustumCulling, RenderLayers};
 use bevy::camera::ClearColorConfig;
 use bevy::image::{ImageSampler, ImageSamplerDescriptor};
+use bevy::light::{NotShadowCaster, NotShadowReceiver};
 use bevy::mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes};
 use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 use bevy::prelude::*;
@@ -268,6 +269,9 @@ fn spawn_view(
                 joints: joints.clone(),
             },
             NoFrustumCulling,
+            // Translated from 0x21f390 and 0x21f3b0 (decompiled, client.so).
+            NotShadowCaster,
+            NotShadowReceiver,
             RenderLayers::layer(VIEW_LAYER),
             ChildOf(root),
         ));

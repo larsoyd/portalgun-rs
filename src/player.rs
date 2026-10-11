@@ -85,6 +85,7 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MovementPlugin)
+            .init_resource::<crate::bodyanim::Gait>()
             .add_systems(Startup, (spawn_camera, grab_cursor, read_footing))
             .add_systems(FixedUpdate, walk.after(simulate));
     }
@@ -202,6 +203,7 @@ fn walk(
     mut audio: ResMut<Assets<AudioSource>>,
     mut logged: Local<f32>,
     footing: Option<ResMut<Footing>>,
+    mut gait: ResMut<crate::bodyanim::Gait>,
 ) {
     let Some(mut footing) = footing else { return };
     if time.elapsed_secs() >= *logged + WALK_LOG {
@@ -252,6 +254,11 @@ fn walk(
         surface.material,
         player.duck.ducked,
     ) {
+        gait.0 = Some(crate::bodyanim::Footfall {
+            left: s.left,
+            at: time.elapsed_secs(),
+            interval: footing.steps.time / 1000.0,
+        });
         heard("step", s);
     }
     if let Some((pitch, volume)) = landing.and_then(|l| l.recover) {
