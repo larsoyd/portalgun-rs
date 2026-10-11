@@ -357,8 +357,8 @@ impl BodyAnimation {
             self.goal_yaw = eye_yaw;
             self.revision = visual.revision;
         }
-        // Translated from 0x256460 (decompiled, client.so).
-        if visual.pose.velocity.length_squared() > 1.0 {
+        // Translated from 0x256460 (decompiled, client.so), the bound is the float after 1 at 0x7f7878
+        if visual.pose.velocity.length_squared() > 1.0 + f32::EPSILON {
             self.goal_yaw = eye_yaw;
         } else {
             let difference = angle(self.goal_yaw - eye_yaw);

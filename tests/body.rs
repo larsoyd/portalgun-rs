@@ -674,3 +674,20 @@ fn the_crouch_fire_gesture_needs_a_finished_duck() {
         );
     }
 }
+
+#[test]
+fn feet_yaw_holds_until_squared_speed_passes_the_next_float_above_one() {
+    let clips = clips();
+    let creep = [1.0, 0.0, f32::EPSILON.sqrt()];
+    assert_eq!(Vec3::from(creep).length_squared(), 1.0 + f32::EPSILON);
+    let mut animation = BodyAnimation::default();
+    let mut visual = still(creep);
+    animation
+        .pose(&clips, &visual, Stance::new(true, false), 0.0, 0.1)
+        .unwrap();
+    visual.angles.yaw = 30.0;
+    let held = animation
+        .pose(&clips, &visual, Stance::new(true, false), 0.1, 0.1)
+        .unwrap();
+    assert_eq!(held.yaw, 0.0, "a creep at the threshold is still standing");
+}
