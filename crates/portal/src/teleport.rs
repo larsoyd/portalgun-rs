@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 larsoyd
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-use crate::pair::{crossing, through_dir, Portal, Vec3};
+use crate::pair::{through_dir, Portal, Vec3};
 use crate::viewbob::{angle_vectors, rotate_about, vector_angles, Angles};
 
 pub const MIN_FLOOR_EXIT_PLAYER: f32 = 300.0;
@@ -11,9 +11,11 @@ pub const MAX_EXIT_SPEED: f32 = 1000.0;
 /// where a portal starts counting as a floor, the float 0.7071 rather than one over root two
 #[allow(clippy::approx_constant)]
 const FLOORISH: f32 = 0.7071;
+/// EntityIsInPortalHole's box, set up at 0x2ccab8 in server.so
 const HOLE_NEAR: f32 = 0.5;
 const HOLE_FAR: f32 = 500.0;
 const HOLE_SHRINK: f32 = 0.98;
+/// prop_portal's collision box reaches 64 out of the wall
 const TRIGGER_DEPTH: f32 = 64.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -42,9 +44,16 @@ pub fn exit_velocity(from: &Portal, to: &Portal, v: Vec3, who: Mover) -> Vec3 {
 }
 
 /// Whether a mover's centre is behind the plane with its box reaching into the hole
-/// behind the opening, or its move crossed the opening in one step.
-pub fn entered(p: &Portal, before: Vec3, centre: Vec3, half: Vec3) -> bool {
-    (p.local(centre)[0] < 0.0 && in_hole(p, centre, half)) || crossing(p, before, centre).is_some()
+/// behind the opening. There is no swept test.
+/// Translated from 0x9172b0 (decompiled, server.so)
+pub fn entered(p: &Portal, centre: Vec3, half: Vec3) -> bool {
+    p.local(centre)[0] < 0.0 && in_hole(p, centre, half)
+}
+
+/// A portal takes over a mover only while its centre is strictly in front.
+/// Translated from 0x91da70 and 0x91d3b0 (decompiled, server.so)
+pub fn in_front(p: &Portal, centre: Vec3) -> bool {
+    p.local(centre)[0] > 0.0
 }
 
 /// Whether a box reaches into the hole shape behind the opening, EntityIsInPortalHole.
@@ -68,12 +77,26 @@ pub fn in_hole(p: &Portal, centre: Vec3, half: Vec3) -> bool {
         )
 }
 
-/// Whether a mover is in the portal's trigger box, 64 Source units deep in front of it, with
-/// its centre in front: what makes the portal take it over.
+/// Whether this portal may take a mover held by another, by the nearer origin.
+/// Translated from 0x917680 (decompiled, server.so)
+pub fn nearer(centre: Vec3, this: &Portal, holder: &Portal) -> bool {
+    let d = |p: &Portal| {
+        let v = [0, 1, 2].map(|i| centre[i] - p.origin[i]);
+        v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
+    };
+    d(this) < d(holder)
+}
+
+/// Whether a portal keeps a mover leaving its box: ducked, behind a ceiling portal's plane.
+/// Translated from 0x91dc20 (decompiled, server.so)
+pub fn keeps_leaving(p: &Portal, centre: Vec3, in_duck_jump: bool) -> bool {
+    p.forward[2] < -FLOORISH && p.local(centre)[0] < 0.0 && in_duck_jump
+}
+
+/// Whether a mover's box meets the portal's own box, 64 deep in front of the opening.
 pub fn touching(p: &Portal, centre: Vec3, half: Vec3) -> bool {
     let l = p.local(centre);
-    l[0] >= 0.0
-        && overlaps(l[0], reach(half, p.forward), 0.0, TRIGGER_DEPTH)
+    overlaps(l[0], reach(half, p.forward), 0.0, TRIGGER_DEPTH)
         && overlaps(l[1], reach(half, p.right), -p.half.0, p.half.0)
         && overlaps(l[2], reach(half, p.up), -p.half.1, p.half.1)
 }

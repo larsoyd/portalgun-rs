@@ -21,6 +21,7 @@ pub mod run;
 pub mod scene;
 pub mod script;
 pub mod settings;
+pub mod simulator;
 pub mod sound;
 pub mod texture;
 pub mod units;

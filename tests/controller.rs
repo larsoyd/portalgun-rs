@@ -235,7 +235,7 @@ fn collision_skin_selects_the_first_plane_again_at_a_corner() {
     assert_eq!(tr.normal, [-1.0, 0.0, 0.0]);
 }
 #[test]
-fn floor_to_wall_teleport_forces_a_duck_and_recovers_when_clear() {
+fn floor_to_wall_teleport_forces_a_duck_for_one_move_and_recovers_when_clear() {
     use portal::pair::Portal;
     let c = floor();
     let pair = [
@@ -258,39 +258,21 @@ fn floor_to_wall_teleport_forces_a_duck_and_recovers_when_clear() {
     assert!(crossed);
     assert_eq!(w.height(), 36.0);
     assert!(w.duck.in_duck_jump);
+    assert!(
+        (w.feet[2] - 180.0).abs() < 1e-3,
+        "the centre moved 16 down before the carry lands the feet 20 under the exit: {:?}",
+        w.feet
+    );
     let velocity = w.velocity[0];
     w.step(&Input::default(), DT, &c, Some(pair));
-    assert_eq!(w.height(), 72.0);
-    assert_eq!(w.velocity[0], velocity);
-}
-
-#[test]
-fn a_fast_crossing_sweeps_the_remaining_motion_against_exit_geometry() {
-    use portal::pair::Portal;
-    let c = Chamber {
-        blocks: vec![block([225.0, -100.0, 0.0], [226.0, 100.0, 300.0])],
-    };
-    let pair = [
-        Portal::new(
-            [0.0, 0.0, 100.0],
-            [-1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-            (32.0, 54.0),
-        ),
-        Portal::new(
-            [200.0, 0.0, 100.0],
-            [1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-            (32.0, 54.0),
-        ),
-    ];
-    let mut w = Walker::at([-20.0, 0.0, 64.0]);
-    w.velocity = [3500.0, 0.0, 0.0];
-    assert_eq!(w.step(&Input::default(), DT, &c, Some(pair)), Some(0));
-    assert!((w.feet[0] - 208.96875).abs() < 0.001, "{:?}", w.feet);
-    assert_eq!(w.velocity[0], 0.0);
+    assert_eq!(
+        w.height(),
+        36.0,
+        "the forced crouch button holds through the next move"
+    );
     w.step(&Input::default(), DT, &c, Some(pair));
-    assert!(w.feet[0] < 209.0);
+    assert_eq!(w.height(), 72.0, "then the duck jump stands up when clear");
+    assert_eq!(w.velocity[0], velocity);
 }
 
 #[test]
@@ -373,33 +355,6 @@ fn reversing_an_unfinished_duck_does_not_jump_the_eye_height() {
     }
     assert_eq!(w.height(), 72.0);
     assert_eq!(w.duck.eye, 64.0);
-}
-
-#[test]
-fn an_obstructed_exit_cannot_place_the_player_inside_a_solid() {
-    use portal::pair::Portal;
-    let c = Chamber {
-        blocks: vec![block([210.0, -100.0, 0.0], [220.0, 100.0, 300.0])],
-    };
-    let pair = [
-        Portal::new(
-            [0.0, 0.0, 100.0],
-            [-1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-            (32.0, 54.0),
-        ),
-        Portal::new(
-            [200.0, 0.0, 100.0],
-            [1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-            (32.0, 54.0),
-        ),
-    ];
-    let mut w = Walker::at([-20.0, 0.0, 64.0]);
-    w.velocity = [3500.0, 0.0, 0.0];
-    assert_eq!(w.step(&Input::default(), DT, &c, Some(pair)), None);
-    assert!(w.feet[0] < 0.0, "{:?}", w.feet);
-    assert_eq!(w.velocity[0], 0.0);
 }
 
 #[test]

@@ -283,8 +283,8 @@ fn a_walker_in_the_opening_cannot_slide_into_the_wall_beside_it() {
         assert_eq!(w.step(&strafe, 0.01, &c, Some(pair())), None);
     }
     assert!(
-        (w.feet[1] - (32.0 - HALF_WIDTH - 0.03125)).abs() < 1e-3,
-        "stopped by the side of the opening: {:?}",
+        (w.feet[1] - (32.1 - HALF_WIDTH - 0.03125)).abs() < 1e-3,
+        "stopped by the tube lining the opening: {:?}",
         w.feet
     );
     assert!((w.feet[0] - -380.0).abs() < 1e-3, "{:?}", w.feet);
@@ -367,6 +367,8 @@ fn unducking_across_a_floor_portal_plane_still_teleports() {
     let mut w = Walker::at([-250.0, 0.0, -15.0]);
     w.duck.ducked = true;
     w.duck.eye = 28.0;
+    // a hull already sunk into the opening belongs to that portal
+    w.owner = Some(0);
     assert!(w.centre()[2] > 0.0);
     assert_eq!(
         w.step(&Input::default(), 0.015, &c, Some([floor, ceiling])),

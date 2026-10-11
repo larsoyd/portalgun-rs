@@ -8,12 +8,14 @@ use portal::movement::{
 };
 use portal::pair::{crossing, through_point, Portal, Vec3};
 use portal::teleport::{
-    entered, exit_velocity, fix_roll, touching, view_through, Mover, Reorient, RollFix,
+    entered, exit_velocity, fix_roll, in_front, keeps_leaving, nearer, touching, view_through,
+    Mover, Reorient, RollFix,
 };
 use portal::viewbob::{angle_vectors, vector_angles, Angles};
 
 use crate::chamber::Chamber;
 use crate::collision::{self, Trace};
+use crate::simulator::Space;
 use portal::surfaces::Surface;
 
 /// Source's standing hull and eye height
@@ -30,6 +32,9 @@ const STEP: f32 = 18.0;
 const GROUND_REACH: f32 = 2.0;
 /// a walk slower than this stops dead
 const MIN_WALK: f32 = 1.0;
+/// mask 0x200400b, what TestPlayerPosition and FindClosestPassableSpace collide with
+const FCPS_TRIES: usize = 100;
+const FCPS_PENALTY: f32 = 100.0;
 
 #[derive(Default)]
 pub struct Input {
@@ -93,6 +98,15 @@ pub struct Walker {
     surface_friction: f32,
     surface: Surface,
     categorize_on_spawn: bool,
+    /// the portal whose simulator holds the player, m_hPortalEnvironment
+    pub owner: Option<usize>,
+    touching: [bool; 2],
+    /// IN_DUCK forced by a tilted teleport until the next move ends
+    forced_duck: bool,
+    stuck_count: usize,
+    stuck_time: f32,
+    clock: f32,
+    command: u64,
 }
 
 impl Walker {
@@ -117,6 +131,13 @@ impl Walker {
             surface_friction: 1.0,
             surface: Surface::default(),
             categorize_on_spawn: true,
+            owner: None,
+            touching: [false; 2],
+            forced_duck: false,
+            stuck_count: 0,
+            stuck_time: 0.0,
+            clock: 0.0,
+            command: 0,
         }
     }
 
@@ -181,8 +202,8 @@ impl Walker {
             (self.pitch + flip * dy * sensitivity * MOUSE_FACTOR).clamp(-PITCH_LIMIT, PITCH_LIMIT);
     }
 
-    /// One tick of FullWalkMove, then the portal touch.
-    /// Translated from 0x275d90 (decompiled, server.so)
+    /// One tick of PlayerMove and FullWalkMove, then the portal touches.
+    /// Translated from 0x27ab40 and 0x275d90 (decompiled, server.so)
     pub fn step(
         &mut self,
         input: &Input,
@@ -190,12 +211,20 @@ impl Walker {
         chamber: &Chamber,
         linked: Option<[Portal; 2]>,
     ) -> Option<usize> {
+        let space = Space::new(chamber, linked.as_ref());
+        let space = &space;
+        self.command += 1;
+        self.clock += dt;
         if self.categorize_on_spawn {
-            self.categorize(chamber, linked.as_ref());
+            self.categorize(space);
             self.categorize_on_spawn = false;
         }
         // DecayPunchAngle, through slot 0x38 at 0x273970 (disassembly, server.so)
         self.punch.decay(dt);
+        if self.stuck_check_due(dt) && self.check_stuck(space) {
+            self.forced_duck = false;
+            return self.touch_portals(space);
+        }
         if self.velocity[2] > 250.0 {
             self.grounded = false;
             self.ground = None;
@@ -211,9 +240,7 @@ impl Walker {
             fmove *= 1.0 / 3.0;
             smove *= 1.0 / 3.0;
         }
-        // Resizing the hull can carry its centre across a portal plane.
-        let before = self.centre();
-        self.update_duck(input.crouch, dt, chamber, linked.as_ref());
+        self.update_duck(input.crouch || self.forced_duck, dt, space);
         self.velocity[2] = start_gravity(self.velocity[2], dt);
         if input.jump_pressed {
             self.jump_held = false;
@@ -228,10 +255,10 @@ impl Walker {
         }
         self.velocity = check_velocity(self.velocity);
         match self.grounded {
-            true => self.walk_move(fmove, smove, max, dt, chamber, linked.as_ref()),
-            false => self.air_move(fmove, smove, max, dt, chamber, linked.as_ref()),
+            true => self.walk_move(fmove, smove, max, dt, space),
+            false => self.air_move(fmove, smove, max, dt, space),
         }
-        self.categorize(chamber, linked.as_ref());
+        self.categorize(space);
         self.velocity = check_velocity(self.velocity);
         self.velocity[2] = finish_gravity(self.velocity[2], dt);
         if self.grounded {
@@ -241,12 +268,9 @@ impl Walker {
             self.landed = Some(self.fall);
             self.fall = 0.0;
         }
-        let pair = linked?;
-        let i = (0..2)
-            .filter(|&i| touching(&pair[i], before, self.half()))
-            .find(|&i| entered(&pair[i], before, self.centre(), self.half()))?;
-        self.carry(&pair[i], &pair[1 - i], before, chamber, &pair)
-            .then_some(i)
+        // ProcessMovement unforces IN_DUCK after the move, 0x2ce200 (decompiled, server.so)
+        self.forced_duck = false;
+        self.touch_portals(space)
     }
 
     /// Translated from 0x2750e0 (decompiled, server.so)
@@ -286,7 +310,7 @@ impl Walker {
         self.duck.eye = 28.0 * q + EYE * (1.0 - q);
     }
 
-    fn finish_duck(&mut self, jumping: bool, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
+    fn finish_duck(&mut self, jumping: bool, space: &Space) {
         if self.duck.ducked {
             return;
         }
@@ -297,50 +321,34 @@ impl Walker {
             self.feet[2] += 36.0;
         }
         let original = self.feet;
-        if self.trace(original, original, chamber, linked).start_solid {
+        if self.trace(original, original, space).start_solid {
             for _ in 0..36 {
                 self.feet[2] += 1.0;
-                if !self
-                    .trace(self.feet, self.feet, chamber, linked)
-                    .start_solid
-                {
+                if !self.trace(self.feet, self.feet, space).start_solid {
                     break;
                 }
             }
-            if self
-                .trace(self.feet, self.feet, chamber, linked)
-                .start_solid
-            {
+            if self.trace(self.feet, self.feet, space).start_solid {
                 self.feet = original;
             }
         }
-        self.categorize(chamber, linked);
+        self.categorize(space);
     }
 
-    fn standing_trace(
-        &self,
-        to: Vec3,
-        chamber: &Chamber,
-        linked: Option<&[Portal; 2]>,
-        stationary: bool,
-    ) -> Trace {
-        collision::trace_brushes(
+    fn standing_trace(&self, to: Vec3, space: &Space, stationary: bool) -> Trace {
+        space.trace(
+            self.owner,
             if stationary { to } else { self.feet },
             to,
             [-HALF_WIDTH, -HALF_WIDTH, 0.0],
             [HALF_WIDTH, HALF_WIDTH, HEIGHT],
-            &solids(chamber, linked),
         )
     }
 
-    fn unduck_jump(&mut self, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
+    fn unduck_jump(&mut self, space: &Space) {
         let p = self.feet;
-        let tr = self.trace(p, [p[0], p[1], p[2] - 36.0], chamber, linked);
-        if tr.fraction >= 1.0
-            || self
-                .standing_trace(tr.end, chamber, linked, true)
-                .start_solid
-        {
+        let tr = self.trace(p, [p[0], p[1], p[2] - 36.0], space);
+        if tr.fraction >= 1.0 || self.standing_trace(tr.end, space, true).start_solid {
             return;
         }
         self.feet = tr.end;
@@ -351,17 +359,11 @@ impl Walker {
         self.duck.jump_timer = 0.0;
         self.duck.eye = 28.0 + 36.0 * tr.fraction;
         self.duck.eye_timer = 800.0 + 200.0 * (1.0 - tr.fraction);
-        self.categorize(chamber, linked);
+        self.categorize(space);
     }
 
     /// Translated from 0x27b6e0 and 0x27aa30 (disassembled, server.so).
-    fn update_duck(
-        &mut self,
-        held: bool,
-        dt: f32,
-        chamber: &Chamber,
-        linked: Option<&[Portal; 2]>,
-    ) {
+    fn update_duck(&mut self, held: bool, dt: f32, space: &Space) {
         for timer in [
             &mut self.duck.timer,
             &mut self.duck.jump_timer,
@@ -399,21 +401,21 @@ impl Walker {
             if self.duck.ducking && !jumping && !recovering {
                 let seconds = (1000.0 - self.duck.timer).max(0.0) * 0.001;
                 if seconds as f64 > 0.4 || in_duck || in_air {
-                    self.finish_duck(false, chamber, linked);
+                    self.finish_duck(false, space);
                 } else {
                     self.duck_eye(seconds * 2.5);
                 }
             }
             if jumping {
                 if !in_duck {
-                    self.finish_duck(true, chamber, linked);
+                    self.finish_duck(true, space);
                 } else if !held {
-                    self.unduck_jump(chamber, linked);
+                    self.unduck_jump(space);
                 }
             }
         } else {
             if self.duck.in_duck_jump {
-                self.unduck_jump(chamber, linked);
+                self.unduck_jump(space);
             }
             if recovering {
                 return;
@@ -429,7 +431,7 @@ impl Walker {
             if !self.grounded {
                 to[2] -= 36.0;
             }
-            let tr = self.standing_trace(to, chamber, linked, false);
+            let tr = self.standing_trace(to, space, false);
             if !tr.start_solid && tr.fraction == 1.0 {
                 if self.duck.ducking || self.duck.ducked {
                     let seconds = (1000.0 - self.duck.timer).max(0.0) * 0.001;
@@ -440,7 +442,7 @@ impl Walker {
                         self.duck.in_duck_jump = false;
                         self.duck.timer = 0.0;
                         self.duck.eye = EYE;
-                        self.categorize(chamber, linked);
+                        self.categorize(space);
                     } else {
                         self.duck_eye((1.0 - seconds as f64 * 5.0) as f32);
                         self.duck.ducking = true;
@@ -456,15 +458,7 @@ impl Walker {
     }
 
     /// Translated from 0x274230 (decompiled, server.so)
-    fn walk_move(
-        &mut self,
-        fmove: f32,
-        smove: f32,
-        max: f32,
-        dt: f32,
-        chamber: &Chamber,
-        linked: Option<&[Portal; 2]>,
-    ) {
+    fn walk_move(&mut self, fmove: f32, smove: f32, max: f32, dt: f32, space: &Space) {
         let (dir, speed) = direction(wish(self.yaw, fmove, smove));
         self.velocity[2] = 0.0;
         self.velocity = accelerate(
@@ -479,26 +473,18 @@ impl Walker {
             self.velocity = [0.0; 3];
             return;
         }
-        self.travel(dt, true, chamber, linked);
-        self.stay_on_ground(chamber, linked);
+        self.travel(dt, true, space);
+        self.stay_on_ground(space);
     }
 
     /// Translated from 0x2cf2a0 (decompiled, server.so)
-    fn air_move(
-        &mut self,
-        fmove: f32,
-        smove: f32,
-        max: f32,
-        dt: f32,
-        chamber: &Chamber,
-        linked: Option<&[Portal; 2]>,
-    ) {
+    fn air_move(&mut self, fmove: f32, smove: f32, max: f32, dt: f32, space: &Space) {
         let flat = [self.velocity[0], self.velocity[1]];
         let mut want = wish(self.yaw, fmove, smove);
         if flinging(flat) {
             want = fling_guard(flat, want);
         } else {
-            for p in linked.into_iter().flatten() {
+            for p in space.pair.iter().flatten() {
                 match funnel(self.velocity, want, self.feet, self.forward(), p) {
                     Funnel::Wish(w) => want = w,
                     Funnel::Stop => (self.velocity[0], self.velocity[1]) = (0.0, 0.0),
@@ -514,28 +500,22 @@ impl Walker {
             AIR_ACCELERATE * self.surface_friction,
             dt,
         );
-        self.travel(dt, false, chamber, linked);
+        self.travel(dt, false, space);
     }
 
-    fn trace(
-        &self,
-        from: Vec3,
-        to: Vec3,
-        chamber: &Chamber,
-        linked: Option<&[Portal; 2]>,
-    ) -> Trace {
-        collision::trace_brushes(
+    fn trace(&self, from: Vec3, to: Vec3, space: &Space) -> Trace {
+        space.trace(
+            self.owner,
             from,
             to,
             [-HALF_WIDTH, -HALF_WIDTH, 0.0],
             [HALF_WIDTH, HALF_WIDTH, self.height()],
-            &solids(chamber, linked),
         )
     }
 
-    fn travel(&mut self, dt: f32, walking: bool, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
+    fn travel(&mut self, dt: f32, walking: bool, space: &Space) {
         let start = self.feet;
-        let cast = |a, b| self.trace(a, b, chamber, linked);
+        let cast = |a, b| self.trace(a, b, space);
         let target = collision::add(start, collision::scale(self.velocity, dt));
         (self.feet, self.velocity) = match walking {
             true if cast(start, target).fraction == 1.0 => (target, self.velocity),
@@ -544,10 +524,10 @@ impl Walker {
         };
     }
 
-    fn stay_on_ground(&mut self, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
+    fn stay_on_ground(&mut self, space: &Space) {
         let p = self.feet;
-        let up = self.trace(p, [p[0], p[1], p[2] + 2.0], chamber, linked);
-        let down = self.trace(up.end, [p[0], p[1], p[2] - STEP], chamber, linked);
+        let up = self.trace(p, [p[0], p[1], p[2] + 2.0], space);
+        let down = self.trace(up.end, [p[0], p[1], p[2] - STEP], space);
         if down.fraction > 0.0
             && down.fraction < 1.0
             && !down.start_solid
@@ -558,9 +538,9 @@ impl Walker {
         }
     }
 
-    fn categorize(&mut self, chamber: &Chamber, linked: Option<&[Portal; 2]>) {
+    fn categorize(&mut self, space: &Space) {
         let p = self.feet;
-        let tr = self.trace(p, [p[0], p[1], p[2] - GROUND_REACH], chamber, linked);
+        let tr = self.trace(p, [p[0], p[1], p[2] - GROUND_REACH], space);
         self.grounded =
             !leaves_ground(self.velocity[2]) && tr.block.is_some() && standable(tr.normal[2]);
         self.ground = if self.grounded { tr.block } else { None };
@@ -596,62 +576,264 @@ impl Walker {
         [HALF_WIDTH, HALF_WIDTH, self.height() / 2.0]
     }
 
-    fn carry(
-        &mut self,
-        from: &Portal,
-        to: &Portal,
-        before: Vec3,
-        chamber: &Chamber,
-        linked: &[Portal; 2],
-    ) -> bool {
-        let old_centre = self.centre();
-        let old_duck = self.duck.clone();
-        let mut centre = old_centre;
-        let force = from.forward[2].abs() > 0.0
+    /// StartTouch, Touch and EndTouch of both portals on the player's box.
+    fn touch_portals(&mut self, space: &Space) -> Option<usize> {
+        let pair = space.pair?;
+        for i in 0..2 {
+            let now = touching(&pair[i], self.centre(), self.half());
+            let was = std::mem::replace(&mut self.touching[i], now);
+            if now && !was {
+                self.start_touch(i, &pair);
+            }
+            let crossed = match (was, now) {
+                (_, true) => self.touch(i, &pair, space),
+                (true, false) => self.end_touch(i, &pair),
+                (false, false) => false,
+            };
+            if crossed {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    fn closer(&self, i: usize, pair: &[Portal; 2]) -> bool {
+        match self.owner {
+            Some(o) if o != i => nearer(self.centre(), &pair[i], &pair[o]),
+            _ => true,
+        }
+    }
+
+    /// Translated from 0x91da70 (decompiled, server.so)
+    fn start_touch(&mut self, i: usize, pair: &[Portal; 2]) {
+        if in_front(&pair[i], self.centre()) && self.closer(i, pair) {
+            self.owner = Some(i);
+        }
+    }
+
+    /// Translated from 0x91d3b0 (decompiled, server.so)
+    fn touch(&mut self, i: usize, pair: &[Portal; 2], space: &Space) -> bool {
+        if self.owner != Some(i) {
+            if !self.closer(i, pair) {
+                return false;
+            }
+            let in_solid = collision::trace_brushes(
+                self.feet,
+                self.feet,
+                [-HALF_WIDTH, -HALF_WIDTH, 0.0],
+                [HALF_WIDTH, HALF_WIDTH, self.height()],
+                &space.world,
+            )
+            .start_solid;
+            if in_solid || in_front(&pair[i], self.centre()) {
+                self.owner = Some(i);
+            }
+        }
+        self.teleport_if_entered(i, pair)
+    }
+
+    /// A player who fell out of a ceiling portal keeps it while ducked behind its plane.
+    /// Translated from 0x91dc20 (decompiled, server.so)
+    fn end_touch(&mut self, i: usize, pair: &[Portal; 2]) -> bool {
+        if self.teleport_if_entered(i, pair) {
+            return true;
+        }
+        let hold = keeps_leaving(&pair[i], self.centre(), self.duck.in_duck_jump);
+        if self.owner == Some(i) && !hold {
+            self.owner = None;
+        }
+        false
+    }
+
+    fn teleport_if_entered(&mut self, i: usize, pair: &[Portal; 2]) -> bool {
+        let entering = self.owner == Some(i) && entered(&pair[i], self.centre(), self.half());
+        if entering {
+            self.teleport(&pair[i], &pair[1 - i]);
+            self.owner = Some(1 - i);
+        }
+        entering
+    }
+
+    /// TeleportTouchingEntity for the player: no trace, a blocked exit is left to CheckStuck.
+    /// Translated from 0x912ff0 (decompiled, server.so)
+    fn teleport(&mut self, from: &Portal, to: &Portal) {
+        let mut centre = self.centre();
+        let tilted = from.forward[2].abs() > 0.0
             && ((from.forward[2].abs() - 1.0).abs() >= 0.01
                 || (to.forward[2].abs() - 1.0).abs() >= 0.01);
-        if force && !self.duck.ducked {
+        if tilted && !self.duck.ducked {
+            // ForceDuckThisFrame, 0x908c60 (decompiled, server.so)
             self.duck.ducked = true;
             self.duck.in_duck_jump = true;
+            self.forced_duck = true;
             centre[2] += if from.forward[2] > 0.0 { -16.0 } else { 16.0 };
         }
         let offset = collision::sub(self.feet, centre);
-        let target = collision::add(through_point(from, to, centre), offset);
-        let entry = crossing(from, before, old_centre).map_or(old_centre, |fraction| {
-            collision::add(
-                before,
-                collision::scale(collision::sub(old_centre, before), fraction),
-            )
-        });
-        let adjusted = collision::add(entry, collision::sub(centre, old_centre));
-        let exit = collision::add(through_point(from, to, adjusted), offset);
-        if self.trace(exit, exit, chamber, Some(linked)).start_solid {
-            self.duck = old_duck;
-            self.feet = collision::add(
-                collision::add(entry, collision::sub(self.feet, old_centre)),
-                collision::scale(from.forward, 0.03125),
-            );
-            self.velocity = collision::clip(self.velocity, from.forward);
-            return false;
-        }
+        self.feet = collision::add(through_point(from, to, centre), offset);
         self.velocity = exit_velocity(from, to, self.velocity, Mover::Player);
         self.grounded = false;
         self.ground = None;
-        let mut normals = Vec::new();
-        let (end, _) = collision::slide(exit, collision::sub(target, exit), 1.0, true, |a, b| {
-            let tr = self.trace(a, b, chamber, Some(linked));
-            if tr.fraction < 1.0 {
-                normals.push(tr.normal);
-            }
-            tr
-        });
-        self.feet = end;
-        for normal in normals {
-            self.velocity = collision::clip(self.velocity, normal);
-        }
         self.turn(from, to);
+    }
+
+    /// CheckInterval for STUCK: 0.2 s of ticks in single player, every tick once stuck.
+    /// Translated from 0x273240 and 0x26d7c0 (decompiled, server.so)
+    fn stuck_check_due(&self, dt: f32) -> bool {
+        let interval = match self.stuck_count {
+            0 => ((0.2 / dt) as u64).max(1),
+            _ => 1,
+        };
+        (self.command + 1).is_multiple_of(interval)
+    }
+
+    /// The portal CheckStuck, which runs FindClosestPassableSpace inside a portal's space.
+    /// Translated from 0x2ce4c0 (decompiled, server.so)
+    fn check_stuck(&mut self, space: &Space) -> bool {
+        if !self.base_check_stuck(space) {
+            return false;
+        }
+        if let Some(push) = self.owner.zip(space.pair).map(|(i, pair)| pair[i].forward) {
+            let old = self.feet;
+            if !self.find_closest_passable_space(space, push) {
+                eprintln!("[walker] fcps=failed feet={:?} push={push:?}", self.feet);
+            }
+            if collision::dot(collision::sub(self.feet, old), push) < 0.0 {
+                self.feet = collision::add(old, collision::scale(push, 5.0));
+            }
+        }
+        self.base_check_stuck(space)
+    }
+
+    /// Translated from 0x26dbd0 (decompiled, server.so)
+    fn base_check_stuck(&mut self, space: &Space) -> bool {
+        let stuck_at = |w: &Self, at: Vec3| w.trace(at, at, space).start_solid;
+        if !stuck_at(self, self.feet) {
+            self.stuck_count = 0;
+            return false;
+        }
+        if (self.stuck_time as f64) < self.clock as f64 - 0.05 {
+            self.stuck_time = self.clock;
+            let test = collision::add(self.feet, stuck_offset(self.stuck_count % 54));
+            self.stuck_count += 1;
+            if !stuck_at(self, test) {
+                self.stuck_count = 0;
+                self.feet = test;
+                return false;
+            }
+        }
         true
     }
+
+    /// Steps the box toward open space by weighing traces between its corners.
+    /// Translated from 0x2d7da0 (decompiled, server.so)
+    fn find_closest_passable_space(&mut self, space: &Space, push: Vec3) -> bool {
+        let world = &space.world;
+        let (mins, maxs) = (
+            collision::add(self.feet, [-HALF_WIDTH, -HALF_WIDTH, 0.0]),
+            collision::add(self.feet, [HALF_WIDTH, HALF_WIDTH, self.height()]),
+        );
+        let c = [0, 1, 2].map(|i| (mins[i] + maxs[i]) * 0.5);
+        let ext = collision::sub(maxs, c);
+        let k = ext.map(|e| e * 0.00990099);
+        let mut pos = [c[0], c[1], c[2] + 0.001];
+        let mut high = collision::sub(ext, k);
+        let mut low = collision::scale(high, -1.0);
+        let mut grow = k;
+        let cast = |a: Vec3, b: Vec3, half: Vec3| {
+            collision::trace_brushes(a, b, collision::scale(half, -1.0), half, world)
+        };
+        for _ in 0..FCPS_TRIES {
+            let t = cast(pos, c, ext);
+            if !t.start_solid {
+                self.feet = collision::add(collision::sub(t.end, c), self.feet);
+                return true;
+            }
+            let corners: [Vec3; 8] = std::array::from_fn(|i| {
+                [
+                    pos[0] + if i & 1 == 0 { low[0] } else { high[0] },
+                    pos[1] + if i & 2 == 0 { low[1] } else { high[1] },
+                    pos[2] + if i & 4 == 0 { low[2] } else { high[2] },
+                ]
+            });
+            let outside = corners.map(|p| world.iter().any(|(_, planes)| inside(planes, p)));
+            let mut weight = [0.0f32; 8];
+            for i in 0..7 {
+                for j in i + 1..8 {
+                    let delta = collision::sub(corners[j], corners[i]);
+                    let d = collision::dot(delta, delta).sqrt();
+                    let reach = |from: usize, to: usize, blocked: bool| match blocked {
+                        true => -FCPS_PENALTY,
+                        false => {
+                            let t = cast(corners[from], corners[to], grow);
+                            if t.start_solid {
+                                -FCPS_PENALTY
+                            } else {
+                                t.fraction * d
+                            }
+                        }
+                    };
+                    weight[i] += reach(i, j, outside[i]);
+                    weight[j] += reach(j, i, outside[j]);
+                }
+            }
+            let total: f32 = weight.iter().filter(|&&w| w > 0.0).sum();
+            let step = if total == 0.0 {
+                high = ext;
+                low = collision::scale(ext, -1.0);
+                grow = k;
+                push
+            } else {
+                let sum = (0..8)
+                    .filter(|&i| weight[i] > 0.0)
+                    .fold([0.0; 3], |acc, i| {
+                        collision::add(
+                            acc,
+                            collision::scale(collision::sub(corners[i], pos), weight[i]),
+                        )
+                    });
+                low = collision::sub(k, high);
+                high = collision::sub(high, k);
+                grow = collision::add(grow, k);
+                collision::scale(sum, 1.0 / total)
+            };
+            pos = collision::add(pos, step);
+        }
+        false
+    }
+}
+
+/// CreateStuckTable: small nudges on each axis and their corners, then big ones.
+/// Translated from 0x26d990 (decompiled, server.so)
+fn stuck_offset(n: usize) -> Vec3 {
+    let small = [-0.125, 0.0, 0.125];
+    let big = [-2.0, 0.0, 2.0];
+    let heights = [0.0, 1.0, 6.0];
+    let mut table: Vec<Vec3> = Vec::with_capacity(54);
+    table.extend(small.map(|z| [0.0, 0.0, z]));
+    table.extend(small.map(|y| [0.0, y, 0.0]));
+    table.extend(small.map(|x| [x, 0.0, 0.0]));
+    for x in [-0.125, 0.125] {
+        for y in [-0.125, 0.125] {
+            table.extend([-0.125, 0.125].map(|z| [x, y, z]));
+        }
+    }
+    table.extend(heights.map(|z| [0.0, 0.0, z]));
+    table.extend(big.map(|y| [0.0, y, 0.0]));
+    table.extend(big.map(|x| [x, 0.0, 0.0]));
+    for z in heights {
+        for x in big {
+            table.extend(big.map(|y| [x, y, z]));
+        }
+    }
+    table.push([0.0; 3]);
+    table[n]
+}
+
+/// PointOutsideWorld, read as a point inside some brush.
+fn inside(planes: &[collision::Plane], p: Vec3) -> bool {
+    planes
+        .iter()
+        .all(|pl| collision::dot(pl.normal, p) < pl.distance)
 }
 
 /// A wish split into its direction and speed.
@@ -663,57 +845,18 @@ fn direction(w: [f32; 2]) -> (Vec3, f32) {
     }
 }
 
-/// Subtract each linked opening as four convex regions outside its right/up edges.
+/// Ground under a foot for the foot placement, none over a portal's opening.
 pub fn body_support(at: Vec3, chamber: &Chamber, linked: Option<&[Portal; 2]>) -> Option<f32> {
-    let trace = collision::trace_brushes(
+    let (from, to) = (
         [at[0], at[1], at[2] + GROUND_REACH],
         [at[0], at[1], at[2] - HEIGHT],
-        [0.0; 3],
-        [0.0; 3],
-        &solids(chamber, linked),
     );
+    if linked.is_some_and(|pair| pair.iter().any(|p| crossing(p, from, to).is_some())) {
+        return None;
+    }
+    let trace = Space::new(chamber, None).trace(None, from, to, [0.0; 3], [0.0; 3]);
     trace
         .block
-        .filter(|_| trace.normal[2] > 0.7)
+        .filter(|_| trace.normal[2] > 0.7 && !trace.start_solid)
         .map(|i| chamber.blocks[i].max[2])
-}
-
-fn solids(chamber: &Chamber, linked: Option<&[Portal; 2]>) -> Vec<(usize, Vec<collision::Plane>)> {
-    chamber
-        .blocks
-        .iter()
-        .enumerate()
-        .flat_map(|(n, block)| {
-            let on = linked.into_iter().flatten().filter(|p| {
-                let q = [0, 1, 2].map(|i| p.origin[i] - p.forward[i]);
-                (0..3).all(|i| q[i] >= block.min[i] && q[i] <= block.max[i])
-            });
-            on.fold(
-                vec![collision::box_planes(block.min, block.max)],
-                |pieces, p| {
-                    pieces
-                        .into_iter()
-                        .flat_map(|planes| {
-                            [(p.right, p.half.0), (p.up, p.half.1)]
-                                .into_iter()
-                                .flat_map(move |(axis, half)| {
-                                    let planes = planes.clone();
-                                    [-1.0, 1.0].map(|sign| {
-                                        let normal = collision::scale(axis, sign);
-                                        let mut outside = planes.clone();
-                                        outside.push(collision::Plane {
-                                            normal,
-                                            distance: collision::dot(normal, p.origin) - half,
-                                        });
-                                        outside
-                                    })
-                                })
-                        })
-                        .collect::<Vec<_>>()
-                },
-            )
-            .into_iter()
-            .map(move |planes| (n, planes))
-        })
-        .collect()
 }

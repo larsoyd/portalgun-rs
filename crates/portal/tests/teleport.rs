@@ -4,8 +4,9 @@
 use portal::pair::Portal;
 use portal::placement::{HALF_HEIGHT, HALF_WIDTH};
 use portal::teleport::{
-    box_meets_portal, entered, exit_velocity, fix_roll, meets_opening, touching, view_through,
-    Mover, Reorient, RollFix, MAX_EXIT_SPEED, MIN_FLOOR_EXIT_PLAYER,
+    box_meets_portal, entered, exit_velocity, fix_roll, in_front, keeps_leaving, meets_opening,
+    nearer, touching, view_through, Mover, Reorient, RollFix, MAX_EXIT_SPEED,
+    MIN_FLOOR_EXIT_PLAYER,
 };
 use portal::viewbob::{angle_vectors, Angles};
 
@@ -82,68 +83,42 @@ fn speed_is_carried_and_capped() {
 #[test]
 fn a_centre_behind_the_plane_inside_the_hole_has_entered() {
     let p = wall();
-    assert!(entered(
-        &p,
-        [10.0, 0.0, 0.0],
-        [-2.0, 0.0, 0.0],
-        [20.0, 20.0, 60.0]
-    ));
+    let body = [20.0, 20.0, 60.0];
+    assert!(entered(&p, [-2.0, 0.0, 0.0], body));
+    assert!(!entered(&p, [2.0, 0.0, 0.0], body), "centre still in front");
+    assert!(!entered(&p, [0.0, 0.0, 0.0], body), "centre on the plane");
+    assert!(!entered(&p, [-2.0, 300.0, 0.0], body), "beside the opening");
     assert!(
-        !entered(&p, [10.0, 0.0, 0.0], [2.0, 0.0, 0.0], [20.0, 20.0, 60.0]),
-        "centre still in front"
-    );
-    assert!(
-        !entered(
-            &p,
-            [-3.0, 300.0, 0.0],
-            [-2.0, 300.0, 0.0],
-            [20.0, 20.0, 60.0]
-        ),
-        "beside the opening"
-    );
-    assert!(
-        entered(
-            &p,
-            [-3.0, HALF_WIDTH + 10.0, 0.0],
-            [-2.0, HALF_WIDTH + 10.0, 0.0],
-            [20.0, 20.0, 60.0]
-        ),
+        entered(&p, [-2.0, HALF_WIDTH + 10.0, 0.0], body),
         "body reaches into it"
     );
     assert!(
-        !entered(
-            &p,
-            [-3.0, 0.0, HALF_HEIGHT + 100.0],
-            [-2.0, 0.0, HALF_HEIGHT + 100.0],
-            [20.0, 20.0, 60.0]
-        ),
+        !entered(&p, [-2.0, 0.0, HALF_HEIGHT + 100.0], body),
         "above it"
     );
     assert!(
-        !entered(
-            &p,
-            [-1200.0, 0.0, 0.0],
-            [-1000.0, 0.0, 0.0],
-            [20.0, 20.0, 60.0]
-        ),
+        !entered(&p, [-1000.0, 0.0, 0.0], body),
         "far behind the wall"
     );
     assert!(
-        !entered(&p, [-0.05, 0.0, 0.0], [-0.1, 0.0, 0.0], [0.1, 0.1, 0.1]),
+        !entered(&p, [-0.1, 0.0, 0.0], [0.1, 0.1, 0.1]),
         "only grazing the plane"
     );
 }
 
 #[test]
-fn a_fast_mover_that_skips_the_hole_still_enters() {
+fn a_mover_that_skips_past_the_hole_in_one_step_has_not_entered() {
     let p = wall();
-    assert!(entered(&p, [400.0, 0.0, 0.0], [-900.0, 0.0, 0.0], [5.0; 3]));
-    assert!(!entered(
-        &p,
-        [400.0, 200.0, 0.0],
-        [-900.0, 200.0, 0.0],
-        [5.0; 3]
-    ));
+    assert!(!entered(&p, [-900.0, 0.0, 0.0], [5.0; 3]));
+    assert!(entered(&p, [-400.0, 0.0, 0.0], [5.0; 3]));
+}
+
+#[test]
+fn a_portal_claims_only_movers_whose_centre_is_strictly_in_front() {
+    let p = wall();
+    assert!(in_front(&p, [0.001, 0.0, 0.0]));
+    assert!(!in_front(&p, [0.0, 0.0, 0.0]));
+    assert!(!in_front(&p, [-0.001, 0.0, 0.0]));
 }
 
 #[test]
@@ -340,7 +315,7 @@ fn a_networked_pitch_reorientation_pitches_when_the_up_is_below_0_2() {
 }
 
 #[test]
-fn only_movers_in_front_within_the_portal_box_are_touching() {
+fn only_movers_whose_box_meets_the_portal_box_are_touching() {
     let p = wall();
     let body = [20.0, 20.0, 60.0];
     assert!(touching(&p, [30.0, 0.0, 0.0], body));
@@ -353,8 +328,12 @@ fn only_movers_in_front_within_the_portal_box_are_touching() {
         "beyond the trigger"
     );
     assert!(
-        !touching(&p, [-5.0, 0.0, 0.0], body),
-        "centre behind the plane"
+        touching(&p, [-5.0, 0.0, 0.0], body),
+        "the trigger box alone decides, a centre behind the plane still touches"
+    );
+    assert!(
+        !touching(&p, [-25.0, 0.0, 0.0], body),
+        "box behind the plane"
     );
     assert!(
         !touching(&p, [30.0, HALF_WIDTH + 30.0, 0.0], body),
@@ -447,4 +426,30 @@ fn a_box_meets_a_portal_only_where_it_straddles_its_two_triangles() {
         !box_meets_portal(&skew, at(47.72, 47.64, -58.44), half),
         "beside a skewed portal, separated only along an edge axis"
     );
+}
+
+#[test]
+fn a_portal_takes_a_held_mover_only_when_strictly_nearer() {
+    let a = wall();
+    let mut b = wall();
+    b.origin = [0.0, 100.0, 0.0];
+    assert!(nearer([0.0, 49.0, 0.0], &a, &b));
+    assert!(!nearer([0.0, 50.0, 0.0], &a, &b), "a tie keeps the holder");
+    assert!(!nearer([0.0, 51.0, 0.0], &a, &b));
+}
+
+#[test]
+#[allow(clippy::approx_constant)]
+fn only_a_ceiling_portal_keeps_a_ducked_mover_behind_its_plane() {
+    let ceiling = |z: f32| Portal::new([0.0; 3], [0.0, (1.0 - z * z).sqrt(), z], X, (32.0, 54.0));
+    let below = |p: &Portal| p.world([-1.0, 0.0, 0.0]);
+    let p = ceiling(-0.7072);
+    assert!(keeps_leaving(&p, below(&p), true));
+    assert!(!keeps_leaving(&p, below(&p), false), "not in a duck jump");
+    assert!(
+        !keeps_leaving(&p, p.world([0.0, 0.0, 0.0]), true),
+        "on the plane"
+    );
+    let p = ceiling(-0.7071);
+    assert!(!keeps_leaving(&p, below(&p), true), "not steep enough");
 }

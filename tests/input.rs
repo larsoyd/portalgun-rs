@@ -344,7 +344,7 @@ fn a_teleport_in_an_earlier_tick_of_the_frame_resets_visual_history() {
             .resource_mut::<Portals>()
             .place(colour, portal);
     }
-    app.world_mut().resource_mut::<Player>().0 = Walker::at([-5.0, 0.0, 64.0]);
+    app.world_mut().resource_mut::<Player>().0 = Walker::at([-25.0, 0.0, 64.0]);
     app.world_mut().resource_mut::<Player>().velocity = [1000.0, 0.0, 0.0];
     frame(&mut app, 0.045);
     let revision = app.world().resource::<VisualPlayer>().revision;
