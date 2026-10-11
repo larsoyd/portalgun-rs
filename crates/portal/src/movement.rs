@@ -3,25 +3,31 @@
 
 use crate::pair::{Portal, Vec3};
 
-/// sv_gravity, sv_friction, sv_stopspeed, sv_accelerate, sv_maxspeed, sv_maxvelocity defaults
+/// sv_gravity, sv_friction, sv_stopspeed, sv_accelerate, sv_maxspeed, sv_maxvelocity defaults,
+/// registered at 0xdf8c40, 0xdf86a0, 0xdf8be0, 0xdf8940, 0xdf89a0 and 0xdf85e0 in server.so
 pub const GRAVITY: f32 = 600.0;
 pub const FRICTION: f32 = 4.0;
 pub const STOP_SPEED: f32 = 100.0;
 pub const ACCELERATE: f32 = 10.0;
 pub const MAX_SPEED: f32 = 320.0;
 pub const MAX_VELOCITY: f32 = 3500.0;
-/// Portal's air move passes a literal instead of sv_airaccelerate
+/// Portal's air move passes a literal instead of sv_airaccelerate, at 0x2cf4fc in server.so
 pub const AIR_ACCELERATE: f32 = 15.0;
+/// 0xa81b78 in server.so
 pub const AIR_SPEED_CAP: f32 = 60.0;
 /// hl2_walkspeed, also measured on the pinned Portal player
 pub const WALK_SPEED: f32 = 150.0;
 /// cl_forwardspeed, cl_backspeed and cl_sidespeed
 pub const KEY_SPEED: f32 = 450.0;
+/// 0xa83c58 in server.so, used since g_bMovementOptimizations at 0xd6b1e8 is set
 pub const JUMP_SPEED: f32 = 160.0;
-/// above this upward speed the ground lets go
+/// above this upward speed the ground lets go, 0xa83c6c in server.so
 const NON_JUMP_VELOCITY: f32 = 140.0;
+/// compared squared, 90000 at 0xa8a2e0 in server.so
 const MIN_FLING_SPEED: f32 = 300.0;
+/// 0xa74744 in server.so
 const STOP_EPSILON: f32 = 0.1;
+/// 0xa74748 in server.so
 const JUMP_BOOST: f32 = 0.5;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

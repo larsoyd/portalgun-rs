@@ -18,7 +18,7 @@ use crate::collision::{self, Trace};
 use crate::simulator::Space;
 use portal::surfaces::Surface;
 
-/// Source's standing hull and eye height
+/// the hull and view table at 0xa84110 in server.so
 pub const HALF_WIDTH: f32 = 16.0;
 pub const HEIGHT: f32 = 72.0;
 pub const EYE: f32 = 64.0;
@@ -26,11 +26,11 @@ pub const EYE: f32 = 64.0;
 const MOUSE_FACTOR: f32 = 0.022;
 /// cl_pitchdown and cl_pitchup, both registered with 89 at 0x1cd3c0 in client.so
 const PITCH_LIMIT: f32 = 89.0;
-/// sv_stepsize's default
+/// sv_stepsize's default, registered at 0xdf8580 in server.so
 const STEP: f32 = 18.0;
-/// how far below the feet the ground check looks
+/// how far below the feet the ground check looks, 0xa74774 in server.so
 const GROUND_REACH: f32 = 2.0;
-/// a walk slower than this stops dead
+/// a walk slower than this stops dead, 0xa74730 in server.so
 const MIN_WALK: f32 = 1.0;
 /// mask 0x200400b, what TestPlayerPosition and FindClosestPassableSpace collide with
 const FCPS_TRIES: usize = 100;
@@ -231,6 +231,7 @@ impl Walker {
             self.forced_duck = false;
             return self.touch_portals(space);
         }
+        // sv_optimizedmovement lets go of the ground above 250, 0x27ae02 (disassembly, server.so)
         if self.velocity[2] > 250.0 {
             self.grounded = false;
             self.ground = None;
@@ -243,6 +244,7 @@ impl Walker {
         self.before_move = (self.velocity, self.grounded, self.duck.ducked);
         let max = MAX_SPEED.min(WALK_SPEED) * self.surface.max_speed_factor.min(1.0);
         let (mut fmove, mut smove) = command(input.forward, input.side, max);
+        // SpeedCrop, 0x26de80 (decompiled, server.so)
         if self.duck.ducked && self.grounded {
             fmove *= 1.0 / 3.0;
             smove *= 1.0 / 3.0;
@@ -312,11 +314,13 @@ impl Walker {
         self.jump_held = true;
     }
 
+    /// Translated from 0x27a960 (decompiled, server.so)
     fn duck_eye(&mut self, amount: f32) {
         let q = amount * amount * (3.0 - 2.0 * amount);
         self.duck.eye = 28.0 * q + EYE * (1.0 - q);
     }
 
+    /// Translated from 0x279490 and 0x279370 (decompiled, server.so)
     fn finish_duck(&mut self, jumping: bool, space: &Space) {
         if self.duck.ducked {
             return;
@@ -352,6 +356,7 @@ impl Walker {
         )
     }
 
+    /// Translated from 0x27a3f0, 0x27b220 and 0x279bc0 (decompiled, server.so)
     fn unduck_jump(&mut self, space: &Space) {
         let p = self.feet;
         let tr = self.trace(p, [p[0], p[1], p[2] - 36.0], space);
@@ -520,6 +525,8 @@ impl Walker {
         )
     }
 
+    /// WalkMove's direct move, then StepMove, or TryPlayerMove in the air.
+    /// Translated from 0x274230 and 0x2cf2a0 (decompiled, server.so)
     fn travel(&mut self, dt: f32, walking: bool, space: &Space) {
         let start = self.feet;
         let cast = |a, b| self.trace(a, b, space);
@@ -531,6 +538,7 @@ impl Walker {
         };
     }
 
+    /// Translated from 0x274050 (decompiled, server.so)
     fn stay_on_ground(&mut self, space: &Space) {
         let p = self.feet;
         let up = self.trace(p, [p[0], p[1], p[2] + 2.0], space);
@@ -545,6 +553,7 @@ impl Walker {
         }
     }
 
+    /// Translated from 0x2d06d0 (decompiled, server.so)
     fn categorize(&mut self, space: &Space) {
         let p = self.feet;
         let tr = self.trace(p, [p[0], p[1], p[2] - GROUND_REACH], space);
