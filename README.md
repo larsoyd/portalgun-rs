@@ -139,6 +139,13 @@ same player position between simulation updates:
   you press, until you land and friction slows you down.
 - Falling onto a floor portal while looking down nudges you toward its
   middle, as `sv_player_funnel_into_portals` does.
+- Near a portal you move through that portal's own collision, built the way
+  `CPortalSimulator` builds it: the world in front cut off just before the
+  plane, the wall behind cut open around the hole, a thin tube lining the
+  opening and the far side's world carried through the hole. A portal takes
+  you over while its box touches you, you pass through when your centre goes
+  behind the plane inside the hole, and if you end up stuck the game's stuck
+  nudges and closest-passable-space search move you out.
 
 The 150-unit speed and several complete movement sequences have been measured
 in the pinned installed game. See [movement evidence and validation](docs/movement/README.md)
@@ -147,18 +154,23 @@ for the audit, recorded references and remaining differences.
 ### Sound
 
 Every sound Portal's manifest declares is read with its volume, pitch and
-waves. The gun's fire sounds come from its weapon script, the portal opening
-sounds and the enter and exit sounds from the game's sound scripts, each
-played at a volume and pitch drawn from the script's range.
+waves. The gun's fire sounds come from its weapon script and the portal opening
+sounds from the game's sound scripts, each played at a volume and pitch drawn
+from the script's range.
+
+Going through a portal plays the enter sound when a box half your size first
+meets the opening and the exit sound when a slightly larger one leaves it, both
+pitched and turned up with your speed. The fling woosh fades in above 300 and
+reaches full volume at 2300.
 
 Footsteps follow `UpdateStepSound`: a step every 300 milliseconds running
 and 400 walking, alternating feet, quieter when walking, with the sound of the
 surface under you from its `$surfaceprop`. A jump plays a step at full volume,
 a hard landing plays one by how fast you fell, and a long fall adds the long
-fall boots' `PortalPlayer.FallRecover`.
+fall boots' `PortalPlayer.FallRecover`. Within one tick the step comes first,
+from how you were moving before the move, then the jump, then the landing.
 
 Close and supported invalid-placement sounds use the game's scripts too.
-TODO: positional sound with each script's sound level and the portals' ambient loop.
 
 ### The crosshair
 
@@ -239,15 +251,12 @@ Still stand-ins or estimates:
 - World geometry remains an AABB chamber. Swept collision supports walls,
   corners, ceilings and steps; slopes, moving platforms, water and ladders
   are not represented.
-- Walking through the wall behind a portal. The game builds its collision
-  behind each portal, this sandbox carves the wall and sweeps the remaining
-  movement against the exit geometry. Full linked-world collision, tilted
-  portal rims and saved-eye recovery remain incomplete.
-  Ordinary wall crossings and repeated floor-to-ceiling loops are covered by
-  tests and graphical checks; arbitrary tilted transitions are not.
+- Portal collision covers the chamber's own geometry. There are no physics
+  objects to carry or clone through a portal, and the extra trace the game
+  runs through a portal when nothing was hit is not reproduced.
 - Where a portal fits: the fitting rules are ported but not yet checked against
   `VerifyPortalPlacement`.
-- Sound is not positional yet.
+- Sound is not positional yet, so the portals' ambient hum is left out.
 
 Deliberate deviations:
 

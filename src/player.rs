@@ -233,7 +233,8 @@ fn walk(
             player.duck.eye
         );
     }
-    if let Some(n) = player.ground {
+    // the portal's own tube has no surface, the last chamber surface stays
+    if let Some(n) = player.ground.filter(|&n| n < footing.surfaces.len()) {
         footing.last = n;
     }
     let surface = footing.surfaces[footing.last].clone();

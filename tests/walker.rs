@@ -297,7 +297,21 @@ fn the_walker_steps_over_the_sill_under_a_raised_portal() {
     blue.origin[2] = 64.0;
     let mut w = Walker::at([-340.0, 0.0, 0.0]);
     w.yaw = 180.0;
-    assert_eq!(walk_west(&mut w, &c, Some([blue, orange])), Some(0));
+    let input = Input {
+        forward: 1.0,
+        ..Input::default()
+    };
+    let mut crossed = None;
+    for _ in 0..200 {
+        crossed = crossed.or(w.step(&input, 0.01, &c, Some([blue, orange])));
+        assert!(
+            w.ground.is_none_or(|g| g < c.blocks.len()),
+            "the ground under the sill is a chamber surface, not the tube: {:?} at {:?}",
+            w.ground,
+            w.feet
+        );
+    }
+    assert_eq!(crossed, Some(0));
 }
 
 #[test]

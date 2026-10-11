@@ -93,6 +93,11 @@ impl Space {
         let sim = sim.trace(from, to, mins, maxs);
         match !real.start_solid && real.fraction >= sim.fraction {
             true => real,
+            // a hit keeps the real trace's surface
+            false if sim.fraction < 1.0 => Trace {
+                block: real.block.or(sim.block),
+                ..sim
+            },
             false => sim,
         }
     }

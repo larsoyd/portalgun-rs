@@ -73,6 +73,11 @@ fn standing_on_a_floor_portal_drops_through_only_inside_the_inner_tube() {
                 "rests on the tube or carved floor: {:?}",
                 w.feet
             );
+            assert_eq!(
+                w.ground,
+                Some(0),
+                "standing on the floor's own surface at {at:?}"
+            );
         }
     }
 }
@@ -277,21 +282,28 @@ fn the_far_side_only_collides_through_the_hole() {
 
 #[test]
 fn a_tie_between_the_real_and_carried_world_keeps_the_real_hit() {
-    let (c, pair) = far_pair();
+    let (_, pair) = far_pair();
+    // the real block meets the hull's side and the carried one its top, both halfway along
+    let c = Chamber {
+        blocks: vec![
+            block([-170.0, -100.0, -20.0], [-130.0, -61.0, 80.0]),
+            block([1130.0, 20.0, 31.0], [1170.0, 40.0, 60.0]),
+        ],
+    };
     let space = Space::new(&c, Some(&pair));
     let half = ([-16.0; 3], [16.0; 3]);
     let tr = space.trace(
         Some(0),
         [-150.0, -30.0, 0.0],
-        [-150.0, -60.0, 0.0],
+        [-150.0, -60.0, 30.0],
         half.0,
         half.1,
     );
-    assert!(tr.fraction < 1.0, "{tr:?}");
+    assert!((tr.fraction - 0.5).abs() < 0.01, "{tr:?}");
     assert_eq!(
-        tr.block,
-        Some(0),
-        "the real block, not its carried twin: {tr:?}"
+        tr.normal,
+        [0.0, 1.0, 0.0],
+        "the real block's face, not the carried top: {tr:?}"
     );
 }
 
