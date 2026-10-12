@@ -68,11 +68,16 @@ pub struct Split {
 }
 
 // Translated from 0x5562a0 (decompiled, client.so), using capsule rig bounds.
-pub fn split(pair: Option<[Portal; 2]>, centre: Vec3, half: Vec3) -> Option<Split> {
+pub fn split(
+    pair: Option<[Portal; 2]>,
+    entity_centre: Vec3,
+    centre: Vec3,
+    half: Vec3,
+) -> Option<Split> {
     let pair = pair?;
     let i = pair.iter().position(|p| {
-        p.local(centre.to_array())[0] >= -5.0
-            && portal::teleport::meets_opening(p, centre.to_array(), half.to_array())
+        p.local(entity_centre.to_array())[0] >= -5.0
+            && portal::teleport::in_hole(p, centre.to_array(), half.to_array())
     })?;
     let plane = |p: &Portal, bias| {
         let normal = to_bevy_dir(p.forward);
@@ -173,6 +178,7 @@ fn clone_body(world: &mut World) {
 
 fn update(
     ghost: Option<Res<Ghost>>,
+    visual: Res<VisualPlayer>,
     portals: Option<Res<Portals>>,
     mut materials: ResMut<Assets<BodyMaterial>>,
     mut transforms: Query<&mut Transform>,
@@ -201,7 +207,12 @@ fn update(
     }
     let centre = Vec3::from(from_bevy((lo + hi) * 0.5));
     let half = Vec3::from(from_bevy((hi - lo) * 0.5)).abs();
-    let halves = split(portals.and_then(|p| p.linked()), centre, half);
+    let halves = split(
+        portals.and_then(|p| p.linked()),
+        visual.pose.centre,
+        centre,
+        half,
+    );
     *visibility.get_mut(ghost.root).unwrap() = if halves.is_some() {
         Visibility::Inherited
     } else {

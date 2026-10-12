@@ -15,9 +15,10 @@ fn a_straddling_body_is_clipped_into_complementary_portal_halves() {
         ([0.0, 0.0, -1.0], [200.0, 0.0, 384.0], [1.0, 0.0, 0.0]),
     ] {
         let exit = Portal::new(origin, normal, up, (32.0, 54.0));
-        for centre in [-5.0, 0.0, 10.0, 35.99, 36.0] {
+        for centre in [-5.0, 0.0, 10.0, 35.49, 35.5] {
             let halves = split(
                 Some([entrance, exit]),
+                Vec3::Z * centre,
                 Vec3::Z * centre,
                 Vec3::new(16.0, 16.0, 36.0),
             )
@@ -41,18 +42,21 @@ fn a_straddling_body_is_clipped_into_complementary_portal_halves() {
         }
         assert!(split(
             Some([entrance, exit]),
-            Vec3::Z * 36.01,
+            Vec3::Z * 35.51,
+            Vec3::Z * 35.51,
             Vec3::new(16.0, 16.0, 36.0)
         )
         .is_none());
         assert!(split(
             Some([entrance, exit]),
             Vec3::Z * -5.01,
+            Vec3::Z * -5.01,
             Vec3::new(16.0, 16.0, 36.0)
         )
         .is_none());
         assert!(split(
             Some([entrance, exit]),
+            Vec3::X * 100.0,
             Vec3::X * 100.0,
             Vec3::new(16.0, 16.0, 36.0)
         )
