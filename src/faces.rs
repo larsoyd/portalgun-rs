@@ -15,9 +15,10 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::pbr::{MaterialPipeline, MaterialPipelineKey};
 use bevy::prelude::*;
 use bevy::render::render_resource::{
-    AsBindGroup, CompareFunction, RenderPipelineDescriptor, ShaderType,
-    SpecializedMeshPipelineError, TextureFormat,
+    AsBindGroup, CachedPipelineState, CompareFunction, PipelineCache, RenderPipelineDescriptor,
+    ShaderType, SpecializedMeshPipelineError, TextureFormat,
 };
+use bevy::render::{ExtractSchedule, MainWorld, RenderApp};
 use bevy::shader::{load_shader_library, ShaderRef};
 use bevy::window::PrimaryWindow;
 use portal::portal_face::{near, shader_time};
@@ -181,12 +182,59 @@ struct Faces {
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PortalViewsUpdated;
 
+#[derive(Resource, Default)]
+struct ViewWarmup {
+    pipelines: usize,
+    stable: usize,
+    frames: usize,
+    ready: bool,
+}
+
+fn finish_warmup(cache: Res<PipelineCache>, mut main: ResMut<MainWorld>) {
+    let Some(mut warmup) = main.get_resource_mut::<ViewWarmup>() else {
+        return;
+    };
+    if warmup.ready {
+        return;
+    }
+    let count = cache.pipelines().count();
+    warmup.frames += 1;
+    warmup.stable = if count > 0
+        && count == warmup.pipelines
+        && cache
+            .pipelines()
+            .all(|p| matches!(p.state, CachedPipelineState::Ok(_)))
+    {
+        warmup.stable + 1
+    } else {
+        0
+    };
+    warmup.pipelines = count;
+    if warmup.frames >= 8 && warmup.stable >= 4 {
+        warmup.ready = true;
+        info!(
+            "[portal] prepared frames={} pipelines={count}",
+            warmup.frames
+        );
+    } else if warmup.frames >= 600 {
+        warmup.ready = true;
+        warn!(
+            "[portal] preparation=timeout frames={} pipelines={count}",
+            warmup.frames
+        );
+    }
+}
+
 pub struct FacesPlugin;
 
 impl Plugin for FacesPlugin {
     fn build(&self, app: &mut App) {
         load_shader_library!(app, "shaders/face.wgsl");
         embedded_asset!(app, "shaders/portal.wgsl");
+        if let Some(render) = app.get_sub_app_mut(RenderApp) {
+            render.add_systems(ExtractSchedule, finish_warmup);
+            app.init_resource::<ViewWarmup>();
+        }
         app.add_plugins(MaterialPlugin::<PortalMaterial>::default())
             .init_resource::<Portals>()
             .add_systems(PostStartup, spawn_faces)
@@ -350,7 +398,8 @@ fn spawn_faces(
                 .spawn((
                     Mesh3d(mesh.clone()),
                     MeshMaterial3d(material.clone()),
-                    Visibility::Hidden,
+                    Visibility::Inherited,
+                    NoFrustumCulling,
                     RenderLayers::layer(layer),
                 ))
                 .id();
@@ -441,10 +490,14 @@ fn draw_views(
     mut materials: ResMut<Assets<PortalMaterial>>,
     mut visibility: Query<&mut Visibility>,
     visual: Option<Res<crate::visual::VisualPlayer>>,
+    warmup: Option<Res<ViewWarmup>>,
 ) {
     let Some(faces) = faces else { return };
     let faces = faces.into_inner();
     let (eye, projection, main_camera) = *main;
+    let warming = warmup.is_some_and(|w| !w.ready);
+    let warm_eye = Transform::from_translation(eye.translation + Vec3::new(2.0, 1.0, 2.0))
+        .looking_at(eye.translation - Vec3::Y * 0.5, Vec3::Y);
     let Projection::Perspective(perspective) = projection else {
         return;
     };
@@ -532,8 +585,13 @@ fn draw_views(
             } else {
                 layers.clone().with(crate::body::BODY_LAYER)
             };
-            if camera.is_active != shown[level] {
-                camera.is_active = shown[level];
+            let active = shown[level] || warming;
+            if camera.is_active != active {
+                camera.is_active = active;
+            }
+            if warming && !shown[level] {
+                *t = warm_eye;
+                *proj = Projection::Perspective(plain.clone());
             }
             let (Some(l), true) = (linked, shown[level]) else {
                 continue;
@@ -607,8 +665,9 @@ fn draw_views(
     if let Ok((mut t, mut proj, mut camera, _)) = cameras.get_mut(faces.doubler.0) {
         *t = *eye;
         *proj = Projection::custom(Kept(plain.clone()));
-        if camera.is_active != any_doubler {
-            camera.is_active = any_doubler;
+        let active = any_doubler || warming;
+        if camera.is_active != active {
+            camera.is_active = active;
         }
     }
     let report = format!("{} doubler={any_doubler}", report.join(" "));
