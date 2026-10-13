@@ -1,0 +1,52 @@
+name: Windows from Ubuntu
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'crates/**/*.rs'
+      - 'crates/**/Cargo.toml'
+      - 'tests/**'
+      - 'build.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+      - 'rust-toolchain*'
+      - '.github/workflows/windows.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_BUILD_JOBS: 4
+  CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
+  CC_x86_64_pc_windows_gnu: x86_64-w64-mingw32-gcc
+  CXX_x86_64_pc_windows_gnu: x86_64-w64-mingw32-g++
+
+jobs:
+  windows:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install cross compiler
+        run: |
+          sudo timeout 300 apt-get update
+          sudo timeout 300 apt-get install --no-install-recommends -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+      - name: Install Rust
+        run: |
+          timeout 300 rustup toolchain install stable --profile minimal
+          rustup default stable
+          timeout 300 rustup target add x86_64-pc-windows-gnu
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ubuntu-windows-gnu
+      - name: Build Windows executable
+        run: timeout 3600 cargo build --locked --release --target x86_64-pc-windows-gnu
+      - name: Compile tests without game assets
+        run: timeout 1800 cargo test --locked --release --workspace --target x86_64-pc-windows-gnu --no-run

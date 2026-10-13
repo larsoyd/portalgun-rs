@@ -3,11 +3,15 @@
 
 use std::path::{Path, PathBuf};
 
-use portal::install::{manifest, root, Install};
+use portal::install::{manifest, root, root_for_platform, Install};
 use portal::Error;
 
 fn steam() -> PathBuf {
-    root(None, None, Path::new(&std::env::var("HOME").unwrap()))
+    root(
+        None,
+        None,
+        Path::new(&std::env::var_os("HOME").unwrap_or_default()),
+    )
 }
 
 fn copy_of_install(name: &str) -> PathBuf {
@@ -26,7 +30,7 @@ fn root_takes_the_argument_then_the_variable_then_steam() {
     let steam = Path::new("/h/.local/share/Steam/steamapps/common/Portal");
     assert_eq!(root(Some("/a"), Some("/e"), home), Path::new("/a"));
     assert_eq!(root(None, Some("/e"), home), Path::new("/e"));
-    assert_eq!(root(None, None, home), steam);
+    assert_eq!(root_for_platform(None, None, home, None), steam);
 }
 
 #[test]
@@ -98,4 +102,41 @@ fn the_search_path_reaches_step_sounds_and_loose_hl2_scripts() {
         assert!(install.search.contains(path), "{path} not found");
     }
     assert!(!install.search.contains("scripts/no_such_file.txt"));
+}
+
+#[test]
+fn windows_default_library_uses_program_files_without_a_home_directory() {
+    let program_files = Path::new("C:/Program Files (x86)");
+    assert_eq!(
+        root_for_platform(None, None, Path::new(""), Some(program_files)),
+        program_files.join("Steam/steamapps/common/Portal")
+    );
+    let other_drive = Path::new("D:/Applications");
+    assert_eq!(
+        root_for_platform(None, None, Path::new("/h"), Some(other_drive)),
+        other_drive.join("Steam/steamapps/common/Portal")
+    );
+}
+
+#[test]
+fn explicit_install_paths_override_both_platform_defaults() {
+    for program_files in [None, Some(Path::new("C:/Program Files (x86)"))] {
+        assert_eq!(
+            root_for_platform(
+                Some("custom"),
+                Some("environment"),
+                Path::new("/h"),
+                program_files
+            ),
+            Path::new("custom")
+        );
+        assert_eq!(
+            root_for_platform(None, Some("environment"), Path::new("/h"), program_files),
+            Path::new("environment")
+        );
+    }
+    assert_eq!(
+        root_for_platform(None, None, Path::new("/h"), None),
+        Path::new("/h/.local/share/Steam/steamapps/common/Portal")
+    );
 }

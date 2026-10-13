@@ -1,0 +1,46 @@
+name: Arch Linux
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'crates/**/*.rs'
+      - 'crates/**/Cargo.toml'
+      - 'tests/**'
+      - 'build.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+      - 'rust-toolchain*'
+      - '.github/workflows/arch.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arch-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_BUILD_JOBS: 4
+  RUST_TEST_THREADS: 2
+
+jobs:
+  arch:
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    timeout-minutes: 90
+    steps:
+      - name: Install build dependencies
+        run: timeout 600 pacman -Syu --noconfirm --needed git rustup pkgconf alsa-lib systemd-libs libx11 libxcursor libxrandr libxi wayland libxkbcommon vulkan-icd-loader zstd
+      - uses: actions/checkout@v6
+      - name: Install Rust
+        run: timeout 300 rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: arch-linux
+      - name: Build Linux executable
+        run: timeout 3600 cargo build --locked --release
+      - name: Compile tests without game assets
+        run: timeout 1800 cargo test --locked --release --workspace --no-run

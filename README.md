@@ -343,7 +343,14 @@ The program looks for Portal in this order:
 
 1. `--install <dir>`
 2. the `PORTAL_DIR` environment variable
-3. Steam's default library, `~/.local/share/Steam/steamapps/common/Portal`
+3. Steam's default library for the executable's platform:
+   - Linux: `~/.local/share/Steam/steamapps/common/Portal`
+   - Windows: `%ProgramFiles(x86)%\Steam\steamapps\common\Portal`, normally
+     `C:\Program Files (x86)\Steam\steamapps\common\Portal`
+
+For another Steam library, pass `--install` or set `PORTAL_DIR`. A Linux executable
+running inside WSL uses Linux paths. To read your Windows install from it, use
+`--install "/mnt/c/Program Files (x86)/Steam/steamapps/common/Portal"`.
 
 It checks the files it reads against known hashes. If one differs, it refuses
 to start and names the file and both hashes, because the numbers were read
@@ -352,6 +359,56 @@ from that exact build of the game.
 ```
 cargo run --release
 ```
+
+### Build on Arch Linux
+
+Install a current stable [Rust toolchain](https://rustup.rs/) (Rust 1.95 or newer)
+and the [Bevy Linux dependencies](https://github.com/bevyengine/bevy/blob/main/docs/linux_dependencies.md):
+
+```sh
+sudo pacman -S --needed base-devel pkgconf alsa-lib systemd-libs libx11 libxcursor libxrandr libxi wayland libxkbcommon vulkan-icd-loader
+cargo build --locked --release -j 4
+./target/release/portalgun
+```
+
+Your desktop also needs the Vulkan driver for your GPU. Keep an existing Rust
+compiler cache configured when building.
+
+### Build Windows from Ubuntu WSL
+
+Install [Ubuntu under WSL](https://learn.microsoft.com/en-us/windows/wsl/install)
+with `wsl --install -d Ubuntu` from an administrator PowerShell, then open Ubuntu.
+Install Rust with [rustup](https://rustup.rs/) inside Ubuntu and keep the checkout
+in its Linux filesystem, for example under `~/Projects`.
+
+```sh
+sudo apt-get update
+sudo apt-get install --no-install-recommends build-essential pkg-config gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+rustup update stable
+rustup target add x86_64-pc-windows-gnu
+CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc \
+CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc \
+CXX_x86_64_pc_windows_gnu=x86_64-w64-mingw32-g++ \
+cargo build --locked --release --target x86_64-pc-windows-gnu -j 4
+```
+
+This produces `target/x86_64-pc-windows-gnu/release/portalgun.exe`, a native
+Windows executable. Copy it into a Windows folder and run it from PowerShell:
+
+```powershell
+.\portalgun.exe --install "C:\Program Files (x86)\Steam\steamapps\common\Portal"
+```
+
+The same cross-build commands work on ordinary Ubuntu. To build a Linux
+executable in Ubuntu instead, install `libx11-dev libasound2-dev libudev-dev
+libwayland-dev libxkbcommon-dev` and run `cargo build --locked --release -j 4`.
+
+The Arch and Ubuntu-to-Windows workflows run on pushes to `main` that change
+source, tests, dependencies or their build configuration. README-only edits do
+not trigger builds. Cargo downloads and compiled dependencies are cached across
+runs. CI builds the executables and compiles the test suites with `--no-run`;
+running asset tests requires your own Portal installation. No game assets or
+built executables are uploaded by these workflows.
 
 The window uses Portal's own icon, read from `portal/resource/game-icon.bmp` in
 your install. On Linux, Wayland compositors take a window's icon from a desktop

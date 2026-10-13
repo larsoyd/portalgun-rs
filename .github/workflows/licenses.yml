@@ -2,7 +2,25 @@ name: Licenses
 
 on:
   push:
-  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'crates/**/*.rs'
+      - 'crates/**/Cargo.toml'
+      - 'crates/**/LICENSE'
+      - 'crates/**/NOTICE'
+      - 'tests/**'
+      - 'tools/check_licenses.py'
+      - 'build.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'deny.toml'
+      - 'LICENSE'
+      - 'NOTICE'
+      - 'LICENSING.md'
+      - 'THIRD_PARTY.md'
+      - 'licenses/**'
+      - '.github/workflows/licenses.yml'
 
 permissions:
   contents: read
@@ -12,17 +30,24 @@ env:
 
 jobs:
   licenses:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install Rust
-        run: rustup toolchain install stable --profile minimal
+        run: |
+          timeout 300 rustup toolchain install stable --profile minimal
+          rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: licenses
+          cache-all-crates: true
       - name: Check license coverage and inventory
         run: python3 tools/check_licenses.py
       - name: Install cargo-deny
-        run: cargo install cargo-deny --version 0.20.2 --locked -j 4
+        run: timeout 1200 cargo install cargo-deny --version 0.20.2 --locked -j 4
       - name: Check dependency licenses
-        run: cargo deny --locked --workspace --all-features check licenses
+        run: timeout 300 cargo deny --locked --workspace --all-features check licenses

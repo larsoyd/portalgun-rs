@@ -63,9 +63,29 @@ pub fn manifest(root: &Path) -> &'static [(&'static str, &'static str); 6] {
 
 /// The install root: the argument, then PORTAL_DIR, then Steam's default library.
 pub fn root(arg: Option<&str>, env: Option<&str>, home: &Path) -> PathBuf {
-    arg.or(env)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| home.join(".local/share/Steam/steamapps/common/Portal"))
+    #[cfg(windows)]
+    let program_files = Some(
+        std::env::var_os("ProgramFiles(x86)")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files (x86)")),
+    );
+    #[cfg(not(windows))]
+    let program_files: Option<PathBuf> = None;
+    root_for_platform(arg, env, home, program_files.as_deref())
+}
+
+pub fn root_for_platform(
+    arg: Option<&str>,
+    env: Option<&str>,
+    home: &Path,
+    program_files: Option<&Path>,
+) -> PathBuf {
+    arg.or(env).map(PathBuf::from).unwrap_or_else(|| {
+        program_files.map_or_else(
+            || home.join(".local/share/Steam/steamapps/common/Portal"),
+            |dir| dir.join("Steam/steamapps/common/Portal"),
+        )
+    })
 }
 
 pub struct Install {
