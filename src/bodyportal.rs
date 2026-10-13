@@ -118,6 +118,9 @@ struct BodyReport {
     faults: crate::diagnostics::Faults,
 }
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BodyPortalUpdated;
+
 pub struct BodyPortalPlugin;
 impl Plugin for BodyPortalPlugin {
     fn build(&self, app: &mut App) {
@@ -128,6 +131,7 @@ impl Plugin for BodyPortalPlugin {
             .add_systems(
                 PostUpdate,
                 update
+                    .in_set(BodyPortalUpdated)
                     .after(crate::body::BodyPoseUpdated)
                     .before(TransformSystems::Propagate),
             )

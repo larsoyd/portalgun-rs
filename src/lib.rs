@@ -38,3 +38,5 @@ pub mod impacts;
 pub mod menu;
 pub mod options;
 pub mod particle_material;
+
+pub mod object_render;
