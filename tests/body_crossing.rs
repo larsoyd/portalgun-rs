@@ -267,3 +267,252 @@ fn seeded_crouch_poses_keep_the_copy_at_the_crossing_plane() {
         );
     }
 }
+
+#[test]
+fn moving_at_the_floor_rim_does_not_push_boots_through_the_ceiling() {
+    use bevy::time::TimeUpdateStrategy;
+    use std::time::Duration;
+    let mut app = body_app();
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
+        0.015,
+    )));
+    let floor = Portal::new([0.0; 3], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0], (32.0, 54.0));
+    let ceiling = Portal::new(
+        [0.0, 0.0, 384.0],
+        [0.0, 0.0, -1.0],
+        [1.0, 0.0, 0.0],
+        (32.0, 54.0),
+    );
+    for duck in [false, true] {
+        for tick in 0..240 {
+            let mut player = Walker::at([60.0, 0.0, 0.0]);
+            player.grounded = true;
+            player.duck.ducked = duck;
+            player.duck.eye = if duck { 28.0 } else { 64.0 };
+            player.yaw = 180.0;
+            player.velocity = [-50.0, 0.0, 0.0];
+            pose(&mut app, player, [floor, ceiling]);
+            let world = app.world_mut();
+            let visible = *world
+                .query_filtered::<&Visibility, With<PortalGhost>>()
+                .single(world)
+                .unwrap();
+            if visible == Visibility::Hidden {
+                continue;
+            }
+            let mut leaks = Vec::new();
+            for (mesh, material, transform, layers) in world
+                .query::<(
+                    &Mesh3d,
+                    &MeshMaterial3d<BodyMaterial>,
+                    &GlobalTransform,
+                    &RenderLayers,
+                )>()
+                .iter(world)
+            {
+                if *layers != RenderLayers::layer(GHOST_LAYER) {
+                    continue;
+                }
+                let m = world
+                    .resource::<Assets<BodyMaterial>>()
+                    .get(&material.0)
+                    .unwrap();
+                let mesh = world.resource::<Assets<Mesh>>().get(&mesh.0).unwrap();
+                if let Some(VertexAttributeValues::Float32x3(vertices)) =
+                    mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+                {
+                    for v in vertices {
+                        let p = transform.transform_point(Vec3::from(*v));
+                        let source = from_bevy(p);
+                        let local = ceiling.local(source);
+                        if m.extension.plane.dot(p.extend(1.0)) >= 0.0
+                            && local[0] > 0.0
+                            && !ceiling.inside(local)
+                        {
+                            leaks.push(source);
+                        }
+                    }
+                }
+            }
+            assert!(
+                leaks.is_empty(),
+                "ceiling leak duck={duck} tick={tick} vertices={leaks:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn floor_support_filter_preserves_airborne_and_crossing_halves() {
+    use portalgun::bodyportal::supported_floor;
+    let floor = Portal::new([0.0; 3], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0], (32.0, 54.0));
+    let wall = Portal::new([0.0; 3], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0], (32.0, 54.0));
+    let ceiling = Portal::new([0.0; 3], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0], (32.0, 54.0));
+    for height in [18.0, 36.0] {
+        let half = Vec3::new(16.0, 16.0, height);
+        for offset in [-0.03225, -0.03125, -0.03025, 0.0, 0.001] {
+            let centre = Vec3::Z * (height + offset);
+            assert_eq!(
+                supported_floor(&floor, centre, half, true),
+                offset >= -0.03125
+            );
+            assert!(!supported_floor(&floor, centre, half, false));
+            assert!(!supported_floor(&wall, Vec3::X * 20.0, half, true));
+            assert!(!supported_floor(&ceiling, Vec3::NEG_Z * 40.0, half, true));
+        }
+    }
+}
+
+#[test]
+fn floor_placement_roundoff_does_not_reenable_the_grounded_copy() {
+    let floor = Portal::new(
+        [0.0, 0.0, 0.0000038146973],
+        [0.0, 0.0, 1.0],
+        [1.0, 0.0, 0.0],
+        (32.0, 54.0),
+    );
+    assert!(portalgun::bodyportal::supported_floor(
+        &floor,
+        Vec3::Z * 36.0,
+        Vec3::new(16.0, 16.0, 36.0),
+        true
+    ));
+}
+
+#[test]
+#[allow(clippy::approx_constant)]
+fn tilted_walls_do_not_count_as_supporting_floor_portals() {
+    for up in [0.001_f32, 0.7070, 0.7071, 0.7072, 1.0] {
+        let normal = Vec3::new((1.0 - up * up).sqrt(), 0.0, up);
+        let portal = Portal::new(
+            [0.0; 3],
+            normal.to_array(),
+            Vec3::Y.to_array(),
+            (32.0, 54.0),
+        );
+        assert_eq!(
+            portalgun::bodyportal::supported_floor(&portal, normal * 60.0, Vec3::splat(16.0), true),
+            up > 0.7071
+        );
+    }
+}
+
+#[test]
+fn missing_body_parts_hide_the_copy_and_log_each_failure_episode() {
+    use bevy::ecs::schedule::SingleThreadedExecutor;
+    use portalgun::body::BODY_LAYER;
+    let mut app = body_app();
+    app.edit_schedule(PostUpdate, |s| {
+        s.set_executor(SingleThreadedExecutor::new());
+    });
+    let floor = Portal::new([0.0; 3], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0], (32.0, 54.0));
+    let ceiling = Portal::new(
+        [0.0, 0.0, 384.0],
+        [0.0, 0.0, -1.0],
+        [1.0, 0.0, 0.0],
+        (32.0, 54.0),
+    );
+    pose(&mut app, Walker::at([0.0, 0.0, -4.0]), [floor, ceiling]);
+    let world = app.world_mut();
+    let ghost = world
+        .query_filtered::<Entity, With<PortalGhost>>()
+        .single(world)
+        .unwrap();
+    assert_eq!(
+        *world.get::<Visibility>(ghost).unwrap(),
+        Visibility::Inherited
+    );
+    let part = world
+        .query::<(Entity, &Mesh3d, &RenderLayers)>()
+        .iter(world)
+        .find(|(_, _, layers)| **layers == RenderLayers::layer(BODY_LAYER))
+        .unwrap()
+        .0;
+    let saved = *world.get::<Transform>(part).unwrap();
+    let path =
+        std::env::temp_dir().join(format!("portalgun-body-fault-{}.log", std::process::id()));
+    let file = portalgun::diagnostics::LogFile::open(&path).unwrap();
+    let subscriber = bevy::log::tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_writer(file.clone())
+        .finish();
+    bevy::log::tracing::subscriber::with_default(subscriber, || {
+        app.world_mut().entity_mut(part).remove::<Transform>();
+        app.update();
+        app.update();
+        assert_eq!(
+            *app.world().get::<Visibility>(ghost).unwrap(),
+            Visibility::Hidden
+        );
+        assert!(app
+            .world()
+            .resource::<Assets<BodyMaterial>>()
+            .iter()
+            .all(|(_, m)| m.extension.plane == Vec4::ZERO));
+        app.world_mut().entity_mut(part).insert(saved);
+        app.update();
+        app.world_mut().entity_mut(part).remove::<Transform>();
+        app.update();
+    });
+    file.flush().unwrap();
+    let log = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(log.matches("reason=missing_component").count(), 2, "{log}");
+    assert!(log.contains(&format!("entity=Some({part:?})")), "{log}");
+    drop(file);
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn supported_floor_does_not_hide_a_valid_wall_copy_at_the_corner() {
+    use bevy::time::TimeUpdateStrategy;
+    use portalgun::units::to_bevy_dir;
+    use std::time::Duration;
+    let floor = Portal::new(
+        [54.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [1.0, 0.0, 0.0],
+        (32.0, 54.0),
+    );
+    let wall = Portal::new(
+        [0.0, 0.0, 54.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        (32.0, 54.0),
+    );
+    for pair in [[floor, wall], [wall, floor]] {
+        for duck in [false, true] {
+            let mut app = body_app();
+            app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(
+                0.015,
+            )));
+            for tick in 0..120 {
+                let mut player = Walker::at([1.0, 0.0, 0.0]);
+                player.grounded = true;
+                player.yaw = 180.0;
+                player.velocity = [-50.0, 0.0, 0.0];
+                player.duck.ducked = duck;
+                player.duck.eye = if duck { 28.0 } else { 64.0 };
+                pose(&mut app, player, pair);
+                let world = app.world_mut();
+                let visible = *world
+                    .query_filtered::<&Visibility, With<PortalGhost>>()
+                    .single(world)
+                    .unwrap();
+                assert_eq!(
+                    visible,
+                    Visibility::Inherited,
+                    "wall copy hidden pair={pair:?} duck={duck} tick={tick}"
+                );
+                for (_, material) in world.resource::<Assets<BodyMaterial>>().iter() {
+                    if !material.extension.ghost {
+                        assert_eq!(
+                            material.extension.plane.truncate(),
+                            to_bevy_dir(wall.forward),
+                            "wrong split pair={pair:?} duck={duck} tick={tick}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}

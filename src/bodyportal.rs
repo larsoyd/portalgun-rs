@@ -62,6 +62,7 @@ struct CopyPart {
 }
 
 pub struct Split {
+    pub portal: usize,
     pub source: Vec4,
     pub exit: Vec4,
     pub transform: Mat4,
@@ -74,20 +75,47 @@ pub fn split(
     centre: Vec3,
     half: Vec3,
 ) -> Option<Split> {
+    split_where(pair, entity_centre, centre, half, |_| true)
+}
+
+fn split_where(
+    pair: Option<[Portal; 2]>,
+    entity_centre: Vec3,
+    centre: Vec3,
+    half: Vec3,
+    admit: impl Fn(&Portal) -> bool,
+) -> Option<Split> {
     let pair = pair?;
     let i = pair.iter().position(|p| {
         p.local(entity_centre.to_array())[0] >= -5.0
             && portal::teleport::in_hole(p, centre.to_array(), half.to_array())
+            && admit(p)
     })?;
     let plane = |p: &Portal, bias| {
         let normal = to_bevy_dir(p.forward);
         normal.extend(-normal.dot(to_bevy(p.origin)) + bias * METRES_PER_UNIT)
     };
     Some(Split {
+        portal: i,
         source: plane(&pair[i], 0.3),
         exit: plane(&pair[1 - i], 0.75),
         transform: crate::views::through(&pair[i], &pair[1 - i]),
     })
+}
+
+// The capsule rig can dip below its supporting floor without entering the portal.
+pub fn supported_floor(portal: &Portal, centre: Vec3, half: Vec3, grounded: bool) -> bool {
+    grounded
+        && portal.forward[2] > portal::teleport::FLOORISH
+        && portal.local(centre.to_array())[0] - Vec3::from(portal.forward).abs().dot(half)
+            >= -crate::collision::DIST_EPSILON
+}
+
+#[derive(Default)]
+struct BodyReport {
+    state: Option<(Option<usize>, Option<usize>, u64, u64)>,
+    next: f32,
+    faults: crate::diagnostics::Faults,
 }
 
 pub struct BodyPortalPlugin;
@@ -176,8 +204,12 @@ fn clone_body(world: &mut World) {
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn update(
     ghost: Option<Res<Ghost>>,
+    player: Res<crate::player::Player>,
+    time: Res<Time>,
+    mut report: Local<BodyReport>,
     visual: Res<VisualPlayer>,
     portals: Option<Res<Portals>>,
     mut materials: ResMut<Assets<BodyMaterial>>,
@@ -185,11 +217,34 @@ fn update(
     mut visibility: Query<&mut Visibility>,
 ) {
     let Some(ghost) = ghost else { return };
+    let missing = [ghost.original, ghost.root]
+        .into_iter()
+        .chain(ghost.copies.iter().flat_map(|p| [p.source, p.target]))
+        .find(|e| !transforms.contains(*e))
+        .or_else(|| (!visibility.contains(ghost.root)).then_some(ghost.root));
+    if report.faults.raised("entities", missing.is_some()) {
+        error!(
+            "[body-portal] update=failed reason=missing_component entity={missing:?} root={:?} copies={}",
+            ghost.original,
+            ghost.copies.len()
+        );
+    }
+    if missing.is_some() {
+        if let Ok(mut visible) = visibility.get_mut(ghost.root) {
+            *visible = Visibility::Hidden;
+        }
+        for (_, material) in materials.iter_mut() {
+            material.extension.plane = Vec4::ZERO;
+        }
+        return;
+    }
     let root_matrix = transforms.get(ghost.original).unwrap().to_matrix();
+    let mut nonfinite = !root_matrix.is_finite();
     let mut matrices = HashMap::from([(ghost.original, root_matrix)]);
     let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
     for part in &ghost.copies {
         let matrix = matrices[&part.parent] * transforms.get(part.source).unwrap().to_matrix();
+        nonfinite |= !matrix.is_finite();
         matrices.insert(part.source, matrix);
         if let Some(bounds) = part.bounds {
             for x in [-1.0, 1.0] {
@@ -205,14 +260,54 @@ fn update(
             }
         }
     }
+    let invalid = nonfinite
+        || !lo.is_finite()
+        || !hi.is_finite()
+        || !visual.pose.centre.is_finite()
+        || !visual.pose.half.is_finite();
+    if report.faults.raised("bounds", invalid) {
+        error!("[body-portal] update=failed reason=invalid_bounds nonfinite_transform={nonfinite} min={lo:?} max={hi:?} hull={:?} revision={}", visual.pose.centre, visual.revision);
+    }
+    if invalid {
+        if let Ok(mut visible) = visibility.get_mut(ghost.root) {
+            *visible = Visibility::Hidden;
+        }
+        for (_, material) in materials.iter_mut() {
+            material.extension.plane = Vec4::ZERO;
+        }
+        return;
+    }
     let centre = Vec3::from(from_bevy((lo + hi) * 0.5));
     let half = Vec3::from(from_bevy((hi - lo) * 0.5)).abs();
-    let halves = split(
-        portals.and_then(|p| p.linked()),
-        visual.pose.centre,
-        centre,
-        half,
+    let pair = portals.as_ref().and_then(|p| p.linked());
+    let candidate = split(pair, visual.pose.centre, centre, half);
+    let candidate = candidate.as_ref().map(|s| s.portal);
+    let supported =
+        |p: &Portal| supported_floor(p, visual.pose.centre, visual.pose.half, player.grounded);
+    let halves = split_where(pair, visual.pose.centre, centre, half, |p| !supported(p));
+    let selected = halves.as_ref().map(|s| s.portal);
+    let supported = candidate.is_some_and(|i| supported(&pair.unwrap()[i]));
+    let state = (
+        candidate,
+        selected,
+        visual.revision,
+        portals.as_ref().map_or(0, |p| p.changes),
     );
+    let now = time.elapsed_secs();
+    if report.state != Some(state) || candidate.is_some() && now >= report.next {
+        report.state = Some(state);
+        report.next = now + 0.5;
+        let gap = |half: Vec3, centre: Vec3| {
+            candidate.map(|i| {
+                let p = &pair.unwrap()[i];
+                p.local(centre.to_array())[0] - Vec3::from(p.forward).abs().dot(half)
+            })
+        };
+        let hull_gap = gap(visual.pose.half, visual.pose.centre);
+        let render_gap = gap(half, centre);
+        debug!("[body-portal] at={now:.3} candidate={candidate:?} selected={selected:?} hull_gap={hull_gap:?} render_gap={render_gap:?} ghost={} supported_floor={supported} grounded={} ducked={} feet={:?} hull_centre={:?} hull_half={:?} render_centre={centre:?} render_half={half:?} camera_portal={:?} revision={} pair={pair:?} planes_bevy={:?}",
+            halves.is_some(), player.grounded, player.duck.ducked, player.feet, visual.pose.centre, visual.pose.half, visual.camera_portal(pair), visual.revision, halves.as_ref().map(|s| (s.source, s.exit)));
+    }
     *visibility.get_mut(ghost.root).unwrap() = if halves.is_some() {
         Visibility::Inherited
     } else {

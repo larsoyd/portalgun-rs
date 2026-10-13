@@ -43,6 +43,7 @@ fn body_fragments_and_depth_are_clipped_on_the_gpu() {
     .add_plugins(BodyPortalPlugin);
     let player = Walker::at([0.0; 3]);
     app.insert_resource(VisualHistory::new(&player).sample(&player, 0.0));
+    app.insert_resource(portalgun::player::Player(player));
     let deadline = Instant::now() + Duration::from_secs(60);
     while app.plugins_state() != PluginsState::Ready {
         assert!(Instant::now() < deadline, "renderer initialization timeout");

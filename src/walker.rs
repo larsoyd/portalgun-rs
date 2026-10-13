@@ -727,14 +727,13 @@ impl Walker {
         }
         if let Some(push) = self.owner.zip(space.pair).map(|(i, pair)| pair[i].forward) {
             let old = self.feet;
-            if !self.find_closest_passable_space(space, push) {
-                if self
+            if !self.find_closest_passable_space(space, push)
+                && self
                     .last_fcps_warning
                     .is_none_or(|last| self.clock - last >= 5.0)
-                {
-                    self.last_fcps_warning = Some(self.clock);
-                    bevy::log::warn!("[walker] fcps=failed at={} feet={:?} velocity={:?} push={push:?} ducked={} owner={:?} attempts={} pair={:?}", self.clock, self.feet, self.velocity, self.duck.ducked, self.owner, self.stuck_count, space.pair);
-                }
+            {
+                self.last_fcps_warning = Some(self.clock);
+                bevy::log::warn!("[walker] fcps=failed at={} feet={:?} velocity={:?} push={push:?} ducked={} owner={:?} attempts={} pair={:?}", self.clock, self.feet, self.velocity, self.duck.ducked, self.owner, self.stuck_count, space.pair);
             }
             if collision::dot(collision::sub(self.feet, old), push) < 0.0 {
                 self.feet = collision::add(old, collision::scale(push, 5.0));

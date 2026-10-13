@@ -93,10 +93,6 @@ fn check_pixels(image: &Image, bias: f32, visible: bool, label: &str) {
             leaked += usize::from(lit && distance < -bias - VIEW_UNITS / SIZE as f32);
         }
     }
-    assert_eq!(
-        leaked, 0,
-        "body escaped its clip half label={label} retained={retained}"
-    );
     if visible {
         assert!(
             retained > 12,
@@ -105,6 +101,10 @@ fn check_pixels(image: &Image, bias: f32, visible: bool, label: &str) {
     } else {
         assert_eq!(retained, 0, "phantom body label={label}");
     }
+    assert_eq!(
+        leaked, 0,
+        "body escaped its clip half label={label} retained={retained}"
+    );
     eprintln!("[body-pixels] label={label} pixels={retained} leaked={leaked}");
 }
 
@@ -320,4 +320,26 @@ fn rendered_player_halves_survive_crouched_corners_and_every_floor_exit() {
     settle(&mut app, deadline);
     let image = capture(&mut app, &target, deadline);
     check_pixels(&image, 0.75, false, "standing-near-floor-no-ceiling-legs");
+
+    for crouched in [false, true] {
+        let mut walker = player(
+            Vec3::new(60.0, 0.0, if crouched { 18.0 } else { 36.0 }),
+            crouched,
+            180.0,
+            Vec3::NEG_X * 50.0,
+        );
+        walker.grounded = true;
+        show_pose(&mut app, walker);
+        let mut view = observer(&exits[2]);
+        view.translation += to_bevy_dir(exits[2].up) * (60.0 * METRES_PER_UNIT);
+        *app.world_mut().get_mut::<Transform>(camera).unwrap() = view;
+        settle(&mut app, deadline);
+        let image = capture(&mut app, &target, deadline);
+        check_pixels(
+            &image,
+            0.75,
+            false,
+            &format!("moving-rim-crouched-{crouched}"),
+        );
+    }
 }

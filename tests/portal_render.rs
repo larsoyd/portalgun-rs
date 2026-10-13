@@ -215,6 +215,7 @@ fn crossing_the_camera_plane_hides_only_the_first_recursive_body_view() {
                 *app.world_mut().get_mut::<Transform>(main).unwrap() =
                     visual.portal_camera(Some([from, to]));
                 app.insert_resource(visual);
+                app.insert_resource(portalgun::player::Player(player));
                 app.update();
                 let world = app.world_mut();
                 for (view, layers) in world.query::<(&ParticleView, &RenderLayers)>().iter(world) {

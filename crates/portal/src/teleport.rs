@@ -10,7 +10,7 @@ const MIN_FLOOR_EXIT_OBJECT: f32 = 50.0;
 pub const MAX_EXIT_SPEED: f32 = 1000.0;
 /// where a portal starts counting as a floor, the float 0.7071 rather than one over root two
 #[allow(clippy::approx_constant)]
-const FLOORISH: f32 = 0.7071;
+pub const FLOORISH: f32 = 0.7071;
 /// EntityIsInPortalHole's box, set up at 0x2ccab8 in server.so
 const HOLE_NEAR: f32 = 0.5;
 const HOLE_FAR: f32 = 500.0;

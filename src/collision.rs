@@ -5,7 +5,7 @@ use portal::movement::standable;
 use portal::pair::Vec3;
 
 /// the engine's trace skin, 0x829f88 in engine.so
-const DIST_EPSILON: f32 = 0.03125;
+pub const DIST_EPSILON: f32 = 0.03125;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Trace {

@@ -178,6 +178,7 @@ fn run_script(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn simulate(
     level: Res<Level>,
     time: Res<Time<Fixed>>,

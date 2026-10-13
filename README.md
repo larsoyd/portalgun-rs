@@ -56,6 +56,8 @@ airwalk state. Chell's model has no airwalk clip, and the game falls back to
 its first sequence on the bind pose. This is the default here too; the Options
 menu can enable holding the jump clip instead.
 Movement and collision still use the existing Portal controller.
+A grounded capsule rig dipping below its supporting floor does not create a
+portal copy until the collision hull enters beyond the existing trace tolerance.
 
 A portal that turns you about its normal leaves the view rolled. As in the
 game, the roll eases back every frame, faster the more you are tipped and twice
