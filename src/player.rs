@@ -44,6 +44,7 @@ pub struct Controls {
     pub jump_pressed: bool,
     pub fire1: bool,
     pub fire2: bool,
+    pub use_object: bool,
 }
 
 #[derive(Resource)]
@@ -150,6 +151,7 @@ fn read_keys(
     controls.jump_pressed |= keys.just_pressed(KeyCode::Space);
     controls.fire1 |= mouse.just_pressed(MouseButton::Left);
     controls.fire2 |= mouse.just_pressed(MouseButton::Right);
+    controls.use_object |= keys.just_pressed(KeyCode::KeyE);
 }
 
 fn run_script(
@@ -161,6 +163,7 @@ fn run_script(
     for action in script.0.due(time.elapsed_secs()) {
         info!("[script] at={:.2} action={action:?}", time.elapsed_secs());
         match action {
+            Action::Use => controls.use_object = true,
             Action::Fire1 => controls.fire1 = true,
             Action::Fire2 => controls.fire2 = true,
             Action::Jump => controls.jump_pressed = true,
@@ -179,7 +182,7 @@ fn run_script(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn simulate(
+pub(crate) fn simulate(
     level: Res<Level>,
     time: Res<Time<Fixed>>,
     portals: Res<Portals>,
@@ -188,6 +191,7 @@ fn simulate(
     mut result: ResMut<MovementResult>,
     mut history: ResMut<VisualHistory>,
     mut faults: Local<crate::diagnostics::Faults>,
+    objects: Option<Res<crate::objects::Objects>>,
 ) {
     if faults.raised(
         "nonfinite",
@@ -204,7 +208,14 @@ fn simulate(
         jump_pressed: pressed,
         crouch: controls.crouch,
     };
-    result.0 = player.step(&input, time.delta_secs(), &level, portals.linked());
+    let obstacle = objects.as_ref().filter(|o| !o.holding()).map(|o| &o.cube);
+    result.0 = player.step_with_object(
+        &input,
+        time.delta_secs(),
+        &level,
+        portals.linked(),
+        obstacle,
+    );
     if let (Some(i), Some(pair)) = (result.0, portals.linked()) {
         history.teleport(&player, &pair[i], &pair[1 - i]);
     } else {
@@ -245,7 +256,11 @@ fn walk(
     if let Some(n) = player.ground.filter(|&n| n < footing.surfaces.len()) {
         footing.last = n;
     }
-    let surface = footing.surfaces[footing.last].clone();
+    let surface = if player.ground == Some(usize::MAX - 1) {
+        footing.object.clone()
+    } else {
+        footing.surfaces[footing.last].clone()
+    };
     let mut heard = |what: &str, step: Step| {
         let name = match step.left {
             true => &surface.step_left,
@@ -375,6 +390,7 @@ fn woosh(
 #[derive(Resource)]
 pub struct Footing {
     surfaces: Vec<Surface>,
+    object: Surface,
     steps: Steps,
     /// the block last stood on, the surface a jump pushes off
     last: usize,
@@ -401,8 +417,10 @@ fn read_footing(
                 surfaces[0].step_left
             );
             player.set_surfaces(surfaces.clone());
+            player.set_object_surface(s.get("metalpanel").clone());
             commands.insert_resource(Footing {
                 surfaces,
+                object: s.get("metalpanel").clone(),
                 steps: Steps::default(),
                 last: 0,
                 plane: PlaneSounds::default(),

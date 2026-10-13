@@ -76,6 +76,70 @@ impl Space {
         }
     }
 
+    pub fn trace_oriented(
+        &self,
+        owner: Option<usize>,
+        from: Vec3,
+        to: Vec3,
+        basis: portal::carry::Basis,
+        half: f32,
+    ) -> Trace {
+        let expand = |solids: &[Solid]| {
+            solids
+                .iter()
+                .map(|(id, planes)| (*id, expanded_planes(planes, basis, half)))
+                .collect()
+        };
+        let expanded = Space {
+            world: expand(&self.world),
+            pair: self.pair,
+            sims: self
+                .sims
+                .iter()
+                .map(|s| Sim {
+                    front: expand(&s.front),
+                    tube: expand(&s.tube),
+                    wall: expand(&s.wall),
+                    linked: expand(&s.linked),
+                    hole: expand(&s.hole),
+                })
+                .collect(),
+        };
+        expanded.trace(owner, from, to, [0.0; 3], [0.0; 3])
+    }
+
+    pub fn add_object(&mut self, centre: Vec3, basis: portal::carry::Basis, half: f32) {
+        let planes: Vec<Plane> = basis
+            .into_iter()
+            .flat_map(|axis| {
+                [-1.0, 1.0].map(|sign| {
+                    let normal = axis.map(|v| v * sign);
+                    Plane {
+                        normal,
+                        distance: dot(normal, centre) + half,
+                    }
+                })
+            })
+            .collect();
+        self.add_solid(planes);
+    }
+
+    pub fn add_solid(&mut self, planes: Vec<Plane>) {
+        self.world.push((usize::MAX - 1, planes.clone()));
+        if let Some(pair) = self.pair {
+            for (i, sim) in self.sims.iter_mut().enumerate() {
+                if let Some(solid) = solid(
+                    usize::MAX - 1,
+                    [planes.clone(), vec![bound(&pair[i], 0, -1.0, FRONT_CLIP)]].concat(),
+                ) {
+                    sim.front.push(solid);
+                }
+                let linked = carried(&[(usize::MAX - 1, planes.clone())], &pair[1 - i], &pair[i]);
+                sim.linked.extend(linked);
+            }
+        }
+    }
+
     /// TracePlayerBBox: the real world, or the owning portal's world when it lets the hull further.
     /// Translated from 0x2ce890 and 0x2dc8e0 (decompiled, server.so)
     pub fn trace(
@@ -311,4 +375,55 @@ fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 
 fn dot64(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn expanded_planes(planes: &[Plane], basis: portal::carry::Basis, half: f32) -> Vec<Plane> {
+    let support = |normal: Vec3| {
+        half * basis
+            .iter()
+            .map(|axis| dot(*axis, normal).abs())
+            .sum::<f32>()
+    };
+    let mut result: Vec<Plane> = planes
+        .iter()
+        .map(|p| Plane {
+            normal: p.normal,
+            distance: p.distance + support(p.normal),
+        })
+        .collect();
+    let points = vertices(planes);
+    if points.is_empty() {
+        return result;
+    }
+    let mut add_axis = |axis: Vec3| {
+        let length = dot(axis, axis).sqrt();
+        if length < 1e-6 {
+            return;
+        }
+        let normal = axis.map(|v| v / length);
+        for sign in [-1.0, 1.0] {
+            let normal = normal.map(|v| v * sign);
+            if result.iter().any(|p| dot(p.normal, normal) > 0.99999) {
+                continue;
+            }
+            let distance = points
+                .iter()
+                .map(|p| dot64(normal.map(f64::from), *p))
+                .fold(f64::NEG_INFINITY, f64::max) as f32
+                + support(normal);
+            result.push(Plane { normal, distance });
+        }
+    };
+    for axis in basis {
+        add_axis(axis);
+    }
+    for (i, a) in planes.iter().enumerate() {
+        for b in &planes[i + 1..] {
+            let edge = portal::carry::cross(a.normal, b.normal);
+            for axis in basis {
+                add_axis(portal::carry::cross(edge, axis));
+            }
+        }
+    }
+    result
 }

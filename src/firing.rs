@@ -27,7 +27,7 @@ impl Plugin for FiringPlugin {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn fire(
+pub(crate) fn fire(
     mut commands: Commands,
     time: Res<Time>,
     mut controls: ResMut<Controls>,
@@ -41,8 +41,12 @@ fn fire(
     files: Res<Files>,
     mut audio: ResMut<Assets<AudioSource>>,
     mut rng: Local<crate::random::Xorshift>,
+    objects: Option<Res<crate::objects::Objects>>,
 ) {
     let now = time.elapsed_secs();
+    if objects.is_some_and(|o| o.holding() || now < o.blocked_until) {
+        return;
+    }
     let pressed = [
         (Colour::Blue, std::mem::take(&mut controls.fire1)),
         (Colour::Orange, std::mem::take(&mut controls.fire2)),

@@ -97,6 +97,7 @@ pub struct Walker {
     surfaces: Vec<Surface>,
     surface_friction: f32,
     surface: Surface,
+    object_surface: Surface,
     categorize_on_spawn: bool,
     /// the portal whose simulator holds the player, m_hPortalEnvironment
     pub owner: Option<usize>,
@@ -135,6 +136,7 @@ impl Walker {
             surfaces: Vec::new(),
             surface_friction: 1.0,
             surface: Surface::default(),
+            object_surface: Surface::default(),
             categorize_on_spawn: true,
             owner: None,
             pitch_reorientation: false,
@@ -151,6 +153,10 @@ impl Walker {
 
     pub fn set_surfaces(&mut self, surfaces: Vec<Surface>) {
         self.surfaces = surfaces;
+    }
+
+    pub fn set_object_surface(&mut self, surface: Surface) {
+        self.object_surface = surface;
     }
 
     pub fn eye(&self) -> Vec3 {
@@ -219,7 +225,21 @@ impl Walker {
         chamber: &Chamber,
         linked: Option<[Portal; 2]>,
     ) -> Option<usize> {
-        let space = Space::new(chamber, linked.as_ref());
+        self.step_with_object(input, dt, chamber, linked, None)
+    }
+
+    pub fn step_with_object(
+        &mut self,
+        input: &Input,
+        dt: f32,
+        chamber: &Chamber,
+        linked: Option<[Portal; 2]>,
+        object: Option<&portal::carry::RigidCube>,
+    ) -> Option<usize> {
+        let mut space = Space::new(chamber, linked.as_ref());
+        if let Some(object) = object {
+            space.add_object(object.position, object.rotation, object.half_size);
+        }
         let space = &space;
         self.command += 1;
         self.clock += dt;
@@ -564,7 +584,11 @@ impl Walker {
         self.ground = if self.grounded { tr.block } else { None };
         if let Some(n) = self.ground {
             self.velocity[2] = 0.0;
-            self.surface = self.surfaces.get(n).cloned().unwrap_or_default();
+            self.surface = if n == usize::MAX - 1 {
+                self.object_surface.clone()
+            } else {
+                self.surfaces.get(n).cloned().unwrap_or_default()
+            };
             self.surface_friction = (self.surface.friction * 1.25).min(1.0);
         } else if self.velocity[2] > 0.0 && !leaves_ground(self.velocity[2]) {
             self.surface_friction = 0.25;
@@ -698,7 +722,6 @@ impl Walker {
             self.forced_duck = true;
             centre[2] += if from.forward[2] > 0.0 { -16.0 } else { 16.0 };
         }
-        // nothing can be carried in the sandbox, so a held object never clears it
         self.pitch_reorientation = pitch_reorients(self.forward(), from, to.forward[2]);
         let offset = collision::sub(self.feet, centre);
         self.feet = collision::add(through_point(from, to, centre), offset);

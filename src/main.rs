@@ -143,6 +143,7 @@ fn run(args: Args, mut app: App) -> ExitCode {
         .insert_resource(GameIcon(game_icon))
         .add_systems(Update, icon::set_window_icon)
         .add_plugins(PlayerPlugin)
+        .add_plugins(portalgun::objects::ObjectsPlugin)
         .add_plugins(portalgun::body::BodyPlugin)
         .insert_resource(GunMeshes(mdl, pieces))
         .add_plugins(ViewPlugin)

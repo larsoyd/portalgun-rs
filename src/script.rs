@@ -3,6 +3,7 @@
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Action {
+    Use,
     Fire1,
     Fire2,
     Jump,
@@ -39,6 +40,7 @@ impl Script {
             };
             let time = number(0).and_then(|t| if t >= 0.0 { Ok(t) } else { Err(at()) })?;
             let action = match words.get(1).copied() {
+                Some("use") => Action::Use,
                 Some("fire1") => Action::Fire1,
                 Some("fire2") => Action::Fire2,
                 Some("jump") => Action::Jump,
