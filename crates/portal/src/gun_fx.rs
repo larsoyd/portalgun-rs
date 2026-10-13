@@ -94,6 +94,20 @@ pub struct Sprite {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Beam {
+    pub start: &'static str,
+    pub end: &'static str,
+    pub material: &'static str,
+    pub width: f32,
+    pub end_width: f32,
+    pub alpha: f32,
+    pub amplitude: f32,
+    pub speed: f32,
+    pub frame_rate: f32,
+    pub segments: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum Kind {
     GravLight,
     Portal1Light,
@@ -121,6 +135,8 @@ pub struct GunFx {
     state: State,
     pulse: f32,
     pulse_up: bool,
+    max_size: f32,
+    world: bool,
 }
 
 fn portal_colour(last_fired: Option<u8>) -> [f32; 3] {
@@ -141,6 +157,52 @@ fn random_float(random: &mut impl FnMut() -> f32, lo: f32, hi: f32) -> f32 {
 }
 
 impl GunFx {
+    // Translated from 0x55b8a0 (decompiled, client.so)
+    pub fn set_max_size(&mut self, value: f32) {
+        self.max_size = value;
+    }
+
+    // Translated from 0x559b80 and 0x55b280 (decompiled, client.so)
+    pub fn beams(&self) -> Vec<Beam> {
+        if self.state != State::Holding {
+            return Vec::new();
+        }
+        END_CAPS
+            .iter()
+            .map(|&start| Beam {
+                start,
+                end: "muzzle",
+                material: if self.world {
+                    "sprites/grav_beam"
+                } else {
+                    "sprites/grav_beam_noz"
+                },
+                width: if self.world { 0.5 } else { 0.0 },
+                end_width: 2.0,
+                alpha: 128.0,
+                amplitude: 16.0,
+                speed: 150.0,
+                frame_rate: 30.0,
+                segments: 8,
+            })
+            .collect()
+    }
+
+    // Translated from 0x55a0f0 (decompiled, client.so)
+    pub fn world(now: f32) -> Self {
+        let mut fx = Self::new(now);
+        fx.world = true;
+        for e in &mut fx.effects {
+            let factor = match e.kind {
+                Kind::GravLight | Kind::Portal1Light | Kind::Portal2Light => 0.03 / 0.018,
+                Kind::Glow | Kind::EndCap => 2.0,
+                _ => 1.0,
+            };
+            e.scale.set_absolute(e.scale.value(now) * factor, now);
+        }
+        fx
+    }
+
     /// StartEffects: every sprite made hidden with its first size and alpha.
     pub fn new(now: f32) -> Self {
         let mut effects = Vec::new();
@@ -226,6 +288,8 @@ impl GunFx {
             state: State::None,
             pulse: 0.0,
             pulse_up: false,
+            max_size: EFFECTS_MAX_SIZE,
+            world: false,
         }
     }
 
@@ -242,7 +306,9 @@ impl GunFx {
                     } else {
                         (0.4, 32.0)
                     };
-                    e.scale.init_from_current(scale * SPRITE_SCALE, 0.2, now);
+                    let (factor, duration) = if self.world { (2.0, 0.4) } else { (1.0, 0.2) };
+                    e.scale
+                        .init_from_current(scale * factor * SPRITE_SCALE, duration, now);
                     e.alpha.init_from_current(alpha, 0.2, now);
                     e.visible = true;
                 }
@@ -286,20 +352,22 @@ impl GunFx {
                 Kind::Portal1Light if active => e.visible = last_fired == Some(1),
                 Kind::Portal2Light if active => e.visible = last_fired == Some(2),
                 Kind::Glow => {
-                    let scale = random_float(random, 0.0075, 0.05) * SPRITE_SCALE;
+                    let factor = if self.world { 2.0 } else { 1.0 };
+                    let scale = random_float(random, 0.0075 * factor, 0.05 * factor) * SPRITE_SCALE;
                     e.scale.init_from_current(scale, 0.1, now);
                     let alpha = random_int(random, 10, 24);
                     e.alpha.set_absolute(alpha, now);
                 }
                 Kind::EndCap => {
-                    let scale = random_float(random, 1.0, 3.0);
+                    let factor = if self.world { 2.0 } else { 1.0 };
+                    let scale = random_float(random, factor, 3.0 * factor);
                     e.scale.set_absolute(scale, now);
                     let alpha = random_int(random, 96, 128);
                     e.alpha.set_absolute(alpha, now);
                 }
                 Kind::MuzzleGlow => {
                     e.scale.set_absolute(
-                        EFFECTS_MIN_SIZE + (EFFECTS_MAX_SIZE - EFFECTS_MIN_SIZE) * self.pulse,
+                        EFFECTS_MIN_SIZE + (self.max_size - EFFECTS_MIN_SIZE) * self.pulse,
                         now,
                     );
                     e.alpha.set_absolute(pulsed_alpha, now);
@@ -330,6 +398,63 @@ impl GunFx {
                 color: e.color,
                 alpha: e.alpha.value(now).trunc(),
                 size: e.scale.value(now),
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BeamPoint {
+    pub fraction: f32,
+    pub offset: f32,
+    pub radius: f32,
+    pub texture: f32,
+}
+
+// Translated from 0x5d2e00 (decompiled, client.so)
+pub fn beam_noise(random: &mut impl FnMut() -> f32) -> [f32; 129] {
+    fn fill(noise: &mut [f32], scale: f32, random: &mut impl FnMut() -> f32) {
+        let n = noise.len() - 1;
+        if n <= 1 {
+            return;
+        }
+        let mid = n / 2;
+        noise[mid] = ((random() * scale) as f64 + (noise[0] + noise[n]) as f64 * 0.5) as f32;
+        fill(&mut noise[mid..], scale * 0.5, random);
+        fill(&mut noise[..=mid], scale * 0.5, random);
+    }
+    let mut noise = [0.0; 129];
+    fill(&mut noise, 1.0, random);
+    noise
+}
+
+impl Beam {
+    // Translated from 0x5d2f00 and 0x2fe1f0 (decompiled, client.so)
+    pub fn points(&self, length: f32, frequency: f32, noise: &[f32; 129]) -> Vec<BeamPoint> {
+        if (length as f64) < 0.1 {
+            return Vec::new();
+        }
+        let mut count = (length as f64 * 0.25 + 3.0) as usize;
+        let half_width = self.width.max(self.end_width) * 0.5;
+        if ((length * (1.0 / (count - 1) as f64) as f32) as f64) < 1.414 * half_width as f64 {
+            count = ((0.7072135785007072 * length as f64 / half_width as f64) as usize + 1).max(2);
+        }
+        count = count.min(128);
+        let step = (1.0 / (count - 1) as f64) as f32;
+        let noise_step = (127.0 * 65536.0 * step) as usize;
+        let length_scale = (length as f64 * 0.01) as f32;
+        let mut texture = (frequency * self.speed) % 1.0;
+        (0..count)
+            .map(|i| {
+                let fraction = i as f32 * step;
+                let point = BeamPoint {
+                    fraction,
+                    offset: self.amplitude * length_scale * noise[(i * noise_step) >> 16],
+                    radius: self.width + fraction * (self.end_width - self.width),
+                    texture,
+                };
+                texture += step * length_scale;
+                point
             })
             .collect()
     }

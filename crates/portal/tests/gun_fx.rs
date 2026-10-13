@@ -191,3 +191,116 @@ fn glow_flicker_spans_source_random_ranges() {
         );
     }
 }
+
+#[test]
+fn a_clear_glow_uses_the_networked_maximum_and_preserves_pulse_phase() {
+    let mut fx = GunFx::new(0.0);
+    fx.set_state(State::Ready, Some(1), 0.0);
+    fx.think(Some(1), 0.01, 0.0, &mut || 0.0);
+    fx.set_max_size(50.0);
+    fx.think(Some(1), 0.5, 0.5, &mut || 0.0);
+    let s = fx.sprites(0.5);
+    let glow = sprite(&s, "Inside_effects", "sprites/portalgun_effects").unwrap();
+    assert_eq!(glow.size, 26.5);
+    assert_eq!(glow.alpha, 112.0);
+    fx.set_max_size(4.0);
+    fx.think(Some(1), 0.0, 0.5, &mut || 0.0);
+    assert_eq!(
+        sprite(
+            &fx.sprites(0.5),
+            "Inside_effects",
+            "sprites/portalgun_effects"
+        )
+        .unwrap()
+        .size,
+        3.5
+    );
+}
+
+#[test]
+fn holding_beams_join_each_prong_to_the_muzzle_and_stop_on_release() {
+    let mut fx = GunFx::new(0.0);
+    assert!(fx.beams().is_empty());
+    fx.set_state(State::Holding, None, 0.0);
+    let beams = fx.beams();
+    assert_eq!(beams.len(), 3);
+    for (i, b) in beams.iter().enumerate() {
+        assert_eq!(b.start, ["Arm1_attach3", "Arm2_attach3", "Arm3_attach3"][i]);
+        assert_eq!(b.end, "muzzle");
+        assert_eq!(b.material, "sprites/grav_beam_noz");
+        assert_eq!((b.width, b.end_width, b.alpha), (0.0, 2.0, 128.0));
+        assert_eq!(
+            (b.amplitude, b.speed, b.frame_rate, b.segments),
+            (16.0, 150.0, 30.0, 8)
+        );
+    }
+    fx.set_state(State::Ready, None, 0.1);
+    assert!(fx.beams().is_empty());
+}
+
+#[test]
+fn world_glows_and_caps_use_their_own_scales_and_beam_material() {
+    let mut fx = GunFx::world(0.0);
+    fx.set_state(State::Holding, Some(2), 0.0);
+    fx.think(Some(2), 0.01, 0.01, &mut || 0.0);
+    let s = fx.sprites(1.0);
+    assert_eq!(
+        sprite(&s, "Arm1_attach1", "sprites/glow04_noz")
+            .unwrap()
+            .size,
+        0.015 * 128.0
+    );
+    assert_eq!(
+        sprite(&s, "Arm1_attach3", "sprites/grav_flare")
+            .unwrap()
+            .size,
+        2.0
+    );
+    assert_eq!(
+        sprite(&s, "Body_light", "sprites/orangelight")
+            .unwrap()
+            .size,
+        0.03 * 128.0
+    );
+    assert_eq!(fx.beams()[0].material, "sprites/grav_beam");
+    assert_eq!(fx.beams()[0].width, 0.5);
+}
+
+#[test]
+fn beam_noise_refines_right_before_left_and_pins_both_ends() {
+    let mut count = 0;
+    let noise = portal::gun_fx::beam_noise(&mut || {
+        count += 1;
+        match count {
+            1 => 1.0,
+            2 => -1.0,
+            3 => 0.5,
+            _ => 0.0,
+        }
+    });
+    assert_eq!(count, 127);
+    assert_eq!((noise[0], noise[128]), (0.0, 0.0));
+    assert_eq!(
+        (noise[64], noise[96], noise[112], noise[32]),
+        (1.0, 0.0, 0.125, 0.5)
+    );
+}
+
+#[test]
+fn attached_beams_resample_noise_and_taper_in_source_units() {
+    let mut fx = GunFx::new(0.0);
+    fx.set_state(State::Holding, None, 0.0);
+    let beam = fx.beams()[0];
+    let noise = std::array::from_fn(|i| i as f32);
+    let points = beam.points(20.0, 0.125, &noise);
+    assert_eq!(points.len(), 8);
+    for (p, index) in points.iter().zip([0, 18, 36, 54, 72, 90, 108, 126]) {
+        assert_eq!(p.offset, 3.2 * index as f32);
+    }
+    assert_eq!((points[0].radius, points[7].radius), (0.0, 2.0));
+    assert_eq!(points[0].texture, 0.75);
+    assert!((points[7].texture - 0.95).abs() < 0.000001);
+    assert!(beam.points(0.099, 0.0, &noise).is_empty());
+    assert_eq!(beam.points(0.1, 0.0, &noise).len(), 2);
+    assert_eq!(beam.points(1000.0, 0.0, &noise).len(), 128);
+}

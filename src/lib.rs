@@ -13,6 +13,7 @@ pub mod faces;
 pub mod feet;
 pub mod firing;
 pub mod gun;
+pub mod gun_visual;
 pub mod hud;
 pub mod icon;
 pub mod player;

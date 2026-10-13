@@ -137,7 +137,31 @@ pub struct MaterialSource {
     ignore_z: bool,
 }
 impl MaterialSource {
+    pub fn upload(
+        self,
+        images: &mut Assets<Image>,
+        materials: &mut Assets<ParticleMaterial>,
+    ) -> Handle<ParticleMaterial> {
+        materials.add(ParticleMaterial {
+            params: self.params,
+            texture: images.add(self.image),
+            key: MaterialKey {
+                blend: self.blend,
+                ignore_z: self.ignore_z,
+            },
+        })
+    }
+
+    pub fn read_gun(search: &SearchPath, name: &str) -> Result<Self, String> {
+        Self::read_mode(search, name, true)?
+            .ok_or_else(|| format!("unsupported gun effect material {name}"))
+    }
+
     pub fn read(search: &SearchPath, name: &str) -> Result<Option<Self>, String> {
+        Self::read_mode(search, name, false)
+    }
+
+    fn read_mode(search: &SearchPath, name: &str, beam: bool) -> Result<Option<Self>, String> {
         if name.is_empty() {
             return Ok(None);
         }
@@ -251,7 +275,7 @@ impl MaterialSource {
                     None,
                 )
             }
-            "sprite" if float("$spriterendermode", 0.0) == 5.0 => {
+            "sprite" if beam || float("$spriterendermode", 0.0) == 5.0 => {
                 image.texture_descriptor.format =
                     image.texture_descriptor.format.remove_srgb_suffix();
                 params.flags.z = 0.0;

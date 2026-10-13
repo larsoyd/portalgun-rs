@@ -38,8 +38,8 @@ const MAX_LAG: f32 = 1.5;
 pub struct Gun {
     pub mdl: Mdl,
     pub anim: GunAnim,
-    joints: Vec<Entity>,
-    root: Entity,
+    pub(crate) joints: Vec<Entity>,
+    pub(crate) root: Entity,
     motion: ViewMotion,
 }
 
@@ -331,7 +331,14 @@ fn spawn_view(
     commands.remove_resource::<GunMeshes>();
 }
 
-fn settle_to_idle(gun: Option<ResMut<Gun>>, time: Res<Time>) {
+pub(crate) fn settle_to_idle(
+    gun: Option<ResMut<Gun>>,
+    time: Res<Time>,
+    effects: Option<Res<crate::gun_visual::GunVisualState>>,
+) {
+    if effects.is_some_and(|effects| effects.holding) {
+        return;
+    }
     let Some(mut gun) = gun else { return };
     let now = time.elapsed_secs();
     let Gun { mdl, anim, .. } = &mut *gun;
@@ -341,7 +348,7 @@ fn settle_to_idle(gun: Option<ResMut<Gun>>, time: Res<Time>) {
     }
 }
 
-fn pose_view(
+pub(crate) fn pose_view(
     gun: Option<Res<Gun>>,
     time: Res<Time>,
     mut transforms: Query<&mut Transform>,

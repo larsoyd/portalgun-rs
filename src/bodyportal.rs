@@ -48,9 +48,9 @@ pub fn material(mut base: StandardMaterial) -> BodyMaterial {
 pub struct PortalGhost;
 
 #[derive(Resource)]
-struct Ghost {
-    original: Entity,
-    root: Entity,
+pub(crate) struct Ghost {
+    pub(crate) original: Entity,
+    pub(crate) root: Entity,
     copies: Vec<CopyPart>,
 }
 

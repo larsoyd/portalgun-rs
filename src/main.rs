@@ -150,6 +150,7 @@ fn run(args: Args, mut app: App) -> ExitCode {
         .add_plugins(FiringPlugin)
         .insert_resource(particles)
         .add_plugins(portalgun::effects::EffectsPlugin)
+        .add_plugins(portalgun::gun_visual::GunVisualPlugin)
         .add_plugins(portalgun::impacts::PortalImpactsPlugin)
         .add_plugins(HudPlugin)
         .run();
