@@ -242,7 +242,11 @@ fn input(
                     .is_some_and(|draft| *draft != config.0)
                 {
                     match menu.options.apply(&mut config.0, &path.0) {
-                        Ok(()) => info!("[menu] settings=saved file={}", path.0.display()),
+                        Ok(()) => info!(
+                            "[menu] settings=saved file={} effective={:?}",
+                            path.0.display(),
+                            config.0
+                        ),
                         Err(reason) => {
                             error!("[menu] settings=failed reason={reason}");
                             menu.error = Some(format!("Could not save settings: {reason}"));

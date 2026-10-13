@@ -329,6 +329,12 @@ per line as seconds, action and arguments: `fire1`, `fire2`, `jump`,
 `look <yaw> <pitch>` and `move <forward> <side>`. With `--shot-at <seconds>`
 and `--quit-after <seconds>` it takes screenshots and exits on its own.
 
+To record a bug, run `cargo run --release -- --log-file portalgun.log` and
+include the log with a screenshot. It records startup failures, effective settings,
+GPU diagnostics, portal/body decisions, movement and exit status. The file appends
+across runs and rotates at about 8 MiB, keeping one `.previous` file. `RUST_LOG`
+can override verbosity; `RUST_LOG=info,portalgun=debug` keeps detailed app diagnostics.
+
 ## Setup
 
 The program looks for Portal in this order:

@@ -398,6 +398,7 @@ fn animate(
     portals: Option<Res<crate::faces::Portals>>,
     gait: Option<Res<crate::bodyanim::Gait>>,
     config: Option<Res<crate::player::Config>>,
+    mut pose_error: Local<Option<String>>,
 ) {
     let (Some(rig), Some(clips)) = (rig, clips) else {
         return;
@@ -417,9 +418,15 @@ fn animate(
         time.elapsed_secs(),
         time.delta_secs(),
     ) {
-        Ok(pose) => pose,
+        Ok(pose) => {
+            *pose_error = None;
+            pose
+        }
         Err(reason) => {
-            error!("[body] pose refused: {reason}");
+            if pose_error.as_ref() != Some(&reason) {
+                error!("[body] pose=failed reason={reason} at={} grounded={} ducked={} revision={} velocity={:?}", time.elapsed_secs(), player.grounded, player.duck.ducked, visual.revision, visual.pose.velocity);
+                *pose_error = Some(reason);
+            }
             return;
         }
     };

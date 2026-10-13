@@ -186,7 +186,14 @@ fn simulate(
     mut player: ResMut<Player>,
     mut result: ResMut<MovementResult>,
     mut history: ResMut<VisualHistory>,
+    mut faults: Local<crate::diagnostics::Faults>,
 ) {
+    if faults.raised(
+        "nonfinite",
+        crate::diagnostics::invalid_player(&player).is_some(),
+    ) {
+        error!("[movement] state=invalid field={:?} feet={:?} velocity={:?} angles={:?} eye={} owner={:?} pair={:?} dt={}", crate::diagnostics::invalid_player(&player), player.feet, player.velocity, (player.yaw, player.pitch, player.roll), player.duck.eye, player.owner, portals.linked(), time.delta_secs());
+    }
     history.synchronize(&player);
     let pressed = std::mem::take(&mut controls.jump_pressed);
     let input = Input {

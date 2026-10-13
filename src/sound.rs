@@ -15,13 +15,14 @@ pub struct Files(pub SearchPath);
 pub struct Sounds {
     bank: Bank,
     waves: HashMap<String, Handle<AudioSource>>,
+    refused: std::collections::HashSet<String>,
     seed: crate::random::Xorshift,
 }
 
 impl Sounds {
     pub fn read(search: &SearchPath) -> portal::Result<Sounds> {
         let bank = Bank::read(search)?;
-        println!(
+        info!(
             "[sound] bank scripts={} missing_scripts={}",
             bank.scripts,
             bank.missing.len()
@@ -29,6 +30,7 @@ impl Sounds {
         Ok(Sounds {
             bank,
             waves: HashMap::new(),
+            refused: default(),
             seed: crate::random::Xorshift::default(),
         })
     }
@@ -104,7 +106,9 @@ impl Sounds {
         let entry = match self.bank.get(name) {
             Ok(e) => e,
             Err(e) => {
-                warn!("[sound] refused name={name} reason={e}");
+                if self.refused.insert(name.to_owned()) {
+                    warn!("[sound] refused name={name} reason={e}");
+                }
                 return None;
             }
         };
@@ -123,13 +127,17 @@ impl Sounds {
                     h
                 }
                 Err(e) => {
-                    warn!("[sound] refused name={name} wave={path} reason={e}");
+                    if self.refused.insert(path.clone()) {
+                        warn!("[sound] refused name={name} wave={path} reason={e}");
+                    }
                     return None;
                 }
             },
         };
+        self.refused.remove(name);
+        self.refused.remove(path);
         info!(
-            "[sound] played name={name} wave={path} volume={:.3} pitch={:.1}",
+            "[sound] queued name={name} wave={path} volume={:.3} pitch={:.1}",
             pick.volume, pick.pitch
         );
         let settings = mode

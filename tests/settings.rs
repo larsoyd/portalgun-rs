@@ -92,3 +92,17 @@ fn every_original_behaviour_switch_is_on_by_default_and_parses() {
             && !s.original_eye_gate
     );
 }
+
+#[test]
+fn nonfinite_settings_are_refused_before_reaching_the_camera() {
+    for key in ["fov", "sensitivity"] {
+        for value in ["NaN", "inf", "-inf", "1e999"] {
+            let line = format!("{key} = {value}");
+            let error = Settings::parse(&line).expect_err(&line);
+            assert!(
+                error.contains("line 1") && error.contains(key) && error.contains(value),
+                "{error}"
+            );
+        }
+    }
+}

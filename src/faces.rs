@@ -15,8 +15,8 @@ use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::pbr::{MaterialPipeline, MaterialPipelineKey};
 use bevy::prelude::*;
 use bevy::render::render_resource::{
-    AsBindGroup, CachedPipelineState, CompareFunction, PipelineCache, RenderPipelineDescriptor,
-    ShaderType, SpecializedMeshPipelineError, TextureFormat,
+    AsBindGroup, CachedPipelineState, CompareFunction, PipelineCache, PipelineDescriptor,
+    RenderPipelineDescriptor, ShaderType, SpecializedMeshPipelineError, TextureFormat,
 };
 use bevy::render::{ExtractSchedule, MainWorld, RenderApp};
 use bevy::shader::{load_shader_library, ShaderRef};
@@ -218,6 +218,19 @@ fn finish_warmup(cache: Res<PipelineCache>, mut main: ResMut<MainWorld>) {
         );
     } else if warmup.frames >= 600 {
         warmup.ready = true;
+        for (id, pipeline) in cache.pipelines().enumerate() {
+            if matches!(pipeline.state, CachedPipelineState::Ok(_)) {
+                continue;
+            }
+            let label = match &pipeline.descriptor {
+                PipelineDescriptor::RenderPipelineDescriptor(p) => p.label.as_deref(),
+                PipelineDescriptor::ComputePipelineDescriptor(p) => p.label.as_deref(),
+            };
+            warn!(
+                "[portal] preparation=pending pipeline={id} label={label:?} state={:?}",
+                pipeline.state
+            );
+        }
         warn!(
             "[portal] preparation=timeout frames={} pipelines={count}",
             warmup.frames
@@ -491,6 +504,7 @@ fn draw_views(
     mut visibility: Query<&mut Visibility>,
     visual: Option<Res<crate::visual::VisualPlayer>>,
     warmup: Option<Res<ViewWarmup>>,
+    mut faults: Local<crate::diagnostics::Faults>,
 ) {
     let Some(faces) = faces else { return };
     let faces = faces.into_inner();
@@ -498,9 +512,59 @@ fn draw_views(
     let warming = warmup.is_some_and(|w| !w.ready);
     let warm_eye = Transform::from_translation(eye.translation + Vec3::new(2.0, 1.0, 2.0))
         .looking_at(eye.translation - Vec3::Y * 0.5, Vec3::Y);
+    let perspective = matches!(projection, Projection::Perspective(_));
+    if faults.raised("projection", !perspective) {
+        error!(
+            "[portal] views=skipped reason=non_perspective_main_camera projection={projection:?}"
+        );
+    }
     let Projection::Perspective(perspective) = projection else {
         return;
     };
+    let mut missing = Vec::new();
+    for (colour, chain) in faces.chain.iter().enumerate() {
+        for entity in &chain.cameras {
+            if !cameras.contains(*entity) {
+                missing.push(format!("camera:{entity:?}"));
+            }
+        }
+        for image in &chain.images {
+            if images.get(image).is_none() {
+                missing.push(format!("image:{:?}", image.id()));
+            }
+        }
+        for (entity, material) in chain
+            .faces
+            .iter()
+            .chain(std::iter::once(&(chain.fix.0, chain.fix.2.clone())))
+        {
+            if !visibility.contains(*entity) {
+                missing.push(format!("face:{entity:?}"));
+            }
+            if materials.get(material).is_none() {
+                missing.push(format!("material:{:?}", material.id()));
+            }
+        }
+        for mesh in [&faces.mesh[colour], &chain.fix.1] {
+            if meshes.get(mesh).is_none() {
+                missing.push(format!("mesh:{:?}", mesh.id()));
+            }
+        }
+    }
+    if !cameras.contains(faces.doubler.0) {
+        missing.push(format!("doubler_camera:{:?}", faces.doubler.0));
+    }
+    for image in [&faces.doubler.1, &faces.blank] {
+        if images.get(image).is_none() {
+            missing.push(format!("image:{:?}", image.id()));
+        }
+    }
+    if faults.raised("resources", !missing.is_empty()) {
+        error!(
+            "[portal] update=incomplete reason=missing_resources count={} items={missing:?}",
+            missing.len()
+        );
+    }
     portals.think(time.delta_secs());
     let eye_at = from_bevy(eye.translation);
     for c in Colour::ALL {

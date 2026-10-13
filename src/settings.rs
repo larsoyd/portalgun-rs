@@ -43,7 +43,14 @@ impl Settings {
             }
             let at = || format!("line {}: {line}", n + 1);
             let (key, value) = line.split_once('=').ok_or_else(at)?;
-            let number = || value.trim().parse::<f32>().map_err(|_| at());
+            let number = || {
+                let number = value.trim().parse::<f32>().map_err(|_| at())?;
+                if number.is_finite() {
+                    Ok(number)
+                } else {
+                    Err(format!("{}, number must be finite", at()))
+                }
+            };
             let boolean = || value.trim().parse::<bool>().map_err(|_| at());
             match key.trim() {
                 "sensitivity" => s.sensitivity = number()?,

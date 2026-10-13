@@ -341,12 +341,28 @@ fn settle_to_idle(gun: Option<ResMut<Gun>>, time: Res<Time>) {
     }
 }
 
-fn pose_view(gun: Option<Res<Gun>>, time: Res<Time>, mut transforms: Query<&mut Transform>) {
+fn pose_view(
+    gun: Option<Res<Gun>>,
+    time: Res<Time>,
+    mut transforms: Query<&mut Transform>,
+    mut pose_error: Local<Option<String>>,
+) {
     let Some(gun) = gun else { return };
     let pose = match gun.anim.pose(&gun.mdl, time.elapsed_secs()) {
-        Ok(p) => p,
+        Ok(p) => {
+            *pose_error = None;
+            p
+        }
         Err(e) => {
-            warn!("[view] pose refused reason={e}");
+            let e = e.to_string();
+            if pose_error.as_ref() != Some(&e) {
+                warn!(
+                    "[view] pose=failed reason={e} sequence={} at={}",
+                    gun.anim.seq,
+                    time.elapsed_secs()
+                );
+                *pose_error = Some(e);
+            }
             return;
         }
     };

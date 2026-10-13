@@ -8,6 +8,7 @@ use bevy::prelude::*;
 use portal::install::{root, Install};
 use portalgun::args::Args;
 use portalgun::chamber::Chamber;
+use portalgun::diagnostics::{self, LogFile};
 use portalgun::display::{self, DisplayPlugin};
 use portalgun::faces::FacesPlugin;
 use portalgun::firing::FiringPlugin;
@@ -27,6 +28,36 @@ fn main() -> ExitCode {
         Ok(a) => a,
         Err(e) => return refuse(&e),
     };
+    let file = match args.log_file.as_deref().map(LogFile::open).transpose() {
+        Ok(file) => file,
+        Err(reason) => return refuse(&format!("log file: {reason}")),
+    };
+    let mut app = App::new();
+    if let Some(file) = &file {
+        app.insert_resource(file.clone());
+    }
+    app.add_plugins(bevy::log::LogPlugin {
+        filter: format!("{},portalgun=debug", bevy::log::DEFAULT_FILTER),
+        custom_layer: LogFile::layer,
+        ..default()
+    });
+    diagnostics::panic_log(file.clone());
+    info!(
+        "[startup] version={} pid={} args={args:?}",
+        env!("CARGO_PKG_VERSION"),
+        std::process::id()
+    );
+    let exit = run(args, app);
+    info!("[run] exit={exit:?}");
+    if let Some(file) = file {
+        if let Err(reason) = file.flush() {
+            eprintln!("[log] flush=failed reason={reason}");
+        }
+    }
+    exit
+}
+
+fn run(args: Args, mut app: App) -> ExitCode {
     let home = std::env::var("HOME").unwrap_or_default();
     let dir = root(
         args.install.as_deref(),
@@ -37,6 +68,10 @@ fn main() -> ExitCode {
         Ok(s) => s,
         Err(e) => return refuse(&e),
     };
+    info!(
+        "[settings] file={} effective={settings:?}",
+        args.settings.display()
+    );
     let script = match &args.script {
         Some(path) => match std::fs::read_to_string(path)
             .map_err(|e| e.to_string())
@@ -73,20 +108,24 @@ fn main() -> ExitCode {
         Err(e) => return refuse(&e),
     };
     desktop_entry(&game_icon);
-    println!(
+    info!(
         "[startup] install={} checked_ms={}",
         install.root.display(),
         started.elapsed().as_millis()
     );
-    let mut app = App::new();
     if let Some(script) = script {
         app.insert_resource(Scripted(script));
     }
     let exit = app
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(display::window(&settings)),
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .build()
+                .disable::<bevy::log::LogPlugin>()
+                .set(WindowPlugin {
+                    primary_window: Some(display::window(&settings)),
+                    ..default()
+                }),
+        )
         .add_plugins(DisplayPlugin)
         .add_plugins(RunPlugin {
             shots: args.shots,
@@ -123,7 +162,11 @@ fn main() -> ExitCode {
 
 fn refuse(reason: &str) -> ExitCode {
     let reason = reason.strip_prefix("refused: ").unwrap_or(reason);
-    eprintln!("[startup] refused: {reason}");
+    if bevy::log::tracing::dispatcher::has_been_set() {
+        error!("[startup] refused: {reason}");
+    } else {
+        eprintln!("[startup] refused: {reason}");
+    }
     ExitCode::from(2)
 }
 
@@ -131,7 +174,7 @@ fn settings(path: &Path) -> Result<Settings, String> {
     match std::fs::read_to_string(path) {
         Ok(text) => Settings::parse(&text).map_err(|e| format!("{}: {e}", path.display())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            println!("[settings] file={} missing=defaults", path.display());
+            info!("[settings] file={} missing=defaults", path.display());
             Settings::parse("")
         }
         Err(e) => Err(format!("{}: {e}", path.display())),
@@ -144,15 +187,15 @@ fn desktop_entry(bmp: &portal::bmp::Bmp) {
         .map(std::path::PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| Path::new(&h).join(".local/share")));
     let (Some(data_home), Ok(exe)) = (data_home, std::env::current_exe()) else {
-        println!("[icon] desktop_entry=skipped reason=no data home or executable path");
+        info!("[icon] desktop_entry=skipped reason=no data home or executable path");
         return;
     };
     match icon::write_desktop_entry(&data_home, bmp, &exe) {
-        Ok(changed) => println!(
+        Ok(changed) => info!(
             "[icon] desktop_entry={} changed={changed}",
             data_home.display()
         ),
-        Err(e) => println!("[icon] desktop_entry=failed reason={e}"),
+        Err(e) => info!("[icon] desktop_entry=failed reason={e}"),
     }
 }
 

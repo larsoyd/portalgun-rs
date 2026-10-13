@@ -7,6 +7,7 @@ pub mod bodyanim;
 pub mod bodyportal;
 pub mod chamber;
 pub mod collision;
+pub mod diagnostics;
 pub mod display;
 pub mod faces;
 pub mod feet;

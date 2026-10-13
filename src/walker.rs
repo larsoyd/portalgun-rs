@@ -109,6 +109,7 @@ pub struct Walker {
     forced_duck: bool,
     stuck_count: usize,
     stuck_time: f32,
+    last_fcps_warning: Option<f32>,
     clock: f32,
     command: u64,
 }
@@ -142,6 +143,7 @@ impl Walker {
             forced_duck: false,
             stuck_count: 0,
             stuck_time: 0.0,
+            last_fcps_warning: None,
             clock: 0.0,
             command: 0,
         }
@@ -720,12 +722,19 @@ impl Walker {
     /// Translated from 0x2ce4c0 (decompiled, server.so)
     fn check_stuck(&mut self, space: &Space) -> bool {
         if !self.base_check_stuck(space) {
+            self.last_fcps_warning = None;
             return false;
         }
         if let Some(push) = self.owner.zip(space.pair).map(|(i, pair)| pair[i].forward) {
             let old = self.feet;
             if !self.find_closest_passable_space(space, push) {
-                eprintln!("[walker] fcps=failed feet={:?} push={push:?}", self.feet);
+                if self
+                    .last_fcps_warning
+                    .is_none_or(|last| self.clock - last >= 5.0)
+                {
+                    self.last_fcps_warning = Some(self.clock);
+                    bevy::log::warn!("[walker] fcps=failed at={} feet={:?} velocity={:?} push={push:?} ducked={} owner={:?} attempts={} pair={:?}", self.clock, self.feet, self.velocity, self.duck.ducked, self.owner, self.stuck_count, space.pair);
+                }
             }
             if collision::dot(collision::sub(self.feet, old), push) < 0.0 {
                 self.feet = collision::add(old, collision::scale(push, 5.0));
