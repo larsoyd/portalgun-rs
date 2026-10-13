@@ -428,9 +428,9 @@ libwayland-dev libxkbcommon-dev` and run `cargo build --locked --release -j 4`.
 The Arch and Ubuntu-to-Windows workflows run on pushes to `main` that change
 source, tests, dependencies or their build configuration. README-only edits do
 not trigger builds. Cargo downloads and compiled dependencies are cached across
-runs. CI builds the executables and compiles the test suites with `--no-run`;
-running asset tests requires your own Portal installation. No game assets or
-built executables are uploaded by these workflows.
+runs. CI builds the release executables only. Run the test suites locally with
+your own Portal installation. No game assets or built executables are uploaded
+by these workflows.
 
 The window uses Portal's own icon, read from `portal/resource/game-icon.bmp` in
 your install. On Linux, Wayland compositors take a window's icon from a desktop

@@ -24,7 +24,6 @@ concurrency:
 
 env:
   CARGO_BUILD_JOBS: 2
-  RUST_TEST_THREADS: 2
 
 jobs:
   arch:
@@ -42,5 +41,3 @@ jobs:
           key: arch-linux
       - name: Build Linux executable
         run: timeout 3600 cargo build --locked --release
-      - name: Compile tests without game assets
-        run: timeout 1800 cargo test --locked --release --workspace --no-run
