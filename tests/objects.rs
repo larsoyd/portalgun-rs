@@ -249,3 +249,96 @@ fn rotated_cube_clears_a_brush_corner_without_a_phantom_overlap() {
     let p = [10.0, 10.0, 0.0];
     assert!(space.trace_oriented(None, p, p, basis, 20.0).start_solid);
 }
+
+#[test]
+fn released_cube_overlap_at_a_portal_rim_keeps_the_player_inside_the_room() {
+    let dir = portal::install::root(
+        None,
+        None,
+        std::path::Path::new(&std::env::var("HOME").unwrap()),
+    );
+    let install = portal::install::Install::open(&dir).unwrap();
+    let chamber = Chamber::test_chamber(&install.search).unwrap();
+    let pair = [
+        Portal::new(
+            [-384.0, -120.00001, 64.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        ),
+        Portal::new(
+            [-320.00003, 256.0, 64.0],
+            [0.0, -1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        ),
+    ];
+    let mut objects = Objects::default();
+    objects.cube = RigidCube::at([-220.0, -80.0, 20.03125]);
+    let mut player = Walker::at([-257.9, -95.17312, 0.03125]);
+    player.yaw = 21.8014;
+    player.pitch = 22.36;
+    assert!(objects.use_object(&player, &Space::new(&chamber, Some(&pair)), 2.7));
+    for tick in 0..280 {
+        let now = 2.7 + tick as f32 * 0.015;
+        if tick == 40 {
+            objects.release(now);
+        }
+        if tick == 93 {
+            player.pitch = 32.36;
+            assert!(objects.use_object(&player, &Space::new(&chamber, Some(&pair)), now));
+        }
+        if tick == 140 {
+            player.yaw = 180.0;
+            player.pitch = 0.0;
+        }
+        let input = portalgun::walker::Input {
+            forward: if (5.11..6.3).contains(&now) { 1.0 } else { 0.0 },
+            ..Default::default()
+        };
+        objects.push(&player, input.forward, 0.0);
+        let crossed = player.step_with_object(
+            &input,
+            0.015,
+            &chamber,
+            Some(pair),
+            (!objects.holding()).then_some(&objects.cube),
+        );
+        objects.advance(0.015, &player, &chamber, Some(pair), crossed, now);
+        assert!(
+            player.feet[2] >= -0.001,
+            "tick={tick} feet={:?}",
+            player.feet
+        );
+    }
+}
+
+#[test]
+fn object_overlap_waits_when_every_separation_path_crosses_static_solids() {
+    let chamber = Chamber {
+        blocks: vec![
+            block([-64.0, -64.0, -16.0], [64.0, 64.0, 0.0]),
+            block([-64.0, -64.0, 73.0], [64.0, 64.0, 89.0]),
+            block([-32.0, -64.0, 0.0], [-16.0, 64.0, 73.0]),
+            block([16.0, -64.0, 0.0], [32.0, 64.0, 73.0]),
+            block([-64.0, -32.0, 0.0], [64.0, -16.0, 73.0]),
+            block([-64.0, 16.0, 0.0], [64.0, 32.0, 73.0]),
+        ],
+    };
+    let mut player = Walker::at([0.0, 0.0, 0.03125]);
+    let cube = RigidCube::at([0.0, 0.0, 40.0]);
+    let start = player.feet;
+    for _ in 0..30 {
+        player.step_with_object(
+            &portalgun::walker::Input {
+                forward: 1.0,
+                ..Default::default()
+            },
+            0.015,
+            &chamber,
+            None,
+            Some(&cube),
+        );
+        assert_eq!(player.feet, start);
+    }
+}

@@ -239,6 +239,9 @@ impl Walker {
         let mut space = Space::new(chamber, linked.as_ref());
         if let Some(object) = object {
             space.add_object(object.position, object.rotation, object.half_size);
+            if !self.separate_object_overlap(object, &space, chamber, linked.as_ref()) {
+                return self.touch_portals(&space);
+            }
         }
         let space = &space;
         self.command += 1;
@@ -302,6 +305,52 @@ impl Walker {
         // ProcessMovement unforces IN_DUCK after the move, 0x2ce200 (decompiled, server.so)
         self.forced_duck = false;
         self.touch_portals(space)
+    }
+
+    // Dynamic overlap recovery must not cross the chamber walls or floor.
+    fn separate_object_overlap(
+        &mut self,
+        object: &portal::carry::RigidCube,
+        space: &Space,
+        chamber: &Chamber,
+        pair: Option<&[Portal; 2]>,
+    ) -> bool {
+        if !self.trace(self.feet, self.feet, space).start_solid {
+            return true;
+        }
+        let world = Space::new(chamber, pair);
+        if self.trace(self.feet, self.feet, &world).start_solid {
+            return true;
+        }
+        let centre = self.centre();
+        let half = [HALF_WIDTH, HALF_WIDTH, self.height() * 0.5];
+        let mut best: Option<(f32, Vec3)> = None;
+        for axis in object.rotation.into_iter().chain(portal::carry::IDENTITY) {
+            for sign in [-1.0, 1.0] {
+                let normal = axis.map(|v| v * sign);
+                let support: f32 = (0..3).map(|i| half[i] * normal[i].abs()).sum();
+                let depth = object.support(normal) + support
+                    - collision::dot(collision::sub(centre, object.position), normal)
+                    + collision::DIST_EPSILON;
+                if depth <= 0.0 || best.is_some_and(|(distance, _)| distance <= depth) {
+                    continue;
+                }
+                let candidate = collision::add(self.feet, collision::scale(normal, depth));
+                let path = self.trace(self.feet, candidate, &world);
+                if path.fraction == 1.0
+                    && !path.start_solid
+                    && !self.trace(candidate, candidate, space).start_solid
+                {
+                    best = Some((depth, candidate));
+                }
+            }
+        }
+        if let Some((_, position)) = best {
+            self.feet = position;
+            true
+        } else {
+            false
+        }
     }
 
     /// Translated from 0x2750e0 (decompiled, server.so)
