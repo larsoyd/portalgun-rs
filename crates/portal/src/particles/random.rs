@@ -92,17 +92,20 @@ pub struct RandomTable(std::sync::Arc<[f32]>);
 impl RandomTable {
     /// Read out of Portal's own client.so. Any other build gets refused.
     pub fn from_client(bytes: &[u8]) -> Result<Self> {
-        let raw = bytes
-            .get(TABLE_OFFSET..TABLE_OFFSET + 4 * TABLE_LEN)
-            .ok_or_else(|| {
-                malformed(
-                    "client.so",
-                    format!("{} bytes, too short for the random table", bytes.len()),
-                )
-            })?;
+        let offset = if bytes.starts_with(b"MZ") {
+            0x4b4fe0
+        } else {
+            TABLE_OFFSET
+        };
+        let raw = bytes.get(offset..offset + 4 * TABLE_LEN).ok_or_else(|| {
+            malformed(
+                "particle random table",
+                format!("{} bytes, too short for the random table", bytes.len()),
+            )
+        })?;
         if sha256(raw) != TABLE_SHA256 {
             return Err(malformed(
-                "client.so",
+                "particle random table",
                 "the random table's hash is not Portal's",
             ));
         }

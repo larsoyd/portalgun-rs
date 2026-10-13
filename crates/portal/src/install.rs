@@ -38,6 +38,29 @@ pub const PINNED: [(&str, &str); 6] = [
     ),
 ];
 
+pub const WINDOWS_PINNED: [(&str, &str); 6] = [
+    PINNED[0],
+    PINNED[1],
+    PINNED[2],
+    PINNED[3],
+    (
+        "portal/bin/client.dll",
+        "59abd9eea5c6a6a5a48bd5be3903b66bc97e7d2e1c893ac521d055fcea2da3d5",
+    ),
+    (
+        "portal/bin/server.dll",
+        "6e0df352d464b1446ba32418578267ec623a6df2d326cf3265e2500f6f3a6162",
+    ),
+];
+
+pub fn manifest(root: &Path) -> &'static [(&'static str, &'static str); 6] {
+    if root.join("portal/bin/client.so").exists() {
+        &PINNED
+    } else {
+        &WINDOWS_PINNED
+    }
+}
+
 /// The install root: the argument, then PORTAL_DIR, then Steam's default library.
 pub fn root(arg: Option<&str>, env: Option<&str>, home: &Path) -> PathBuf {
     arg.or(env)
@@ -55,7 +78,7 @@ impl Install {
     /// Every pinned file read and checked before anything gets opened.
     pub fn open(root: &Path) -> Result<Install> {
         let mut client = Vec::new();
-        for (file, want) in PINNED {
+        for &(file, want) in manifest(root) {
             let bytes = std::fs::read(root.join(file))
                 .map_err(|e| Error::Refused(format!("{file} under {}: {e}", root.display())))?;
             let got = hex(&sha256(&bytes));
@@ -64,7 +87,7 @@ impl Install {
                     "{file} sha256={got} expected={want}"
                 )));
             }
-            if file.ends_with("client.so") {
+            if file.ends_with("client.so") || file.ends_with("client.dll") {
                 client = bytes;
             }
         }

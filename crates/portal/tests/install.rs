@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use portal::install::{root, Install, PINNED};
+use portal::install::{manifest, root, Install};
 use portal::Error;
 
 fn steam() -> PathBuf {
@@ -12,7 +12,7 @@ fn steam() -> PathBuf {
 
 fn copy_of_install(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("portal-install-{}-{name}", std::process::id()));
-    for (file, _) in PINNED {
+    for &(file, _) in manifest(&steam()) {
         let to = dir.join(file);
         std::fs::create_dir_all(to.parent().unwrap()).unwrap();
         std::fs::copy(steam().join(file), &to).unwrap();
@@ -45,7 +45,7 @@ fn opens_the_users_install() {
     }
     assert_eq!(
         install.client.len(),
-        std::fs::metadata(steam().join("portal/bin/client.so"))
+        std::fs::metadata(steam().join(manifest(&steam())[4].0))
             .unwrap()
             .len() as usize
     );
@@ -53,7 +53,7 @@ fn opens_the_users_install() {
 
 #[test]
 fn one_flipped_byte_in_any_pinned_file_is_refused() {
-    for (i, (file, _)) in PINNED.iter().enumerate() {
+    for (i, (file, _)) in manifest(&steam()).iter().enumerate() {
         let dir = copy_of_install(&format!("flip{i}"));
         let path = dir.join(file);
         let mut bytes = std::fs::read(&path).unwrap();
