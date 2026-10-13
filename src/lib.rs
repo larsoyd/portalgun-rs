@@ -41,3 +41,5 @@ pub mod options;
 pub mod particle_material;
 
 pub mod object_render;
+
+pub mod object_visual;
