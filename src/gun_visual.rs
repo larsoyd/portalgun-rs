@@ -417,7 +417,7 @@ fn draw(
         .map_or(Vec4::ZERO, |m| m.extension.plane);
     let exit_plane = body_materials
         .iter()
-        .find(|(_, m)| m.extension.ghost)
+        .find(|(_, m)| m.extension.ghost && m.extension.player_owned)
         .map_or(Vec4::ZERO, |(_, m)| m.extension.plane);
     let ghost_matrix = ghost.as_ref().and_then(|g| {
         if visibility

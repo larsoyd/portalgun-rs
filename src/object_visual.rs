@@ -62,6 +62,54 @@ impl CubeHistory {
     }
 }
 
+pub struct ObjectPresentationPlugin;
+
+impl Plugin for ObjectPresentationPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<CubePose>()
+            .insert_resource(CubeHistory::new(&CubePose::default()))
+            .add_systems(
+                FixedUpdate,
+                record
+                    .after(crate::objects::ObjectsUpdated)
+                    .run_if(crate::menu::playing),
+            )
+            .add_systems(
+                Update,
+                present
+                    .after(crate::objects::ObjectInteraction)
+                    .after(crate::firing::fire)
+                    .before(crate::gun_visual::GunVisualUpdate),
+            );
+    }
+}
+
+fn record(
+    objects: Res<crate::objects::Objects>,
+    mut history: ResMut<CubeHistory>,
+    mut revision: Local<u64>,
+) {
+    history.advance(
+        &CubePose {
+            position: objects.cube.position,
+            rotation: objects.cube.rotation,
+        },
+        *revision != objects.visual_revision,
+    );
+    *revision = objects.visual_revision;
+}
+
+fn present(
+    objects: Res<crate::objects::Objects>,
+    history: Res<CubeHistory>,
+    fixed: Res<Time<Fixed>>,
+    mut pose: ResMut<CubePose>,
+    mut gun: ResMut<crate::gun_visual::GunVisualState>,
+) {
+    *pose = history.sample(fixed.overstep_fraction());
+    gun.holding = objects.holding();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

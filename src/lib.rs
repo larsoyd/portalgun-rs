@@ -37,6 +37,7 @@ pub mod walker;
 pub mod effects;
 pub mod impacts;
 pub mod menu;
+pub mod model_material;
 pub mod objects;
 pub mod options;
 pub mod particle_material;

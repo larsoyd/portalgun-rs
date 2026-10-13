@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::carry::{
     carry_pitch, hold_distance, pickup_eligible, throw_impulse, Carry, RigidCube, IDENTITY,
 };

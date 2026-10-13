@@ -44,6 +44,7 @@ pub struct Controls {
     pub jump_pressed: bool,
     pub fire1: bool,
     pub fire2: bool,
+    pub fizzle: bool,
     pub use_object: bool,
 }
 
@@ -151,6 +152,7 @@ fn read_keys(
     controls.jump_pressed |= keys.just_pressed(KeyCode::Space);
     controls.fire1 |= mouse.just_pressed(MouseButton::Left);
     controls.fire2 |= mouse.just_pressed(MouseButton::Right);
+    controls.fizzle |= keys.just_pressed(KeyCode::KeyR);
     controls.use_object |= keys.just_pressed(KeyCode::KeyE);
 }
 
@@ -166,6 +168,7 @@ fn run_script(
             Action::Use => controls.use_object = true,
             Action::Fire1 => controls.fire1 = true,
             Action::Fire2 => controls.fire2 = true,
+            Action::Fizzle => controls.fizzle = true,
             Action::Jump => controls.jump_pressed = true,
             Action::JumpHeld(held) => {
                 controls.jump_pressed |= held && !controls.jump;

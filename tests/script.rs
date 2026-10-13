@@ -32,3 +32,8 @@ fn a_bad_line_is_refused_with_its_number() {
         assert!(e.contains(want), "{text:?} gave {e}");
     }
 }
+
+#[test]
+fn a_script_can_fizzle_portals() {
+    assert!(Script::parse("0 fizzle").is_ok());
+}

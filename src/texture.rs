@@ -26,6 +26,10 @@ pub fn base_texture(search: &SearchPath, material: &str) -> Result<String, Strin
 
 /// A colour texture, repeating like a brush face.
 pub fn load(search: &SearchPath, name: &str) -> Result<Image, String> {
+    load_as(search, name, true)
+}
+
+pub fn load_as(search: &SearchPath, name: &str, srgb: bool) -> Result<Image, String> {
     let path = format!("materials/{name}.vtf");
     let vtf = search.read(&path).map_err(|e| format!("{path}: {e}"))?;
     let dds = portal::vtf::to_dds(&vtf).map_err(|e| format!("{path}: {e}"))?;
@@ -41,7 +45,7 @@ pub fn load(search: &SearchPath, name: &str) -> Result<Image, String> {
         &dds,
         ImageType::Extension("dds"),
         CompressedImageFormats::BC,
-        true,
+        srgb,
         sampler,
         RenderAssetUsages::RENDER_WORLD,
     )

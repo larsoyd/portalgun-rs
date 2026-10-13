@@ -139,21 +139,18 @@ impl Plugin for BodyPlugin {
     }
 }
 
-/// no shadow for the original player, 0x54c830 (decompiled, client.so)
+// Translated from 0x54c830 and 0x35b120 (decompiled, client.so)
 fn quiet_body(
     mut commands: Commands,
     config: Option<Res<crate::player::Config>>,
     meshes: Query<(Entity, &RenderLayers), With<Mesh3d>>,
-    parents: Query<&ChildOf>,
-    gun: Query<(), With<HeldGun>>,
 ) {
     let Some(config) = config else { return };
     if !config.is_changed() {
         return;
     }
     for (entity, layers) in &meshes {
-        let held = parents.iter_ancestors(entity).any(|a| gun.contains(a));
-        if *layers == RenderLayers::layer(BODY_LAYER) && !held {
+        if *layers == RenderLayers::layer(BODY_LAYER) {
             if config.0.original_body_shadows {
                 commands.entity(entity).insert(NotShadowCaster);
             } else {
@@ -349,8 +346,8 @@ fn spawn_gun(
     let (mdl, pieces) = crate::viewmodel::read_model(files, "models/weapons/w_portalgun")?;
     for piece in pieces {
         let look = crate::viewmodel::look(files, &mdl, piece.material)?;
-        let name = look.texture.ok_or("world gun texture missing")?;
-        let texture = images.add(crate::texture::load(files, &name)?);
+        let name = look.texture.as_ref().ok_or("world gun texture missing")?;
+        let texture = images.add(crate::texture::load(files, name)?);
         let skin = crate::viewmodel::skin(&piece);
         let rotation = Quat::IDENTITY;
         let positions: Vec<_> = skin
@@ -370,14 +367,20 @@ fn spawn_gun(
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
         .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
         .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, skin.uvs)
+        .with_inserted_attribute(
+            Mesh::ATTRIBUTE_TANGENT,
+            piece.vertices.iter().map(|v| v.tangent).collect::<Vec<_>>(),
+        )
         .with_inserted_indices(Indices::U32(skin.indices));
+        let mut look_material = material(StandardMaterial {
+            base_color_texture: Some(texture),
+            ..default()
+        });
+        look_material.base.alpha_mode = AlphaMode::Opaque;
+        crate::model_material::apply(&look, files, images, &mut look_material)?;
         commands.spawn((
             Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(materials.add(material(StandardMaterial {
-                base_color_texture: Some(texture),
-                perceptual_roughness: 0.6,
-                ..default()
-            }))),
+            MeshMaterial3d(materials.add(look_material)),
             RenderLayers::layer(BODY_LAYER),
             ChildOf(parent),
         ));

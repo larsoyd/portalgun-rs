@@ -20,6 +20,7 @@ pub struct Look {
     /// the base texture the material names when the game does not ship it
     pub missing: Option<String>,
     pub blend: Blend,
+    pub phong: crate::model_material::Phong,
 }
 
 #[derive(Default)]
@@ -126,5 +127,6 @@ pub fn look(search: &SearchPath, mdl: &Mdl, index: usize) -> Result<Look, String
         texture: shipped.then(|| base.clone()),
         missing: (!shipped).then_some(base),
         blend,
+        phong: crate::model_material::Phong::parse(shader)?,
     })
 }

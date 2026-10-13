@@ -104,8 +104,11 @@ fn spawn(
         for piece in pieces {
             let index = companion_material(&mdl, piece.material)?;
             let look = crate::viewmodel::look(&files, &mdl, index)?;
-            let texture = look.texture.ok_or("companion cube base texture missing")?;
-            let texture = images.add(crate::texture::load(&files, &texture)?);
+            let texture = look
+                .texture
+                .as_ref()
+                .ok_or("companion cube base texture missing")?;
+            let texture = images.add(crate::texture::load(&files, texture)?);
             let skin = crate::viewmodel::skin(&piece);
             let mesh = Mesh::new(
                 PrimitiveTopology::TriangleList,
@@ -114,6 +117,10 @@ fn spawn(
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, skin.positions)
             .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, skin.normals)
             .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, skin.uvs)
+            .with_inserted_attribute(
+                Mesh::ATTRIBUTE_TANGENT,
+                piece.vertices.iter().map(|v| v.tangent).collect::<Vec<_>>(),
+            )
             .with_inserted_indices(Indices::U32(skin.indices));
             let mesh = meshes.add(mesh);
             for ghost in [false, true] {
@@ -123,6 +130,8 @@ fn spawn(
                 });
                 surface.base.alpha_mode = AlphaMode::Opaque;
                 surface.extension.ghost = ghost;
+                surface.extension.player_owned = false;
+                crate::model_material::apply(&look, &files, &mut images, &mut surface)?;
                 let surface = materials.add(surface);
                 let entity = commands
                     .spawn((

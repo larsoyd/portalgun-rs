@@ -37,8 +37,11 @@ need your own copy of Portal, which the program reads at startup.
   portal, as in the game. Continuous sway is an optional improvement.
 
 Portal placement now dispatches the original success and supported failure
-particle graphs. Refraction children remain unsupported. TODO: the gun's glow
-sprites and beams, projectile streams, and pickup and hold animations.
+particle graphs. Attachment glow sprites, pickup beams, holding animations and
+the holding sound follow the gun's state, including portal removal. Model lighting
+reads the installed normal, Phong exponent and lightwarp textures. The chamber
+uses Bevy point lights and uniform ambient lighting in place of Source's per-entity
+lights and baked ambient cube. Refraction children remain unsupported.
 
 ### The player model
 
@@ -68,7 +71,7 @@ The body and held gun render in both colours' recursive portal views, clipped
 into matching halves while crossing an opening. Boots have soles and heels,
 and the default feet and gait follow the authored animation. Floor fitting and
 matching the walk cycle to footstep sounds are optional improvements. The direct
-player body casts no shadow by default; its held gun and portal copy still do.
+player body and its held gun cast no shadow by default; their portal copy still does.
 The separate first-person gun and arms do not cast world shadows.
 
 Capsule proportions, ground fitting and sound-synchronized gait are adaptations;
@@ -114,6 +117,23 @@ culling the game uses for nested views.
   A portal counts as a floor when its normal points up by more than 0.7071.
 - The camera follows the eye through an opening independently of the body
   centre, including ceiling exits and crouch transitions.
+
+### Companion Cube
+
+The installed Companion Cube skin can be picked up with **E**, carried through
+portals, dropped with **E** or the right mouse button, and thrown with the left
+mouse button. Its position, orientation and velocities transform through the
+portal pair; rendering clips it into two halves while crossing. Portal shots
+pass through physics props, as the original gun's trace filter specifies.
+
+Pickup reach, holding targets, mass limits and throw force follow the original
+pickup controller. The oriented cube contact solver is a host adaptation;
+contact ordering, rolling, sleeping and stacking are not a complete IVP port.
+The original contact-dependent velocity clearing on a normal drop is not yet
+reproduced; releases currently use its non-contact speed limits.
+
+**R** clears portals and pending shots and triggers the gun's fizzle response.
+This is a sandbox shortcut for the game's cleanser behavior.
 
 ### Moving
 
@@ -282,8 +302,10 @@ Deliberate deviations:
 | W A S D | Walk |
 | Space | Jump |
 | Ctrl | Crouch |
-| Left mouse button | Fire blue |
-| Right mouse button | Fire orange |
+| E | Pick up or drop the cube |
+| R | Clear portals and pending shots |
+| Left mouse button | Fire blue, or throw the held cube |
+| Right mouse button | Fire orange, or drop the held cube |
 | F11 | Toggle fullscreen |
 | Esc | Open or hide the pause menu |
 
@@ -326,7 +348,7 @@ rate depends on rendering cost. The terminal reports physical resolution,
 monitor refresh rate and frame timings under `[display]`.
 
 `--script <file>` plays timed actions instead of the keyboard and mouse, one
-per line as seconds, action and arguments: `fire1`, `fire2`, `jump`,
+per line as seconds, action and arguments: `fire1`, `fire2`, `use`, `fizzle`, `jump`,
 `jump-held 1` / `jump-held 0`, `crouch 1` / `crouch 0`,
 `look <yaw> <pitch>` and `move <forward> <side>`. With `--shot-at <seconds>`
 and `--quit-after <seconds>` it takes screenshots and exits on its own.

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 larsoyd
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+
 use portal::carry::{RigidCube, IDENTITY};
 use portal::pair::Portal;
 use portal::placement::Surface;
@@ -340,5 +343,23 @@ fn object_overlap_waits_when_every_separation_path_crosses_static_solids() {
             Some(&cube),
         );
         assert_eq!(player.feet, start);
+    }
+}
+
+#[test]
+fn releasing_caps_linear_and_angular_speed_without_accelerating_the_cube() {
+    for speed in [0.0, 284.999, 285.0, 285.001, 1000.0] {
+        let mut objects = Objects::default();
+        objects.cube.velocity = [speed * 0.6, speed * 0.8, 0.0];
+        objects.release(0.0);
+        let limit = speed.min(285.0);
+        assert!((objects.cube.velocity[0] - limit * 0.6).abs() < 0.0001);
+        assert!((objects.cube.velocity[1] - limit * 0.8).abs() < 0.0001);
+    }
+    for speed in [0.0, 719.999, 720.0, 720.001, 3600.0] {
+        let mut objects = Objects::default();
+        objects.cube.angular_velocity = [0.0, 0.0, -speed];
+        objects.release(0.0);
+        assert!((objects.cube.angular_velocity[2] + speed.min(720.0)).abs() < 0.0001);
     }
 }

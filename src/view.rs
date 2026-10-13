@@ -70,7 +70,8 @@ pub struct ViewPlugin;
 
 impl Plugin for ViewPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PostStartup, spawn_view)
+        app.init_asset::<crate::bodyportal::BodyMaterial>()
+            .add_systems(PostStartup, spawn_view)
             .add_systems(Update, (settle_to_idle, pose_view).chain())
             .add_systems(PostUpdate, sway.before(TransformSystems::Propagate));
     }
@@ -186,6 +187,10 @@ fn gun_mesh(data: &MeshData) -> Mesh {
     )
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, s.positions)
     .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, s.normals)
+    .with_inserted_attribute(
+        Mesh::ATTRIBUTE_TANGENT,
+        data.vertices.iter().map(|v| v.tangent).collect::<Vec<_>>(),
+    )
     .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, s.uvs)
     .with_inserted_attribute(
         Mesh::ATTRIBUTE_JOINT_INDEX,
@@ -204,7 +209,7 @@ fn spawn_view(
     camera: Single<(Entity, &Msaa), With<PlayerCamera>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<crate::bodyportal::BodyMaterial>>,
     mut binds: ResMut<Assets<SkinnedMeshInverseBindposes>>,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -292,14 +297,26 @@ fn spawn_view(
             Blend::Blend => AlphaMode::Blend,
             Blend::Add => AlphaMode::Add,
         };
-        commands.spawn((
-            Mesh3d(meshes.add(gun_mesh(piece))),
-            MeshMaterial3d(materials.add(StandardMaterial {
+        let mut material = crate::bodyportal::BodyMaterial {
+            base: StandardMaterial {
                 base_color_texture: Some(image),
                 alpha_mode,
                 perceptual_roughness: 0.6,
                 ..default()
-            })),
+            },
+            extension: default(),
+        };
+        if let Err(reason) = crate::model_material::apply(&l, &files, &mut images, &mut material) {
+            error!(
+                "[view] refused: material={} reason={reason}",
+                piece.material
+            );
+            exit.write(AppExit::error());
+            return;
+        }
+        commands.spawn((
+            Mesh3d(meshes.add(gun_mesh(piece))),
+            MeshMaterial3d(materials.add(material)),
             SkinnedMesh {
                 inverse_bindposes: bind.clone(),
                 joints: joints.clone(),

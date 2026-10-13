@@ -25,6 +25,17 @@ pub struct BodyClip {
     #[uniform(100)]
     pub plane: Vec4,
     pub ghost: bool,
+    pub player_owned: bool,
+    #[uniform(101)]
+    pub phong: Vec4,
+    #[uniform(102)]
+    pub model_flags: Vec4,
+    #[texture(103)]
+    #[sampler(104)]
+    pub exponent: Option<Handle<Image>>,
+    #[texture(105)]
+    #[sampler(106)]
+    pub lightwarp: Option<Handle<Image>>,
 }
 
 impl MaterialExtension for BodyClip {
@@ -40,7 +51,10 @@ pub fn material(mut base: StandardMaterial) -> BodyMaterial {
     base.alpha_mode = AlphaMode::Mask(0.5);
     BodyMaterial {
         base,
-        extension: BodyClip::default(),
+        extension: BodyClip {
+            player_owned: true,
+            ..default()
+        },
     }
 }
 
@@ -237,7 +251,10 @@ fn update(
         if let Ok(mut visible) = visibility.get_mut(ghost.root) {
             *visible = Visibility::Hidden;
         }
-        for (_, material) in materials.iter_mut() {
+        for (_, material) in materials
+            .iter_mut()
+            .filter(|(_, m)| m.extension.player_owned)
+        {
             material.extension.plane = Vec4::ZERO;
         }
         return;
@@ -276,7 +293,10 @@ fn update(
         if let Ok(mut visible) = visibility.get_mut(ghost.root) {
             *visible = Visibility::Hidden;
         }
-        for (_, material) in materials.iter_mut() {
+        for (_, material) in materials
+            .iter_mut()
+            .filter(|(_, m)| m.extension.player_owned)
+        {
             material.extension.plane = Vec4::ZERO;
         }
         return;
@@ -317,7 +337,10 @@ fn update(
     } else {
         Visibility::Hidden
     };
-    for (_, material) in materials.iter_mut() {
+    for (_, material) in materials
+        .iter_mut()
+        .filter(|(_, m)| m.extension.player_owned)
+    {
         material.extension.plane = halves.as_ref().map_or(Vec4::ZERO, |s| {
             if material.extension.ghost {
                 s.exit

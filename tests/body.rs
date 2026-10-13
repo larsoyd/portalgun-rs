@@ -754,7 +754,7 @@ fn the_original_gait_ignores_the_footstep_clock() {
 }
 
 #[test]
-fn the_original_body_casts_no_shadows_but_its_held_gun_and_ghost_still_do() {
+fn the_original_body_and_held_gun_cast_no_shadows_but_the_ghost_does() {
     use bevy::camera::visibility::RenderLayers;
     use bevy::light::NotShadowCaster;
     use portalgun::body::{BodyPlugin, HeldGun, BODY_LAYER};
@@ -802,7 +802,7 @@ fn the_original_body_casts_no_shadows_but_its_held_gun_and_ghost_still_do() {
             assert!(quiet, "body mesh casts a shadow");
             body += 1;
         } else if layers == RenderLayers::layer(BODY_LAYER) {
-            assert!(!quiet);
+            assert!(quiet, "held gun casts a shadow with body shadows disabled");
             held += 1;
         } else {
             assert!(!quiet);
@@ -839,7 +839,7 @@ fn body_shadow_improvement_can_be_enabled_and_disabled_without_respawning() {
     app.update();
     let body: Vec<Entity> = app
         .world_mut()
-        .query_filtered::<(Entity, &RenderLayers), (With<Mesh3d>, With<NotShadowCaster>)>()
+        .query_filtered::<(Entity, &RenderLayers), With<Mesh3d>>()
         .iter(app.world())
         .filter(|(_, layers)| **layers == RenderLayers::layer(BODY_LAYER))
         .map(|(e, _)| e)

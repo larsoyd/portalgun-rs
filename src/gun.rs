@@ -91,6 +91,12 @@ impl Gun {
         self.flying.last()
     }
 
+    // Translated from 0x932a00 (decompiled, server.so)
+    pub fn fizzle(&mut self) {
+        self.flying.clear();
+        self.last_fired = 0;
+    }
+
     pub fn flying(&self) -> &[Shot] {
         &self.flying
     }

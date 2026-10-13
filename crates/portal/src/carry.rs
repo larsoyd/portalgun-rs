@@ -32,6 +32,19 @@ impl RigidCube {
         }
     }
 
+    // Translated from 0x1f9270 (decompiled, server.so)
+    pub fn limit_release_velocity(&mut self, normal_speed: f32) {
+        for (velocity, limit) in [
+            (&mut self.velocity, 1.5 * normal_speed),
+            (&mut self.angular_velocity, 720.0),
+        ] {
+            let speed = dot(*velocity, *velocity).sqrt();
+            if speed > limit {
+                *velocity = velocity.map(|v| v * limit / speed);
+            }
+        }
+    }
+
     pub fn half(&self) -> Vec3 {
         [0, 1, 2].map(|i| self.half_size * self.rotation.iter().map(|v| v[i].abs()).sum::<f32>())
     }

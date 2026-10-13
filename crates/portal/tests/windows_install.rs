@@ -6,19 +6,15 @@ use portal::particles::random::RandomTable;
 use std::path::Path;
 
 #[test]
-fn the_windows_install_opens_and_supplies_the_particle_table() {
+fn the_verified_install_supplies_its_binary_formats_particle_table() {
     let dir = root(None, None, Path::new(&std::env::var("HOME").unwrap()));
     let opened = Install::open(&dir);
     assert!(
         opened.is_ok(),
-        "Windows install refused: {:?}",
+        "Verified install refused: {:?}",
         opened.err()
     );
     let install = opened.unwrap();
     let table = RandomTable::from_client(&install.client);
-    assert!(
-        table.is_ok(),
-        "Windows particle table refused: {:?}",
-        table.err()
-    );
+    assert!(table.is_ok(), "Particle table refused: {:?}", table.err());
 }

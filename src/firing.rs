@@ -22,7 +22,12 @@ impl Plugin for FiringPlugin {
         app.add_message::<crate::impacts::PortalImpact>()
             .init_resource::<Firing>()
             .add_systems(Startup, |mut gun: ResMut<Firing>| gun.deploy(0.0))
-            .add_systems(Update, (fire, land).chain().run_if(crate::menu::playing));
+            .add_systems(
+                Update,
+                (fizzle.before(crate::objects::ObjectInteraction), fire, land)
+                    .chain()
+                    .run_if(crate::menu::playing),
+            );
     }
 }
 
@@ -44,13 +49,13 @@ pub(crate) fn fire(
     objects: Option<Res<crate::objects::Objects>>,
 ) {
     let now = time.elapsed_secs();
-    if objects.is_some_and(|o| o.holding() || now < o.blocked_until) {
-        return;
-    }
     let pressed = [
         (Colour::Blue, std::mem::take(&mut controls.fire1)),
         (Colour::Orange, std::mem::take(&mut controls.fire2)),
     ];
+    if objects.is_some_and(|o| o.holding() || now < o.blocked_until) {
+        return;
+    }
     for (colour, _) in pressed.into_iter().filter(|(_, p)| *p) {
         let Some(shot) = gun.fire(colour, now, &player, &level.0, &portals) else {
             info!("[gun] wait colour={colour:?} now={now:.2}");
@@ -125,5 +130,113 @@ fn land(
                 );
             }
         }
+    }
+}
+
+fn fizzle(
+    mut controls: ResMut<Controls>,
+    mut gun: ResMut<Firing>,
+    mut portals: ResMut<Portals>,
+    mut visual: Option<ResMut<crate::gun_visual::GunVisualState>>,
+) {
+    if !std::mem::take(&mut controls.fizzle)
+        || (portals.open.iter().all(Option::is_none) && gun.flying().is_empty())
+    {
+        return;
+    }
+    for colour in Colour::ALL {
+        portals.deactivate(colour);
+    }
+    gun.fizzle();
+    if let Some(visual) = visual.as_deref_mut() {
+        visual.fizzle_revision += 1;
+    }
+    info!("[gun] fizzle portals=cleared pending=0");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gun_visual::GunVisualState;
+    use portal::pair::Portal;
+
+    #[test]
+    fn release_consumes_early_shots_and_allows_a_new_click_at_half_a_second() {
+        let home = std::env::var("HOME").unwrap_or_default();
+        let dir = portal::install::root(None, None, std::path::Path::new(&home));
+        let install = portal::install::Install::open(&dir).unwrap();
+        let sounds = Sounds::read(&install.search).unwrap();
+        let level = crate::chamber::Chamber::test_chamber(&install.search).unwrap();
+        let mut objects = crate::objects::Objects::default();
+        objects.carry = Some(portal::carry::Carry::new(
+            portal::carry::IDENTITY,
+            0.0,
+            None,
+        ));
+        objects.release(10.0);
+        let mut clock = Time::<()>::default();
+        clock.advance_by(std::time::Duration::from_millis(10499));
+        let mut app = App::new();
+        app.insert_resource(clock)
+            .insert_resource(objects)
+            .insert_resource(Player(crate::walker::Walker::at([-200.0, 0.0, 0.0])))
+            .insert_resource(Level(level))
+            .insert_resource(Files(install.search))
+            .insert_resource(sounds)
+            .init_resource::<Controls>()
+            .init_resource::<Firing>()
+            .init_resource::<Portals>()
+            .init_resource::<Assets<AudioSource>>()
+            .add_systems(Update, fire);
+        app.world_mut().resource_mut::<Controls>().fire1 = true;
+        app.update();
+        assert!(app.world().resource::<Firing>().flying().is_empty());
+        assert!(
+            !app.world().resource::<Controls>().fire1,
+            "blocked click must be consumed"
+        );
+        app.world_mut()
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_millis(1));
+        app.update();
+        assert!(
+            app.world().resource::<Firing>().flying().is_empty(),
+            "the old click must not fire later"
+        );
+        app.world_mut().resource_mut::<Controls>().fire2 = true;
+        app.update();
+        let gun = app.world().resource::<Firing>();
+        assert_eq!(gun.flying().len(), 1);
+        assert_eq!(gun.flying()[0].colour, Colour::Orange);
+        assert_eq!(gun.flying()[0].launched, 10.5);
+    }
+
+    #[test]
+    fn clearing_an_open_portal_triggers_one_fizzle_and_empty_clears_do_nothing() {
+        let mut app = App::new();
+        app.init_resource::<Controls>()
+            .init_resource::<Firing>()
+            .init_resource::<Portals>()
+            .init_resource::<GunVisualState>()
+            .add_systems(Update, fizzle);
+        app.world_mut().resource_mut::<Portals>().place(
+            Colour::Blue,
+            Portal::new([0.0; 3], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0], (32.0, 54.0)),
+        );
+        app.world_mut().resource_mut::<Firing>().last_fired = 1;
+        app.world_mut().resource_mut::<Controls>().fizzle = true;
+        app.update();
+        assert!(app
+            .world()
+            .resource::<Portals>()
+            .open
+            .iter()
+            .all(Option::is_none));
+        assert_eq!(app.world().resource::<Firing>().last_fired, 0);
+        assert_eq!(app.world().resource::<GunVisualState>().fizzle_revision, 1);
+        assert!(!app.world().resource::<Controls>().fizzle);
+        app.world_mut().resource_mut::<Controls>().fizzle = true;
+        app.update();
+        assert_eq!(app.world().resource::<GunVisualState>().fizzle_revision, 1);
     }
 }

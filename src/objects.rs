@@ -74,6 +74,7 @@ impl Objects {
     }
 
     pub fn release(&mut self, now: f32) {
+        self.cube.limit_release_velocity(190.0);
         self.carry = None;
         self.blocked_until = now + 0.5;
         info!(

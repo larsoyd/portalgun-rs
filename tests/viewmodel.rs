@@ -166,6 +166,28 @@ fn first_person_gun_and_arms_neither_cast_nor_receive_world_shadows() {
         parts.iter().all(|&(cast, receive)| cast && receive),
         "viewmodel shadows: {parts:?}"
     );
+    let model_parts: Vec<_> = world
+        .query::<(
+            &Mesh3d,
+            &MeshMaterial3d<portalgun::bodyportal::BodyMaterial>,
+        )>()
+        .iter(world)
+        .map(|(mesh, material)| (mesh.0.clone(), material.0.clone()))
+        .collect();
+    assert_eq!(model_parts.len(), 3, "viewmodel must use model lighting");
+    for (mesh, material) in model_parts {
+        assert!(world
+            .resource::<Assets<Mesh>>()
+            .get(&mesh)
+            .unwrap()
+            .attribute(Mesh::ATTRIBUTE_TANGENT)
+            .is_some());
+        let material = world
+            .resource::<Assets<portalgun::bodyportal::BodyMaterial>>()
+            .get(&material)
+            .unwrap();
+        assert!(!material.extension.player_owned);
+    }
     let nears: Vec<_> = world
         .query_filtered::<&Projection, Without<PlayerCamera>>()
         .iter(world)

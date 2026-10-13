@@ -147,6 +147,8 @@ fn run(args: Args, mut app: App) -> ExitCode {
         .add_plugins(portalgun::body::BodyPlugin)
         .insert_resource(GunMeshes(mdl, pieces))
         .add_plugins(ViewPlugin)
+        .add_plugins(portalgun::object_render::CubeRenderPlugin)
+        .add_plugins(portalgun::object_visual::ObjectPresentationPlugin)
         .add_plugins(FacesPlugin)
         .add_plugins(FiringPlugin)
         .insert_resource(particles)

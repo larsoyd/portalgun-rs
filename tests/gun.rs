@@ -195,3 +195,18 @@ fn the_fire_punch_draws_its_yaw_before_its_pitch() {
     let pitch = draws.range(-1.0, -0.5);
     assert_eq!(portalgun::gun::fire_punch(&mut rng), [pitch, yaw, 0.0]);
 }
+
+#[test]
+fn fizzling_cancels_pending_shots_and_clears_the_gun_colour() {
+    let chamber = chamber();
+    let mut gun = Gun::default();
+    let walker = Walker::at([-200.0, 0.0, 0.0]);
+    gun.fire(Colour::Blue, 0.0, &walker, &chamber, &Pair::default())
+        .unwrap();
+    assert_eq!(gun.last_fired, 1);
+    assert_eq!(gun.flying().len(), 1);
+    gun.fizzle();
+    assert_eq!(gun.last_fired, 0);
+    assert!(gun.flying().is_empty());
+    assert!(gun.land(10.0).is_empty());
+}
