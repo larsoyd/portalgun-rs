@@ -84,7 +84,12 @@ fn dispatch(
     mut audio: ResMut<Assets<AudioSource>>,
 ) {
     for impact in messages.read() {
-        fx.spawn(impact.colour, impact.effect, impact.frame, impact.target);
+        let id = fx.spawn(impact.colour, impact.effect, impact.frame, impact.target);
+        info!(
+            "[fx] impact effect={} id={id} live={}",
+            impact.effect.name(impact.colour),
+            fx.instance_count()
+        );
         let sound = match impact.effect {
             Effect::Close => Some(format!("Portal.close_{}", impact.colour.sound())),
             Effect::Near | Effect::Overlap | Effect::BadVolume | Effect::BadSurface => {
