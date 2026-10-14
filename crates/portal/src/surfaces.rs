@@ -20,6 +20,8 @@ pub struct Surface {
     pub friction: f32,
     pub jump_factor: f32,
     pub max_speed_factor: f32,
+    /// vphysics parses a missing value as 0.001
+    pub elasticity: f32,
 }
 
 impl Default for Surface {
@@ -31,6 +33,7 @@ impl Default for Surface {
             friction: 1.0,
             jump_factor: 1.0,
             max_speed_factor: 1.0,
+            elasticity: 0.001,
         }
     }
 }
@@ -84,6 +87,7 @@ impl Surfaces {
                     "friction" => s.friction = value.parse().unwrap_or(0.0),
                     "jumpfactor" => s.jump_factor = value.parse().unwrap_or(0.0),
                     "maxspeedfactor" => s.max_speed_factor = value.parse().unwrap_or(0.0),
+                    "elasticity" => s.elasticity = value.parse().unwrap_or(0.0),
                     _ => {}
                 }
             }
@@ -100,6 +104,7 @@ impl Surfaces {
             friction: 1.0,
             jump_factor: 1.0,
             max_speed_factor: 1.0,
+            elasticity: 0.001,
         };
         let map = &self.0;
         map.get(&name.to_ascii_lowercase())

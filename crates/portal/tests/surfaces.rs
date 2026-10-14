@@ -79,3 +79,22 @@ fn repeated_surface_definitions_retain_properties_and_apply_base_in_order() {
     assert_eq!(s.get("ordered").friction, 0.8);
     assert_eq!(s.get("ordered").max_speed_factor, 0.5);
 }
+
+#[test]
+fn metal_panels_bounce_at_a_fifth_and_grip_at_point_eight() {
+    let s = Surfaces::read(&install().search).unwrap();
+    let panel = s.get("metalpanel");
+    assert_eq!(panel.elasticity, 0.2);
+    assert_eq!(panel.friction, 0.8);
+    assert_eq!(s.get("default").elasticity, 0.25);
+}
+
+#[test]
+fn elasticity_inherits_and_falls_back_to_the_physics_parser_default() {
+    let text = r#""default" { "elasticity" "0.25" }
+        "rubber" { "elasticity" "2" }
+        "child" { "base" "rubber" }"#;
+    let s = Surfaces::from_files(&[keyvalues::parse(text).unwrap()]);
+    assert_eq!(s.get("child").elasticity, 2.0);
+    assert_eq!(Surfaces::from_files(&[]).get("missing").elasticity, 0.001);
+}
