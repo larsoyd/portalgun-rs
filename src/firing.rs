@@ -84,12 +84,7 @@ pub(crate) fn fire(
             shot.arrives
         );
         if let Some(fx) = fx.as_deref_mut() {
-            let frame = crate::effects::Frame {
-                origin: Vec3::from(shot.from),
-                forward: Vec3::from(player.forward()),
-                right: Vec3::from(player.right()),
-                up: Vec3::from(player.up()),
-            };
+            let frame = crate::effects::Frame::stream(shot.from);
             let id = fx.spawn(colour, crate::effects::Effect::Stream, frame, None);
             streams.0.push((id, shot.clone(), false));
         }

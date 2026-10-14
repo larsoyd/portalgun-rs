@@ -71,6 +71,17 @@ impl Frame {
             up: m.z_axis.truncate(),
         }
     }
+    /// The shot stream's entity only ever gets an origin, so its points keep zero angles.
+    /// Translated from 0x560b80 and 0x260b40 (decompiled, client.so)
+    pub fn stream(at: [f32; 3]) -> Self {
+        Self {
+            origin: Vec3::from(at),
+            forward: Vec3::X,
+            right: -Vec3::Y,
+            up: Vec3::Z,
+        }
+    }
+
     pub fn impact(p: &Portal, offset: f32) -> Self {
         Self {
             origin: Vec3::from(p.origin) + Vec3::from(p.forward) * offset,
