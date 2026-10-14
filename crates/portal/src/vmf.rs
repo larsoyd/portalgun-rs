@@ -102,7 +102,7 @@ fn entity(kv: &Kv) -> Result<Entity> {
     })
 }
 
-fn output(event: &str, text: &str) -> Result<Output> {
+pub(crate) fn output(event: &str, text: &str) -> Result<Output> {
     let fields: Vec<&str> = if text.contains('\u{1b}') {
         text.split('\u{1b}').collect()
     } else {

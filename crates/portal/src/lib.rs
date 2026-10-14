@@ -7,6 +7,7 @@
 pub mod anim;
 pub mod bmp;
 pub mod brush;
+pub mod bsp;
 pub mod carry;
 pub mod crosshair;
 pub mod dmx;
