@@ -12,6 +12,7 @@ pub mod dmx;
 mod error;
 pub mod gun_fx;
 pub mod install;
+pub mod ivp;
 pub mod keyvalues;
 pub mod mdl;
 pub mod model;
