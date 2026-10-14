@@ -14,11 +14,15 @@ const STATIC_MASS: f64 = 100000.0;
 const MAX_SPEED: f64 = 2000.0 * 0.0254;
 const MAX_SPIN: f64 = 3600.0 * std::f64::consts::PI / 180.0;
 const ENERGY_DECAY: f64 = -0.10536054521799088;
+/// the environment's minimum friction mass, Source passes 10
+const MIN_FRICTION_MASS: f64 = 10.0;
 
 /// World geometry the body touches, with its surface's friction and elasticity.
 #[derive(Debug, Clone)]
 pub struct Solid {
     pub id: usize,
+    /// the static physics object the piece belongs to
+    pub object: usize,
     pub hull: Convex,
     pub friction: f32,
     pub elasticity: f32,
@@ -27,6 +31,7 @@ pub struct Solid {
 #[derive(Debug, Clone)]
 pub struct Contact {
     pub solid: usize,
+    object: usize,
     pub key: Key,
     pub gap: Gap,
     pub pressure: f64,
@@ -195,7 +200,7 @@ pub fn step(body: &mut Body, world: &[Solid], gravity: D3, dt: f64, now: f64) {
     body.spin = [0, 1, 2].map(|i| body.spin[i] * angular[i] as f64);
     body.speed = add(scale(body.speed, linear), scale(gravity, dt));
     friction(body, dt);
-    normal(body, dt);
+    normal(body, dt, MIN_FRICTION_MASS * length(gravity) * 0.1);
     body.sleep_count -= 1;
     if body.sleep_count <= 0 {
         body.seed = body.seed.wrapping_mul(0x4b);
@@ -264,11 +269,22 @@ fn refresh(body: &mut Body, world: &[Solid], now: f64) {
 /// Translated from 0xea430 and 0xe65d0 (decompiled, vphysics.so)
 fn friction(body: &mut Body, dt: f64) {
     let mut gained = 0.0;
-    for i in 0..body.contacts.len() {
+    let share =
+        |b: &Body, c: &Contact| c.mu * c.pressure / b.friction_mass(c.gap.on_cube) * dt * dt;
+    let shared = body.contacts.len() >= 2;
+    let pair_span: std::collections::HashMap<usize, f64> =
+        body.contacts.iter().fold(Default::default(), |mut m, c| {
+            *m.entry(c.object).or_default() += share(body, c);
+            m
+        });
+    for i in (0..body.contacts.len()).rev() {
         let c = body.contacts[i].clone();
         let mu = c.mu;
-        let inv_mred = 1.0 / body.friction_mass(c.gap.on_cube);
-        let max_span = mu * c.pressure * inv_mred * dt * dt;
+        let max_span = if shared {
+            pair_span[&c.object]
+        } else {
+            share(body, &c)
+        };
         let mut span = c.span;
         let mut slipping = c.slipping;
         let mut slip_work = c.slip_work;
@@ -339,7 +355,7 @@ fn remove_energy(body: &mut Body, dt: f64) {
 
 /// Pushes contacts apart until each one sits at twice the tolerance.
 /// Translated from 0xea2d0, 0xe5790 and 0xec400 (decompiled, vphysics.so)
-fn normal(body: &mut Body, dt: f64) {
+fn normal(body: &mut Body, dt: f64, allowance: f64) {
     body.contacts.retain(|c| c.gap.distance < 4.5 * T);
     match body.contacts.len() {
         0 => {}
@@ -357,14 +373,13 @@ fn normal(body: &mut Body, dt: f64) {
                 body.push(at, scale(c.gap.normal, imp));
             }
         }
-        _ => solve_normals(body, dt),
+        _ => solve_normals(body, dt, allowance),
     }
 }
 
-fn solve_normals(body: &mut Body, dt: f64) {
-    let active: Vec<usize> = (0..body.contacts.len())
-        .filter(|&i| body.contacts[i].gap.distance <= 2.0 * T + 0.01 * T)
-        .collect();
+fn solve_normals(body: &mut Body, dt: f64, allowance: f64) {
+    let active: Vec<usize> = (0..body.contacts.len()).collect();
+    let before = (body.speed, body.spin, body.kinetic());
     for c in body.contacts.iter_mut() {
         c.pressure = 0.0;
     }
@@ -410,6 +425,9 @@ fn solve_normals(body: &mut Body, dt: f64) {
             body.push(p, scale(n, x[k]));
         }
     }
+    if body.kinetic() > before.2 + allowance {
+        (body.speed, body.spin) = (before.0, before.1);
+    }
 }
 
 /// Moves the body through the step, stopping at each impact on the way.
@@ -436,6 +454,7 @@ fn advance(body: &mut Body, world: &[Solid], dt: f64, now: f64) {
             None => {
                 body.contacts.push(Contact {
                     solid: solid.id,
+                    object: solid.object,
                     key,
                     gap: g,
                     pressure: 0.0,

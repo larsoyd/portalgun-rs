@@ -33,6 +33,7 @@ fn slab(id: usize, lo: [f64; 3], hi: [f64; 3]) -> Solid {
         .collect::<Vec<_>>();
     Solid {
         id,
+        object: id,
         hull: Convex::from_planes(&planes),
         friction: 0.8,
         elasticity: 0.2,

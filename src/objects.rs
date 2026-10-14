@@ -64,6 +64,15 @@ const UNIT_INERTIA: [f64; 3] = [0.12165254, 0.12122901, 0.12122901];
 const RADIUS: f32 = 0.87988;
 const INCHES: f32 = 39.37008;
 
+/// The world's brushes are one static object, the player another, each portal piece group its own.
+fn physics_object(id: usize, block: usize) -> usize {
+    match id >> 20 {
+        0 if block == usize::MAX - 1 => 1,
+        0 => 0,
+        group => group,
+    }
+}
+
 fn cube_body(cube: &RigidCube) -> Body {
     let mut body = Body::new(
         Convex::cube(cube.half_size as f64 * METRES as f64),
@@ -327,6 +336,7 @@ impl Objects {
                     .collect();
                 Solid {
                     id,
+                    object: physics_object(id, block),
                     hull: Convex::from_planes(&planes),
                     friction: surface.friction,
                     elasticity: surface.elasticity,
@@ -371,11 +381,7 @@ impl Objects {
         let block = |id: usize| blocks.get(&id).copied().unwrap_or(usize::MAX);
         for (id, speed) in std::mem::take(&mut self.body.collisions) {
             let hit = block(id);
-            let object = match (id >> 20, hit) {
-                (0, b) if b == usize::MAX - 1 => 1,
-                (0, _) => 0,
-                (group, _) => group,
-            };
+            let object = physics_object(id, hit);
             let since = self
                 .last_collision
                 .insert(object, now)
