@@ -5,7 +5,7 @@ Rust on [Bevy](https://bevyengine.org) 0.19.
 
 The gun, the portals and moving through them are read from Portal's own
 binaries and files rather than tuned by eye. Where a value could not be found
-in the game, it is marked as an estimate instead of being made up.
+in the game, it is marked as an estimate instead of being made up. There is a companion cube but it is in alpha at the moment and the physics do not work very well. 
 
 Original behavior is the default. New behavior work starts with decompilation
 and Ghidra evidence. Optional improvements stay off until you enable them in
