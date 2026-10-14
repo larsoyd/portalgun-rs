@@ -115,6 +115,21 @@ impl Objects {
         );
     }
 
+    /// The throw torque is in degrees and turns the cube through its inertia in metres.
+    /// Translated from 0x209460 (decompiled, server.so) and 0x3f890 (decompiled, vphysics.so)
+    pub fn throw(&mut self, forward: SourceVec, random_axes: SourceVec) {
+        let cube = &mut self.cube;
+        let impulse = throw_impulse(cube.mass) / cube.mass;
+        cube.velocity = add(cube.velocity, forward.map(|v| v * impulse));
+        let torque = portal::carry::throw_torque(cube.mass, random_axes);
+        let mut spin = cube.angular_velocity;
+        for (i, axis) in cube.rotation.into_iter().enumerate() {
+            let turn = dot(axis, torque) / (UNIT_INERTIA[i] as f32 * cube.mass);
+            spin = add(spin, axis.map(|v| v * turn));
+        }
+        cube.angular_velocity = spin;
+    }
+
     pub fn use_object(&mut self, player: &Walker, space: &Space, now: f32) -> bool {
         if self.holding() {
             self.release(now);
@@ -426,17 +441,8 @@ fn interact(
         }
         objects.release(now);
         if throw {
-            let impulse = throw_impulse(objects.cube.mass) / objects.cube.mass;
-            objects.cube.velocity = add(objects.cube.velocity, forward.map(|v| v * impulse));
-            let torque = portal::carry::throw_torque(
-                objects.cube.mass,
-                [0, 1, 2].map(|_| random.range(-10.0, 10.0)),
-            );
-            let inv_inertia = 1.5 / (objects.cube.mass * objects.cube.half_size.powi(2));
-            objects.cube.angular_velocity = add(
-                objects.cube.angular_velocity,
-                torque.map(|v| (v * inv_inertia).to_degrees()),
-            );
+            let axes = [0, 1, 2].map(|_| random.range(-10.0, 10.0));
+            objects.throw(forward, axes);
         }
     }
     if std::mem::take(&mut controls.use_object) {

@@ -430,3 +430,17 @@ fn random_drops_never_dip_into_the_floor_and_all_come_to_rest() {
         assert_eq!(objects.cube.velocity, [0.0; 3], "run {run} still moving");
     }
 }
+
+#[test]
+fn a_throw_spins_the_cube_through_its_own_inertia_in_radians() {
+    let mut objects = Objects::default();
+    objects.cube = RigidCube::at([100.0, 0.0, 20.5]);
+    objects.throw([1.0, 0.0, 0.0], [10.0, 0.0, 0.0]);
+    let want = (40.0f32 * std::f32::consts::PI / 180.0 / (0.12165254 * 40.000004)).to_degrees();
+    assert!(
+        (objects.cube.angular_velocity[0] - want).abs() < 0.01,
+        "spin {:?} want {want}",
+        objects.cube.angular_velocity
+    );
+    assert!((objects.cube.velocity[0] - 100.0).abs() < 0.001);
+}
