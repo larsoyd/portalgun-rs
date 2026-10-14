@@ -15,6 +15,9 @@ This is a fan project for study. It is not affiliated with or endorsed by
 Valve. Nothing from the game is in this repository, only code: to run it you
 need your own copy of Portal, which the program reads at startup.
 
+**NB:** The code within the Portal crate is **strictly** non-commercial only. See: [license coverage](LICENSING.md)
+and the [required notice](NOTICE).
+
 ## What is in it
 
 ### The gun
