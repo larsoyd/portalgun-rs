@@ -96,6 +96,7 @@ fn turn(radius: f32, a: Quat, b: [f32; 4]) -> f64 {
 }
 
 /// Two reference poses, one per sleep window and one held for four seconds.
+#[derive(Debug, Clone)]
 pub struct SleepCheck {
     recent: Mark,
     held: Mark,
@@ -138,3 +139,6 @@ impl SleepCheck {
         Rest::Moving
     }
 }
+
+pub mod body;
+pub mod hull;
