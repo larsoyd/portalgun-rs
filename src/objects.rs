@@ -215,7 +215,10 @@ impl Objects {
             if self.carry.as_ref().is_some_and(|c| c.portal.is_some()) {
                 self.release(now);
             }
-            self.cube.owner = None;
+            let owner = self.cube.owner;
+            let kept =
+                owner.filter(|&i| matches!((self.pair, pair), (Some(o), Some(n)) if o[i] == n[i]));
+            self.cube.owner = kept;
             let tr = space.trace_oriented(
                 None,
                 self.cube.position,
@@ -223,7 +226,25 @@ impl Objects {
                 self.cube.rotation,
                 self.cube.half_size,
             );
-            if tr.start_solid {
+            let push = owner.zip(self.pair).map(|(i, old)| old[i].forward);
+            let half = self.cube.half();
+            let shift = push
+                .filter(|_| kept.is_none() && tr.start_solid)
+                .and_then(|push| {
+                    crate::walker::closest_passable_space(
+                        &space.world,
+                        sub(self.cube.position, half),
+                        add(self.cube.position, half),
+                        push,
+                    )
+                });
+            if let Some(shift) = shift {
+                self.cube.position = add(self.cube.position, shift);
+                info!(
+                    "[object] freed reason=portal_changed shift={shift:?} position={:?}",
+                    self.cube.position
+                );
+            } else if kept.is_none() && tr.start_solid {
                 self.cube.position = self.safe_position;
                 self.cube.rotation = self.safe_rotation;
                 self.visual_revision += 1;

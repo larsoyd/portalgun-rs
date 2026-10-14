@@ -543,3 +543,73 @@ fn a_cube_sliding_on_metal_reports_a_smooth_scrape() {
         "{cues:?}"
     );
 }
+
+#[test]
+fn a_cube_left_in_the_floor_when_its_portal_closes_is_pushed_out_where_it_was() {
+    let pair = [
+        Portal::new(
+            [150.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0],
+            (32.0, 54.0),
+        ),
+        Portal::new(
+            [-150.0, 200.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0],
+            (32.0, 54.0),
+        ),
+    ];
+    let player = Walker::at([-400.0, -400.0, 0.0]);
+    let mut objects = Objects::default();
+    objects.cube = RigidCube::at([0.0, 300.0, 20.5]);
+    objects.advance(0.015, &player, &room(), Some(pair), None, 0.0);
+    objects.cube = RigidCube::at([150.0, 0.0, 10.0]);
+    objects.cube.owner = Some(0);
+    objects.advance(0.015, &player, &room(), Some(pair), None, 0.015);
+    let before = objects.cube.position;
+    objects.advance(0.015, &player, &room(), None, None, 0.03);
+    let after = objects.cube.position;
+    assert!(
+        (after[0] - before[0]).abs() < 1.0 && (after[1] - before[1]).abs() < 1.0,
+        "moved sideways from {before:?} to {after:?}"
+    );
+    assert!(after[2] >= 19.9, "still in the floor at {after:?}");
+}
+
+#[test]
+fn moving_the_far_portal_leaves_a_cube_in_this_portals_hole_alone() {
+    let mut pair = [
+        Portal::new(
+            [150.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0],
+            (32.0, 54.0),
+        ),
+        Portal::new(
+            [-150.0, 200.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0],
+            (32.0, 54.0),
+        ),
+    ];
+    let player = Walker::at([-400.0, -400.0, 0.0]);
+    let mut objects = Objects::default();
+    objects.cube = RigidCube::at([0.0, 300.0, 20.5]);
+    objects.advance(0.015, &player, &room(), Some(pair), None, 0.0);
+    objects.cube = RigidCube::at([150.0, 0.0, 10.0]);
+    objects.cube.owner = Some(0);
+    objects.advance(0.015, &player, &room(), Some(pair), None, 0.015);
+    let before = objects.cube.position;
+    pair[1].origin = [-250.0, 200.0, 0.0];
+    objects.advance(0.015, &player, &room(), Some(pair), None, 0.03);
+    assert_eq!(objects.cube.owner, Some(0));
+    let moved = (0..3)
+        .map(|i| (objects.cube.position[i] - before[i]).abs())
+        .fold(0.0, f32::max);
+    assert!(
+        moved < 1.0,
+        "cube jumped from {before:?} to {:?}",
+        objects.cube.position
+    );
+}

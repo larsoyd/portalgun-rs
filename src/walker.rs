@@ -834,82 +834,93 @@ impl Walker {
         true
     }
 
-    /// Steps the box toward open space by weighing traces between its corners.
-    /// Translated from 0x2d7da0 (decompiled, server.so)
     fn find_closest_passable_space(&mut self, space: &Space, push: Vec3) -> bool {
-        let world = &space.world;
-        let (mins, maxs) = (
-            collision::add(self.feet, [-HALF_WIDTH, -HALF_WIDTH, 0.0]),
-            collision::add(self.feet, [HALF_WIDTH, HALF_WIDTH, self.height()]),
-        );
-        let c = [0, 1, 2].map(|i| (mins[i] + maxs[i]) * 0.5);
-        let ext = collision::sub(maxs, c);
-        let k = ext.map(|e| e * 0.00990099);
-        let mut pos = [c[0], c[1], c[2] + 0.001];
-        let mut high = collision::sub(ext, k);
-        let mut low = collision::scale(high, -1.0);
-        let mut grow = k;
-        let cast = |a: Vec3, b: Vec3, half: Vec3| {
-            collision::trace_brushes(a, b, collision::scale(half, -1.0), half, world)
-        };
-        for _ in 0..FCPS_TRIES {
-            let t = cast(pos, c, ext);
-            if !t.start_solid {
-                self.feet = collision::add(collision::sub(t.end, c), self.feet);
-                return true;
+        let mins = collision::add(self.feet, [-HALF_WIDTH, -HALF_WIDTH, 0.0]);
+        let maxs = collision::add(self.feet, [HALF_WIDTH, HALF_WIDTH, self.height()]);
+        match closest_passable_space(&space.world, mins, maxs, push) {
+            Some(shift) => {
+                self.feet = collision::add(self.feet, shift);
+                true
             }
-            let corners: [Vec3; 8] = std::array::from_fn(|i| {
-                [
-                    pos[0] + if i & 1 == 0 { low[0] } else { high[0] },
-                    pos[1] + if i & 2 == 0 { low[1] } else { high[1] },
-                    pos[2] + if i & 4 == 0 { low[2] } else { high[2] },
-                ]
-            });
-            let outside = corners.map(|p| world.iter().any(|(_, planes)| inside(planes, p)));
-            let mut weight = [0.0f32; 8];
-            for i in 0..7 {
-                for j in i + 1..8 {
-                    let delta = collision::sub(corners[j], corners[i]);
-                    let d = collision::dot(delta, delta).sqrt();
-                    let reach = |from: usize, to: usize, blocked: bool| match blocked {
-                        true => -FCPS_PENALTY,
-                        false => {
-                            let t = cast(corners[from], corners[to], grow);
-                            if t.start_solid {
-                                -FCPS_PENALTY
-                            } else {
-                                t.fraction * d
-                            }
-                        }
-                    };
-                    weight[i] += reach(i, j, outside[i]);
-                    weight[j] += reach(j, i, outside[j]);
-                }
-            }
-            let total: f32 = weight.iter().filter(|&&w| w > 0.0).sum();
-            let step = if total == 0.0 {
-                high = ext;
-                low = collision::scale(ext, -1.0);
-                grow = k;
-                push
-            } else {
-                let sum = (0..8)
-                    .filter(|&i| weight[i] > 0.0)
-                    .fold([0.0; 3], |acc, i| {
-                        collision::add(
-                            acc,
-                            collision::scale(collision::sub(corners[i], pos), weight[i]),
-                        )
-                    });
-                low = collision::sub(k, high);
-                high = collision::sub(high, k);
-                grow = collision::add(grow, k);
-                collision::scale(sum, 1.0 / total)
-            };
-            pos = collision::add(pos, step);
+            None => false,
         }
-        false
     }
+}
+
+/// Steps a box toward open space by weighing traces between its corners, the shift that frees it.
+/// Translated from 0x2d7da0 (decompiled, server.so)
+pub fn closest_passable_space(
+    world: &[crate::simulator::Solid],
+    mins: Vec3,
+    maxs: Vec3,
+    push: Vec3,
+) -> Option<Vec3> {
+    let c = [0, 1, 2].map(|i| (mins[i] + maxs[i]) * 0.5);
+    let ext = collision::sub(maxs, c);
+    let k = ext.map(|e| e * 0.00990099);
+    let mut pos = [c[0], c[1], c[2] + 0.001];
+    let mut high = collision::sub(ext, k);
+    let mut low = collision::scale(high, -1.0);
+    let mut grow = k;
+    let cast = |a: Vec3, b: Vec3, half: Vec3| {
+        collision::trace_brushes(a, b, collision::scale(half, -1.0), half, world)
+    };
+    for _ in 0..FCPS_TRIES {
+        let t = cast(pos, c, ext);
+        if !t.start_solid {
+            return Some(collision::sub(t.end, c));
+        }
+        let corners: [Vec3; 8] = std::array::from_fn(|i| {
+            [
+                pos[0] + if i & 1 == 0 { low[0] } else { high[0] },
+                pos[1] + if i & 2 == 0 { low[1] } else { high[1] },
+                pos[2] + if i & 4 == 0 { low[2] } else { high[2] },
+            ]
+        });
+        let outside = corners.map(|p| world.iter().any(|(_, planes)| inside(planes, p)));
+        let mut weight = [0.0f32; 8];
+        for i in 0..7 {
+            for j in i + 1..8 {
+                let delta = collision::sub(corners[j], corners[i]);
+                let d = collision::dot(delta, delta).sqrt();
+                let reach = |from: usize, to: usize, blocked: bool| match blocked {
+                    true => -FCPS_PENALTY,
+                    false => {
+                        let t = cast(corners[from], corners[to], grow);
+                        if t.start_solid {
+                            -FCPS_PENALTY
+                        } else {
+                            t.fraction * d
+                        }
+                    }
+                };
+                weight[i] += reach(i, j, outside[i]);
+                weight[j] += reach(j, i, outside[j]);
+            }
+        }
+        let total: f32 = weight.iter().filter(|&&w| w > 0.0).sum();
+        let step = if total == 0.0 {
+            high = ext;
+            low = collision::scale(ext, -1.0);
+            grow = k;
+            push
+        } else {
+            let sum = (0..8)
+                .filter(|&i| weight[i] > 0.0)
+                .fold([0.0; 3], |acc, i| {
+                    collision::add(
+                        acc,
+                        collision::scale(collision::sub(corners[i], pos), weight[i]),
+                    )
+                });
+            low = collision::sub(k, high);
+            high = collision::sub(high, k);
+            grow = collision::add(grow, k);
+            collision::scale(sum, 1.0 / total)
+        };
+        pos = collision::add(pos, step);
+    }
+    None
 }
 
 /// CreateStuckTable: small nudges on each axis and their corners, then big ones.
