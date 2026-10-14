@@ -311,6 +311,7 @@ impl Objects {
         } else {
             -600.0 * METRES as f64
         };
+        let was_asleep = self.body.asleep;
         step(
             &mut self.body,
             &solids,
@@ -319,6 +320,15 @@ impl Objects {
             now as f64,
         );
         self.store_body();
+        if self.body.asleep != was_asleep {
+            info!(
+                "[object] asleep={} position={:?} contacts={} solids={}",
+                self.body.asleep,
+                self.cube.position,
+                self.body.contacts.len(),
+                solids.len()
+            );
+        }
     }
 
     /// Copies any change made to the cube from outside the simulation into the body.
