@@ -14,6 +14,7 @@ use portal::vpk::SearchPath;
 use portal::Error;
 
 use crate::collision::{dot, Plane};
+use crate::simulator::bevelled;
 
 const SANDBOX: &str = include_str!("../assets/chambers/sandbox.vmf");
 
@@ -36,6 +37,7 @@ pub struct Block {
     pub sides: Vec<Side>,
     /// one per brush, footsteps and impacts look it up by block
     pub surfaceprop: String,
+    planes: Vec<Plane>,
 }
 
 pub struct Chamber {
@@ -102,6 +104,17 @@ impl Chamber {
 }
 
 impl Block {
+    fn new(min: Vec3, max: Vec3, sides: Vec<Side>, surfaceprop: String) -> Block {
+        let own: Vec<Plane> = sides.iter().map(|s| s.plane).collect();
+        Block {
+            min,
+            max,
+            planes: bevelled(&own),
+            sides,
+            surfaceprop,
+        }
+    }
+
     fn from_solid(solid: &vmf::Solid, looks: &HashMap<String, Look>) -> portal::Result<Block> {
         let polys = brush::faces(&solid.sides);
         let (min, max) = brush::bounds(&polys);
@@ -135,12 +148,7 @@ impl Block {
                 }
             })
             .collect();
-        Ok(Block {
-            min,
-            max,
-            sides,
-            surfaceprop,
-        })
+        Ok(Block::new(min, max, sides, surfaceprop))
     }
 
     /// An axis-aligned box with Hammer's world-aligned texture axes on every side.
@@ -178,30 +186,11 @@ impl Block {
                 });
             }
         }
-        Block {
-            min,
-            max,
-            sides,
-            surfaceprop: prop.to_string(),
-        }
+        Block::new(min, max, sides, prop.to_string())
     }
 
-    /// The sides plus vbsp's axial bevels, so a box sweeps against slanted sides correctly.
     pub fn planes(&self) -> Vec<Plane> {
-        let mut planes: Vec<Plane> = self.sides.iter().map(|s| s.plane).collect();
-        for i in 0..3 {
-            for (sign, at) in [(1.0, self.max[i]), (-1.0, self.min[i])] {
-                let mut normal = [0.0; 3];
-                normal[i] = sign;
-                if !planes.iter().any(|p| p.normal == normal) {
-                    planes.push(Plane {
-                        normal,
-                        distance: sign * at,
-                    });
-                }
-            }
-        }
-        planes
+        self.planes.clone()
     }
 
     pub fn faces(&self) -> impl Iterator<Item = &Side> {

@@ -55,19 +55,19 @@ impl Space {
                 let fronts = pair.map(|p| front(chamber, &p));
                 (0..2)
                     .map(|i| Sim {
-                        front: fronts[i].clone(),
-                        tube: tube(&pair[i]),
-                        wall: wall(chamber, &pair[i]),
-                        linked: carried(&fronts[1 - i], &pair[1 - i], &pair[i]),
+                        front: bevel_all(fronts[i].clone()),
+                        tube: bevel_all(tube(&pair[i])),
+                        wall: bevel_all(wall(chamber, &pair[i])),
+                        linked: bevel_all(carried(&fronts[1 - i], &pair[1 - i], &pair[i])),
                         surface: behind(&world, &pair[i]),
-                        hole: vec![(
+                        hole: bevel_all(vec![(
                             usize::MAX,
                             local_box(
                                 &pair[i],
                                 [-HOLE_FAR, -HOLE.0, -HOLE.1],
                                 [-HOLE_NEAR, HOLE.0, HOLE.1],
                             ),
-                        )],
+                        )]),
                     })
                     .collect()
             })
@@ -424,6 +424,39 @@ fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
 
 fn dot64(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/// The solid's own planes plus every supporting plane a world box can touch it along, so a
+/// box sweep against it is exact.
+pub fn bevelled(planes: &[Plane]) -> Vec<Plane> {
+    let axial = |p: &Plane| p.normal.iter().any(|c| c.abs() > 0.99999);
+    if planes.iter().all(axial) {
+        return planes.to_vec();
+    }
+    let points = vertices(planes);
+    let tight: Vec<Plane> = planes
+        .iter()
+        .map(|p| Plane {
+            normal: p.normal,
+            distance: points
+                .iter()
+                .map(|v| dot64(p.normal.map(f64::from), *v) as f32)
+                .fold(f32::NEG_INFINITY, f32::max)
+                .min(p.distance),
+        })
+        .collect();
+    expanded_planes(
+        &tight,
+        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        0.0,
+    )
+}
+
+fn bevel_all(solids: Vec<Solid>) -> Vec<Solid> {
+    solids
+        .into_iter()
+        .map(|(n, planes)| (n, bevelled(&planes)))
+        .collect()
 }
 
 fn expanded_planes(planes: &[Plane], basis: portal::carry::Basis, half: f32) -> Vec<Plane> {
