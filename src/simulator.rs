@@ -38,11 +38,13 @@ struct Sim {
     wall: Vec<Solid>,
     linked: Vec<Solid>,
     hole: Vec<Solid>,
+    /// the block 500 units straight behind the portal, whose material every piece takes
+    surface: usize,
 }
 
 impl Space {
     pub fn new(chamber: &Chamber, linked: Option<&[Portal; 2]>) -> Space {
-        let world = chamber
+        let world: Vec<Solid> = chamber
             .blocks
             .iter()
             .enumerate()
@@ -57,6 +59,7 @@ impl Space {
                         tube: tube(&pair[i]),
                         wall: wall(chamber, &pair[i]),
                         linked: carried(&fronts[1 - i], &pair[1 - i], &pair[i]),
+                        surface: behind(&world, &pair[i]),
                         hole: vec![(
                             usize::MAX,
                             local_box(
@@ -102,6 +105,7 @@ impl Space {
                     wall: expand(&s.wall),
                     linked: expand(&s.linked),
                     hole: expand(&s.hole),
+                    surface: s.surface,
                 })
                 .collect(),
         };
@@ -155,16 +159,22 @@ impl Space {
                 .map(|(k, (n, planes))| (k, *n, planes.as_slice()))
                 .collect();
         };
-        let mut groups = vec![&sim.front, &sim.wall, &sim.tube];
+        let far = self.sims[1 - i].surface;
+        let mut groups = vec![
+            (&sim.front, sim.surface),
+            (&sim.wall, sim.surface),
+            (&sim.tube, sim.surface),
+        ];
         if in_hole {
-            groups.push(&sim.linked);
+            groups.push((&sim.linked, far));
         }
         groups
             .into_iter()
             .enumerate()
-            .flat_map(|(g, solids)| {
+            .flat_map(|(g, (solids, surface))| {
                 solids.iter().enumerate().map(move |(k, (n, planes))| {
-                    ((1 + i) << 24 | g << 20 | k, *n, planes.as_slice())
+                    let surface = if *n == usize::MAX - 1 { *n } else { surface };
+                    ((1 + i) << 24 | g << 20 | k, surface, planes.as_slice())
                 })
             })
             .collect()
@@ -225,6 +235,15 @@ impl Sim {
         }
         best.unwrap_or_else(|| cast(&[]))
     }
+}
+
+/// Translated from 0x2d60f0 (decompiled, server.so)
+fn behind(world: &[Solid], p: &Portal) -> usize {
+    let from = p.world([1.0, 0.0, 0.0]);
+    let to = p.world([-500.0, 0.0, 0.0]);
+    trace_brushes(from, to, [0.0; 3], [0.0; 3], world)
+        .block
+        .unwrap_or(usize::MAX)
 }
 
 /// The world in front of the portal, cut off 0.1 in front of its plane.

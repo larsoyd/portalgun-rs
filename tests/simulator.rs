@@ -381,3 +381,26 @@ fn a_hull_that_lands_behind_the_exit_plane_right_after_crossing_is_sent_back() {
     w.velocity = [0.0; 3];
     assert_eq!(w.step(&Input::default(), DT, &c, Some(pair)), Some(1));
 }
+
+#[test]
+fn an_owned_object_meets_every_portal_piece_in_the_surface_behind_that_portal() {
+    let pair = [floor_portal(), wall_portal()];
+    let space = Space::new(&room(), Some(&pair));
+    let pieces = space.object_solids(Some(0), true);
+    let linked = |id: usize| (id >> 20) & 15 == 3;
+    assert!(pieces.iter().any(|p| linked(p.0)), "no far side pieces");
+    for (id, surface, _) in &pieces {
+        let want = if linked(*id) { 1 } else { 0 };
+        assert_eq!(*surface, want, "piece {id:#x}");
+    }
+    let mut lost = pair;
+    lost[0].origin[2] = 900.0;
+    let space = Space::new(&room(), Some(&lost));
+    for (id, surface, _) in space.object_solids(Some(0), false) {
+        assert_eq!(
+            surface,
+            usize::MAX,
+            "piece {id:#x} with nothing behind the portal"
+        );
+    }
+}
