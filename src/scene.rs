@@ -11,7 +11,7 @@ use bevy::camera::visibility::RenderLayers;
 
 use crate::chamber::{Chamber, Side};
 use crate::sound::Files;
-use crate::texture;
+use crate::texture::{self, WorldLook};
 use crate::units::{to_bevy, to_bevy_dir};
 use crate::view::VIEW_LAYER;
 
@@ -67,22 +67,55 @@ fn spawn_chamber(
         by_material.entry(&side.material).or_default().push(side);
     }
     for (name, faces) in &by_material {
-        let image = match texture::base_texture(&files, name)
-            .and_then(|base| texture::load(&files, &base))
-        {
-            Ok(i) => i,
+        let look = match texture::world_look(&files, name) {
+            Ok(l) => l,
             Err(e) => {
                 error!("[chamber] refused: material={name} reason={e}");
                 exit.write(AppExit::error());
                 return;
             }
         };
-        let size = image.size();
-        let material = materials.add(StandardMaterial {
-            base_color_texture: Some(images.add(image)),
-            perceptual_roughness: 0.9,
-            ..default()
-        });
+        let (material, size) = match &look {
+            WorldLook::Refract(tint) => (
+                StandardMaterial {
+                    base_color: Color::srgb(tint[0], tint[1], tint[2]),
+                    alpha_mode: AlphaMode::Multiply,
+                    unlit: true,
+                    ..default()
+                },
+                UVec2::ONE,
+            ),
+            WorldLook::Opaque(base) | WorldLook::Translucent(base) => {
+                let image = match texture::load(&files, base) {
+                    Ok(i) => i,
+                    Err(e) => {
+                        error!("[chamber] refused: material={name} reason={e}");
+                        exit.write(AppExit::error());
+                        return;
+                    }
+                };
+                let size = image.size();
+                let blend = matches!(look, WorldLook::Translucent(_));
+                let material = StandardMaterial {
+                    base_color_texture: Some(images.add(image)),
+                    perceptual_roughness: 0.9,
+                    alpha_mode: if blend {
+                        AlphaMode::Blend
+                    } else {
+                        AlphaMode::Opaque
+                    },
+                    double_sided: blend,
+                    cull_mode: if blend {
+                        None
+                    } else {
+                        Some(bevy::render::render_resource::Face::Back)
+                    },
+                    ..default()
+                };
+                (material, size)
+            }
+        };
+        let material = materials.add(material);
         commands.spawn((
             Mesh3d(meshes.add(material_mesh(faces, size))),
             MeshMaterial3d(material),

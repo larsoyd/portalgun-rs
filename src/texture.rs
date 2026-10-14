@@ -24,6 +24,44 @@ pub fn base_texture(search: &SearchPath, material: &str) -> Result<String, Strin
         .ok_or_else(|| format!("{path}: no $basetexture"))
 }
 
+#[derive(Debug, PartialEq)]
+pub enum WorldLook {
+    Opaque(String),
+    Translucent(String),
+    Refract([f32; 3]),
+}
+
+pub fn world_look(search: &SearchPath, material: &str) -> Result<WorldLook, String> {
+    let path = format!("materials/{material}.vmt");
+    let bytes = search.read(&path).map_err(|e| format!("{path}: {e}"))?;
+    let root =
+        keyvalues::parse(&String::from_utf8_lossy(&bytes)).map_err(|e| format!("{path}: {e}"))?;
+    let shader = root.first().ok_or_else(|| format!("{path}: empty"))?;
+    if shader.key.eq_ignore_ascii_case("refract") {
+        let tint = shader.get("$refracttint").unwrap_or("[1 1 1]");
+        return colour(tint)
+            .map(WorldLook::Refract)
+            .ok_or_else(|| format!("{path}: $refracttint {tint:?}"));
+    }
+    let base = base_texture(search, material)?;
+    Ok(match shader.get("$translucent").map(str::trim) {
+        Some("1") => WorldLook::Translucent(base),
+        _ => WorldLook::Opaque(base),
+    })
+}
+
+/// a VMT colour, braces hold 0 to 255 and brackets 0 to 1
+fn colour(text: &str) -> Option<[f32; 3]> {
+    let t = text.trim();
+    let scale = if t.starts_with('{') { 255.0 } else { 1.0 };
+    let v: Vec<f32> = t
+        .trim_matches(|c| matches!(c, '{' | '}' | '[' | ']'))
+        .split_whitespace()
+        .map(|x| x.parse::<f32>().ok().map(|x| x / scale))
+        .collect::<Option<_>>()?;
+    v.try_into().ok()
+}
+
 /// A colour texture, repeating like a brush face.
 pub fn load(search: &SearchPath, name: &str) -> Result<Image, String> {
     load_as(search, name, true)

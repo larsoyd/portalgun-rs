@@ -74,3 +74,23 @@ fn the_blue_ramp_comes_out_blue() {
         "orange keeps red over blue"
     );
 }
+
+#[test]
+fn world_materials_are_opaque_translucent_or_refracting_glass() {
+    use portalgun::texture::{world_look, WorldLook};
+    let i = install();
+    assert_eq!(
+        world_look(&i.search, "concrete/concrete_modular_wall001a").unwrap(),
+        WorldLook::Opaque("Concrete/concrete_modular_wall001a".into())
+    );
+    assert_eq!(
+        world_look(&i.search, "glass/glasswindow_frosted_002").unwrap(),
+        WorldLook::Translucent("Glass/glasswindow_frosted_002".into())
+    );
+    let WorldLook::Refract(tint) = world_look(&i.search, "glass/glasswindow_refract01").unwrap()
+    else {
+        panic!("the observation glass is a Refract material");
+    };
+    let want = [183.0 / 255.0, 204.0 / 255.0, 218.0 / 255.0];
+    assert!((0..3).all(|k| (tint[k] - want[k]).abs() < 1e-6), "{tint:?}");
+}
