@@ -395,13 +395,13 @@ fn the_ground_is_found_up_to_2_units_below_the_feet() {
 fn with_platform(height: f32) -> Chamber {
     let mut c = chamber();
     let floor = &c.blocks[0];
-    let block = Block {
-        min: [-200.0, -100.0, 0.0],
-        max: [0.0, 100.0, height],
-        material: floor.material,
-        surface: floor.surface,
-        surfaceprop: floor.surfaceprop.clone(),
-    };
+    let block = Block::cuboid(
+        [-200.0, -100.0, 0.0],
+        [0.0, 100.0, height],
+        &floor.sides[0].material,
+        floor.sides[0].surface,
+        &floor.surfaceprop,
+    );
     c.blocks.push(block);
     c
 }

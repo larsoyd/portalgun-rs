@@ -10,13 +10,7 @@ use portalgun::walker::{Input, Walker};
 const DT: f32 = 0.015;
 
 fn block(min: [f32; 3], max: [f32; 3]) -> Block {
-    Block {
-        min,
-        max,
-        material: "",
-        surface: Surface::Portalable,
-        surfaceprop: "default".into(),
-    }
+    Block::cuboid(min, max, "", Surface::Portalable, "default")
 }
 
 /// A floor at z 0 and a wall whose face is x 500.

@@ -10,13 +10,7 @@ use portalgun::simulator::Space;
 use portalgun::walker::Walker;
 
 fn block(min: [f32; 3], max: [f32; 3]) -> Block {
-    Block {
-        min,
-        max,
-        material: "",
-        surface: Surface::Portalable,
-        surfaceprop: "metalpanel".into(),
-    }
+    Block::cuboid(min, max, "", Surface::Portalable, "metalpanel")
 }
 fn room() -> Chamber {
     Chamber {

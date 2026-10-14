@@ -14,6 +14,32 @@ fn chamber() -> Chamber {
 }
 
 #[test]
+fn the_sandbox_comes_from_its_vmf_with_every_side_shown() {
+    let c = chamber();
+    let bounds: Vec<_> = c.blocks.iter().map(|b| (b.min, b.max)).collect();
+    assert_eq!(
+        bounds,
+        [
+            ([-400.0, -272.0, -16.0], [400.0, 272.0, 0.0]),
+            ([-400.0, -272.0, 384.0], [400.0, 272.0, 400.0]),
+            ([-400.0, -272.0, 0.0], [-384.0, 272.0, 384.0]),
+            ([384.0, -272.0, 0.0], [400.0, 272.0, 384.0]),
+            ([-384.0, -272.0, 0.0], [384.0, -256.0, 384.0]),
+            ([-384.0, 256.0, 0.0], [-64.0, 272.0, 384.0]),
+            ([-64.0, 256.0, 0.0], [64.0, 272.0, 384.0]),
+            ([64.0, 256.0, 0.0], [384.0, 272.0, 384.0]),
+            ([192.0, -256.0, 0.0], [384.0, -64.0, 128.0]),
+            ([-160.0, 96.0, 0.0], [-128.0, 128.0, 32.0]),
+        ]
+    );
+    for b in &c.blocks {
+        assert_eq!(b.sides.len(), 6);
+        assert!(b.sides.iter().all(|s| s.points.len() == 4), "{:?}", b.min);
+    }
+    assert_eq!(c.blocks[6].sides[0].material, "metal/metalwall048b");
+}
+
+#[test]
 fn noportal_in_the_material_is_what_makes_a_surface_refuse_portals() {
     assert!(noportal("\"LightmappedGeneric\" { \"%noportal\" 1 }").unwrap());
     assert!(!noportal("\"LightmappedGeneric\" { \"%noportal\" 0 }").unwrap());
@@ -114,27 +140,34 @@ fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 fn every_face_winds_outward_with_world_aligned_texture_axes() {
     let c = chamber();
     let floor = &c.blocks[0];
-    let faces = floor.faces();
+    let faces: Vec<_> = floor.faces().collect();
     assert_eq!(faces.len(), 6);
     for f in &faces {
-        let [a, b, _, d] = f.corners;
+        let (a, b, d) = (f.points[0], f.points[1], f.points[3]);
         let e1 = [0, 1, 2].map(|i| b[i] - a[i]);
         let e2 = [0, 1, 2].map(|i| d[i] - a[i]);
         let n = cross(e1, e2);
         let len = n.iter().map(|v| v * v).sum::<f32>().sqrt();
-        assert_eq!(n.map(|v| v / len), f.normal, "winding of {:?}", f.normal);
+        assert_eq!(
+            n.map(|v| v / len),
+            f.plane.normal,
+            "winding of {:?}",
+            f.plane.normal
+        );
     }
-    let top = faces.iter().find(|f| f.normal == [0.0, 0.0, 1.0]).unwrap();
-    for (p, uv) in top.corners.iter().zip(top.uv) {
-        assert_eq!(uv, [p[0], -p[1]]);
+    let texels = |p: f32| p / 0.25;
+    let side = |n: [f32; 3]| *faces.iter().find(|f| f.plane.normal == n).unwrap();
+    let top = side([0.0, 0.0, 1.0]);
+    for (p, uv) in top.points.iter().zip(&top.uv) {
+        assert_eq!(*uv, [texels(p[0]), texels(-p[1])]);
     }
-    let west = faces.iter().find(|f| f.normal == [-1.0, 0.0, 0.0]).unwrap();
-    for (p, uv) in west.corners.iter().zip(west.uv) {
-        assert_eq!(uv, [p[1], -p[2]]);
+    let west = side([-1.0, 0.0, 0.0]);
+    for (p, uv) in west.points.iter().zip(&west.uv) {
+        assert_eq!(*uv, [texels(p[1]), texels(-p[2])]);
     }
-    let north = faces.iter().find(|f| f.normal == [0.0, 1.0, 0.0]).unwrap();
-    for (p, uv) in north.corners.iter().zip(north.uv) {
-        assert_eq!(uv, [p[0], -p[2]]);
+    let north = side([0.0, 1.0, 0.0]);
+    for (p, uv) in north.points.iter().zip(&north.uv) {
+        assert_eq!(*uv, [texels(p[0]), texels(-p[2])]);
     }
 }
 
@@ -145,7 +178,7 @@ fn each_block_knows_its_materials_surface() {
     let metal = c
         .blocks
         .iter()
-        .find(|b| b.material.starts_with("metal/"))
+        .find(|b| b.sides[0].material.starts_with("metal/"))
         .unwrap();
     assert_eq!(metal.surfaceprop, "metal");
 }
@@ -183,18 +216,88 @@ fn portal_clearance_checks_thin_obstructions_between_the_ray_samples() {
         (32.0, 54.0),
     );
     let mut c = Chamber {
-        blocks: vec![Block {
-            min: [-1.0, 7.0, 20.0],
-            max: [10.0, 8.0, 30.0],
-            material: "",
-            surface: Surface::Rejects,
-            surfaceprop: "default".into(),
-        }],
+        blocks: vec![Block::cuboid(
+            [-1.0, 7.0, 20.0],
+            [10.0, 8.0, 30.0],
+            "",
+            Surface::Rejects,
+            "default",
+        )],
     };
     assert!(!c.clear_portal(&p));
-    c.blocks[0].max[0] = 0.0;
+    c.blocks[0] = Block::cuboid(
+        [-1.0, 7.0, 20.0],
+        [0.0, 8.0, 30.0],
+        "",
+        Surface::Rejects,
+        "default",
+    );
     assert!(c.clear_portal(&p), "support behind the opening is allowed");
-    c.blocks[0].min = [-1.0, -100.0, -10.0];
-    c.blocks[0].max = [100.0, 100.0, 0.0];
+    c.blocks[0] = Block::cuboid(
+        [-1.0, -100.0, -10.0],
+        [100.0, 100.0, 0.0],
+        "",
+        Surface::Rejects,
+        "default",
+    );
     assert!(c.clear_portal(&p), "the bottom can sit flush on the floor");
+}
+
+fn panel(x: f32, material: &str) -> String {
+    let (a, b) = (x, x + 4.0);
+    let side = |p: &str| {
+        format!(
+            "side {{ \"plane\" \"{p}\" \"material\" \"{material}\" \
+             \"uaxis\" \"[0 1 0 0] 0.25\" \"vaxis\" \"[0 0 -1 0] 0.25\" }}"
+        )
+    };
+    format!(
+        "solid {{ \"id\" \"1\" {} {} {} {} {} {} }}",
+        side(&format!("({a} 64 128) ({b} 64 128) ({b} -64 128)")),
+        side(&format!("({a} -64 0) ({b} -64 0) ({b} 64 0)")),
+        side(&format!("({a} 64 128) ({a} -64 128) ({a} -64 0)")),
+        side(&format!("({b} 64 0) ({b} -64 0) ({b} -64 128)")),
+        side(&format!("({b} 64 128) ({a} 64 128) ({a} 64 0)")),
+        side(&format!("({b} -64 0) ({a} -64 0) ({a} -64 128)")),
+    )
+}
+
+#[test]
+fn glass_refuses_portals_and_the_orange_light_lets_shots_through() {
+    let dir = root(None, None, Path::new(&std::env::var("HOME").unwrap()));
+    let install = Install::open(&dir).unwrap();
+    let text = format!(
+        "world {{ {} {} }}",
+        panel(100.0, "glass/glasswindow_refract01"),
+        panel(200.0, "lights/light_orange001")
+    );
+    let c = Chamber::from_vmf(&install.search, &text).unwrap();
+    let eye = [0.0, 0.0, 64.0];
+    let glass = c.cast(eye, [1.0, 0.0, 0.0], 1000.0).unwrap();
+    assert_eq!((glass.distance, glass.surface), (100.0, Surface::Rejects));
+    let light = c.cast([150.0, 0.0, 64.0], [1.0, 0.0, 0.0], 1000.0).unwrap();
+    assert_eq!(
+        (light.distance, light.surface),
+        (50.0, Surface::PassThrough)
+    );
+    assert_eq!(c.blocks[0].surfaceprop, "glass");
+}
+
+#[test]
+fn a_brush_mixing_surfaceprops_is_refused() {
+    let dir = root(None, None, Path::new(&std::env::var("HOME").unwrap()));
+    let install = Install::open(&dir).unwrap();
+    let wall = panel(100.0, "concrete/concrete_modular_wall001a");
+    let mixed = wall.replacen(
+        "concrete/concrete_modular_wall001a",
+        "metal/metalwall048b",
+        1,
+    );
+    let err = Chamber::from_vmf(&install.search, &format!("world {{ {mixed} }}"))
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(err.contains("refused") && err.contains("metal"), "{err}");
+    let nodraw = wall.replacen("concrete/concrete_modular_wall001a", "tools/toolsnodraw", 1);
+    assert!(Chamber::from_vmf(&install.search, &format!("world {{ {nodraw} }}")).is_ok());
 }

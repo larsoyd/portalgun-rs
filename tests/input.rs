@@ -19,13 +19,13 @@ fn app() -> App {
         .init_resource::<ButtonInput<MouseButton>>()
         .init_resource::<Portals>()
         .insert_resource(Level(Chamber {
-            blocks: vec![Block {
-                min: [-1000.0, -1000.0, -16.0],
-                max: [1000.0, 1000.0, 0.0],
-                material: "",
-                surface: portal::placement::Surface::Portalable,
-                surfaceprop: "default".into(),
-            }],
+            blocks: vec![Block::cuboid(
+                [-1000.0, -1000.0, -16.0],
+                [1000.0, 1000.0, 0.0],
+                "",
+                portal::placement::Surface::Portalable,
+                "default",
+            )],
         }))
         .add_plugins(MovementPlugin);
     app.world_mut().resource_mut::<Player>().0 = Walker::at([0.0; 3]);

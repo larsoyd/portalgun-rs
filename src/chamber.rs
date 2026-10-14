@@ -1,31 +1,41 @@
 // SPDX-FileCopyrightText: 2026 larsoyd
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+use std::collections::HashMap;
+
+use portal::brush;
 use portal::keyvalues;
 use portal::pair::{Portal, Vec3};
-use portal::placement::{RayHit, Surface, World};
-use portal::view::{clip_poly, Plane};
+use portal::placement::{surface_of, RayHit, Surface, World};
+use portal::surfaces::Surfaces;
+use portal::view::{clip_poly, Plane as ClipPlane};
+use portal::vmf::{self, TexAxis};
 use portal::vpk::SearchPath;
+use portal::Error;
 
-const WALL: &str = "concrete/concrete_modular_wall001a";
-const FLOOR: &str = "concrete/concrete_modular_floor001a";
-const CEILING: &str = "concrete/concrete_modular_ceiling001a";
-const METAL: &str = "metal/metalwall048b";
+use crate::collision::{dot, Plane};
+
+const SANDBOX: &str = include_str!("../assets/chambers/sandbox.vmf");
+
+/// nodraw still collides, vbsp just never emits its faces
+const NODRAW: &str = "tools/toolsnodraw";
+
+pub struct Side {
+    pub plane: Plane,
+    pub material: String,
+    pub surface: Surface,
+    /// the visible polygon wound outward, empty when no part of the side shows
+    pub points: Vec<Vec3>,
+    /// texel coordinates of the points
+    pub uv: Vec<[f32; 2]>,
+}
 
 pub struct Block {
     pub min: Vec3,
     pub max: Vec3,
-    pub material: &'static str,
-    pub surface: Surface,
-    /// the material's $surfaceprop, default when it names none
+    pub sides: Vec<Side>,
+    /// one per brush, footsteps and impacts look it up by block
     pub surfaceprop: String,
-}
-
-pub struct Face {
-    pub normal: Vec3,
-    pub corners: [Vec3; 4],
-    /// in units along the texture axes, before the texture's scale
-    pub uv: [[f32; 2]; 4],
 }
 
 pub struct Chamber {
@@ -51,105 +61,204 @@ pub fn surfaceprop(vmt: &str) -> portal::Result<String> {
         .to_ascii_lowercase())
 }
 
-/// Interior 768 by 512 by 384 units, z up, a metal strip on the north wall and a ledge in the east.
-const LAYOUT: [(Vec3, Vec3, &str); 10] = [
-    ([-400.0, -272.0, -16.0], [400.0, 272.0, 0.0], FLOOR),
-    ([-400.0, -272.0, 384.0], [400.0, 272.0, 400.0], CEILING),
-    ([-400.0, -272.0, 0.0], [-384.0, 272.0, 384.0], WALL),
-    ([384.0, -272.0, 0.0], [400.0, 272.0, 384.0], WALL),
-    ([-384.0, -272.0, 0.0], [384.0, -256.0, 384.0], WALL),
-    ([-384.0, 256.0, 0.0], [-64.0, 272.0, 384.0], WALL),
-    ([-64.0, 256.0, 0.0], [64.0, 272.0, 384.0], METAL),
-    ([64.0, 256.0, 0.0], [384.0, 272.0, 384.0], WALL),
-    ([192.0, -256.0, 0.0], [384.0, -64.0, 128.0], WALL),
-    ([-160.0, 96.0, 0.0], [-128.0, 128.0, 32.0], METAL),
-];
+struct Look {
+    surface: Surface,
+    surfaceprop: String,
+}
+
+fn look(search: &SearchPath, surfaces: &Surfaces, material: &str) -> portal::Result<Look> {
+    let text =
+        String::from_utf8_lossy(&search.read(&format!("materials/{material}.vmt"))?).into_owned();
+    let prop = surfaceprop(&text)?;
+    Ok(Look {
+        surface: surface_of(material, noportal(&text)?, surfaces.get(&prop).material),
+        surfaceprop: prop,
+    })
+}
 
 impl Chamber {
     pub fn test_chamber(search: &SearchPath) -> portal::Result<Chamber> {
-        let blocks = LAYOUT
-            .iter()
-            .map(|&(min, max, material)| {
-                let path = format!("materials/{material}.vmt");
-                let text = String::from_utf8_lossy(&search.read(&path)?).into_owned();
-                let surface = if noportal(&text)? {
-                    Surface::Rejects
-                } else {
-                    Surface::Portalable
-                };
-                Ok(Block {
-                    min,
-                    max,
-                    material,
-                    surface,
-                    surfaceprop: surfaceprop(&text)?,
-                })
-            })
-            .collect::<portal::Result<_>>()?;
+        Chamber::from_vmf(search, SANDBOX)
+    }
+
+    pub fn from_vmf(search: &SearchPath, text: &str) -> portal::Result<Chamber> {
+        let map = vmf::parse(text)?;
+        let surfaces = Surfaces::read(search)?;
+        let mut looks: HashMap<String, Look> = HashMap::new();
+        let mut blocks = Vec::new();
+        for solid in &map.world {
+            for side in &solid.sides {
+                if !looks.contains_key(&side.material) {
+                    looks.insert(
+                        side.material.clone(),
+                        look(search, &surfaces, &side.material)?,
+                    );
+                }
+            }
+            blocks.push(Block::from_solid(solid, &looks)?);
+        }
         Ok(Chamber { blocks })
     }
 }
 
-/// Hammer's world alignment, the texture axes of a face by its dominant axis
-fn world_aligned(axis: usize, p: Vec3) -> [f32; 2] {
-    match axis {
-        0 => [p[1], -p[2]],
-        1 => [p[0], -p[2]],
-        _ => [p[0], -p[1]],
-    }
-}
-
 impl Block {
-    pub fn faces(&self) -> Vec<Face> {
-        let mut faces = Vec::new();
+    fn from_solid(solid: &vmf::Solid, looks: &HashMap<String, Look>) -> portal::Result<Block> {
+        let polys = brush::faces(&solid.sides);
+        let (min, max) = brush::bounds(&polys);
+        let mut props = solid
+            .sides
+            .iter()
+            .filter(|s| !s.material.starts_with("tools/"))
+            .map(|s| looks[&s.material].surfaceprop.as_str());
+        let surfaceprop = props.next().unwrap_or("default").to_string();
+        if let Some(other) = props.find(|p| *p != surfaceprop) {
+            return Err(Error::Refused(format!(
+                "solid {} mixes surfaceprops {surfaceprop} and {other}",
+                solid.id
+            )));
+        }
+        let sides = solid
+            .sides
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let poly = polys.iter().find(|p| p.side == i);
+                Side {
+                    plane: Plane {
+                        normal: s.plane.normal,
+                        distance: s.plane.dist,
+                    },
+                    material: s.material.clone(),
+                    surface: looks[&s.material].surface,
+                    points: poly.map(|p| p.points.clone()).unwrap_or_default(),
+                    uv: poly.map(|p| p.uv.clone()).unwrap_or_default(),
+                }
+            })
+            .collect();
+        Ok(Block {
+            min,
+            max,
+            sides,
+            surfaceprop,
+        })
+    }
+
+    /// An axis-aligned box with Hammer's world-aligned texture axes on every side.
+    pub fn cuboid(min: Vec3, max: Vec3, material: &str, surface: Surface, prop: &str) -> Block {
+        let mut sides = Vec::new();
         for i in 0..3 {
             let (j, k) = ((i + 1) % 3, (i + 2) % 3);
-            for (side, plane) in [(1.0, self.max[i]), (-1.0, self.min[i])] {
-                let (u, v) = if side > 0.0 { (j, k) } else { (k, j) };
-                let corners = [(0, 0), (1, 0), (1, 1), (0, 1)].map(|(a, b)| {
-                    let mut p = [0.0; 3];
-                    p[i] = plane;
-                    p[u] = if a == 0 { self.min[u] } else { self.max[u] };
-                    p[v] = if b == 0 { self.min[v] } else { self.max[v] };
-                    p
-                });
+            let (u, v) = world_axes(i);
+            for (sign, at) in [(1.0, max[i]), (-1.0, min[i])] {
+                let (a, b) = if sign > 0.0 { (j, k) } else { (k, j) };
+                let points: Vec<Vec3> = [(0, 0), (1, 0), (1, 1), (0, 1)]
+                    .iter()
+                    .map(|&(x, y)| {
+                        let mut p = [0.0; 3];
+                        p[i] = at;
+                        p[a] = if x == 0 { min[a] } else { max[a] };
+                        p[b] = if y == 0 { min[b] } else { max[b] };
+                        p
+                    })
+                    .collect();
                 let mut normal = [0.0; 3];
-                normal[i] = side;
-                faces.push(Face {
-                    normal,
-                    corners,
-                    uv: corners.map(|p| world_aligned(i, p)),
+                normal[i] = sign;
+                sides.push(Side {
+                    plane: Plane {
+                        normal,
+                        distance: sign * at,
+                    },
+                    material: material.to_string(),
+                    surface,
+                    uv: points
+                        .iter()
+                        .map(|&p| [texel(&u, p), texel(&v, p)])
+                        .collect(),
+                    points,
                 });
             }
         }
-        faces
+        Block {
+            min,
+            max,
+            sides,
+            surfaceprop: prop.to_string(),
+        }
     }
 
-    /// slab test, a ray starting inside the block does not hit it
-    fn entry(&self, from: Vec3, dir: Vec3) -> Option<(f32, Vec3)> {
-        let (mut near, mut far, mut axis) = (f32::NEG_INFINITY, f32::INFINITY, 0);
+    /// The sides plus vbsp's axial bevels, so a box sweeps against slanted sides correctly.
+    pub fn planes(&self) -> Vec<Plane> {
+        let mut planes: Vec<Plane> = self.sides.iter().map(|s| s.plane).collect();
         for i in 0..3 {
-            if dir[i] == 0.0 {
-                if from[i] < self.min[i] || from[i] > self.max[i] {
+            for (sign, at) in [(1.0, self.max[i]), (-1.0, self.min[i])] {
+                let mut normal = [0.0; 3];
+                normal[i] = sign;
+                if !planes.iter().any(|p| p.normal == normal) {
+                    planes.push(Plane {
+                        normal,
+                        distance: sign * at,
+                    });
+                }
+            }
+        }
+        planes
+    }
+
+    pub fn faces(&self) -> impl Iterator<Item = &Side> {
+        self.sides
+            .iter()
+            .filter(|s| s.points.len() >= 3 && s.material != NODRAW)
+    }
+
+    /// convex ray entry, a ray starting inside the block does not hit it
+    fn entry(&self, from: Vec3, dir: Vec3) -> Option<(f32, usize)> {
+        let (mut near, mut far, mut hit) = (f32::NEG_INFINITY, f32::INFINITY, None);
+        for (i, side) in self.sides.iter().enumerate() {
+            let n = side.plane.normal;
+            let gap = dot(n, from) - side.plane.distance;
+            let rate = dot(n, dir);
+            if rate == 0.0 {
+                if gap > 0.0 {
                     return None;
                 }
                 continue;
             }
-            let a = (self.min[i] - from[i]) / dir[i];
-            let b = (self.max[i] - from[i]) / dir[i];
-            let (lo, hi) = (a.min(b), a.max(b));
-            if lo > near {
-                (near, axis) = (lo, i);
+            let t = -gap / rate;
+            if rate < 0.0 {
+                if t > near {
+                    (near, hit) = (t, Some(i));
+                }
+            } else {
+                far = far.min(t);
             }
-            far = far.min(hi);
         }
         if near > far || near < 0.0 {
             return None;
         }
-        let mut normal = [0.0; 3];
-        normal[axis] = -dir[axis].signum();
-        Some((near, normal))
+        hit.map(|i| (near, i))
     }
+}
+
+/// Hammer's world alignment for a side facing along the axis
+fn world_axes(axis: usize) -> (TexAxis, TexAxis) {
+    let unit = |k: usize, sign: f32| {
+        let mut v = [0.0; 3];
+        v[k] = sign;
+        TexAxis {
+            axis: v,
+            shift: 0.0,
+            scale: 0.25,
+        }
+    };
+    match axis {
+        0 => (unit(1, 1.0), unit(2, -1.0)),
+        1 => (unit(0, 1.0), unit(2, -1.0)),
+        _ => (unit(0, 1.0), unit(1, -1.0)),
+    }
+}
+
+fn texel(t: &TexAxis, p: Vec3) -> f32 {
+    dot(p, t.axis) / t.scale + t.shift
 }
 
 impl World for Chamber {
@@ -159,14 +268,14 @@ impl World for Chamber {
         // Clip the whole opening so buried corners and thin obstructions cannot escape ray samples.
         self.blocks.iter().all(|b| {
             let mut poly = corners.to_vec();
-            for axis in 0..3 {
-                for (sign, dist) in [(1.0, b.min[axis]), (-1.0, -b.max[axis])] {
-                    let mut normal = [0.0; 3];
-                    normal[axis] = sign;
-                    poly = clip_poly(&poly, &Plane { normal, dist }, 0.0);
-                    if poly.len() < 3 {
-                        return true;
-                    }
+            for side in &b.sides {
+                let inside = ClipPlane {
+                    normal: side.plane.normal.map(|c| -c),
+                    dist: -side.plane.distance,
+                };
+                poly = clip_poly(&poly, &inside, 0.0);
+                if poly.len() < 3 {
+                    return true;
                 }
             }
             false
@@ -176,13 +285,13 @@ impl World for Chamber {
     fn cast(&self, from: Vec3, dir: Vec3, max: f32) -> Option<RayHit> {
         self.blocks
             .iter()
-            .filter_map(|b| b.entry(from, dir).map(|(d, n)| (d, n, b.surface)))
-            .filter(|&(d, ..)| d <= max)
+            .filter_map(|b| b.entry(from, dir).map(|(d, i)| (d, &b.sides[i])))
+            .filter(|&(d, _)| d <= max)
             .min_by(|a, b| a.0.total_cmp(&b.0))
-            .map(|(distance, normal, surface)| RayHit {
+            .map(|(distance, side)| RayHit {
                 distance,
-                normal,
-                surface,
+                normal: side.plane.normal,
+                surface: side.surface,
             })
     }
 }

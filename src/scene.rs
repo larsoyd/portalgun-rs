@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 larsoyd
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
@@ -9,14 +9,11 @@ use bevy::prelude::*;
 
 use bevy::camera::visibility::RenderLayers;
 
-use crate::chamber::{Block, Chamber};
+use crate::chamber::{Chamber, Side};
 use crate::sound::Files;
 use crate::texture;
 use crate::units::{to_bevy, to_bevy_dir};
 use crate::view::VIEW_LAYER;
-
-/// Hammer's default, a texel is a quarter unit
-const TEXEL_UNITS: f32 = 0.25;
 
 #[derive(Resource, Deref)]
 pub struct Level(pub Chamber);
@@ -33,16 +30,18 @@ impl Plugin for ScenePlugin {
     }
 }
 
-fn block_mesh(block: &Block, size: UVec2) -> Mesh {
-    let faces = block.faces();
-    let scale = Vec2::new(size.x as f32, size.y as f32) * TEXEL_UNITS;
+/// every visible face drawn in one material, fanned into triangles
+fn material_mesh(faces: &[&Side], size: UVec2) -> Mesh {
+    let size = Vec2::new(size.x as f32, size.y as f32);
     let (mut positions, mut normals, mut uvs, mut indices) = (vec![], vec![], vec![], vec![]);
-    for f in &faces {
+    for f in faces {
         let base = positions.len() as u32;
-        positions.extend(f.corners.map(|p| to_bevy(p).to_array()));
-        normals.extend([to_bevy_dir(f.normal).to_array(); 4]);
-        uvs.extend(f.uv.map(|[u, v]| [u / scale.x, v / scale.y]));
-        indices.extend([0, 1, 2, 0, 2, 3].map(|i| base + i));
+        positions.extend(f.points.iter().map(|&p| to_bevy(p).to_array()));
+        normals.extend(vec![to_bevy_dir(f.plane.normal).to_array(); f.points.len()]);
+        uvs.extend(f.uv.iter().map(|[u, v]| [u / size.x, v / size.y]));
+        for i in 1..f.points.len() as u32 - 1 {
+            indices.extend([base, base + i, base + i + 1]);
+        }
     }
     Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -63,31 +62,30 @@ fn spawn_chamber(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut exit: MessageWriter<AppExit>,
 ) {
-    let mut looks: HashMap<&str, (Handle<StandardMaterial>, UVec2)> = HashMap::new();
-    for block in &level.blocks {
-        if !looks.contains_key(block.material) {
-            let image = match texture::base_texture(&files, block.material)
-                .and_then(|name| texture::load(&files, &name))
-            {
-                Ok(i) => i,
-                Err(e) => {
-                    error!("[chamber] refused: material={} reason={e}", block.material);
-                    exit.write(AppExit::error());
-                    return;
-                }
-            };
-            let size = image.size();
-            let material = materials.add(StandardMaterial {
-                base_color_texture: Some(images.add(image)),
-                perceptual_roughness: 0.9,
-                ..default()
-            });
-            looks.insert(block.material, (material, size));
-        }
-        let (material, size) = &looks[block.material];
+    let mut by_material: BTreeMap<&str, Vec<&Side>> = BTreeMap::new();
+    for side in level.blocks.iter().flat_map(|b| b.faces()) {
+        by_material.entry(&side.material).or_default().push(side);
+    }
+    for (name, faces) in &by_material {
+        let image = match texture::base_texture(&files, name)
+            .and_then(|base| texture::load(&files, &base))
+        {
+            Ok(i) => i,
+            Err(e) => {
+                error!("[chamber] refused: material={name} reason={e}");
+                exit.write(AppExit::error());
+                return;
+            }
+        };
+        let size = image.size();
+        let material = materials.add(StandardMaterial {
+            base_color_texture: Some(images.add(image)),
+            perceptual_roughness: 0.9,
+            ..default()
+        });
         commands.spawn((
-            Mesh3d(meshes.add(block_mesh(block, *size))),
-            MeshMaterial3d(material.clone()),
+            Mesh3d(meshes.add(material_mesh(faces, size))),
+            MeshMaterial3d(material),
         ));
     }
     for at in [[-192.0, 0.0, 360.0], [192.0, 0.0, 360.0]] {
@@ -110,6 +108,6 @@ fn spawn_chamber(
     info!(
         "[chamber] blocks={} materials={}",
         level.blocks.len(),
-        looks.len()
+        by_material.len()
     );
 }

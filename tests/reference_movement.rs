@@ -14,13 +14,13 @@ fn compare(csv: &str) {
     let initial = &rows[0];
     let floor = initial[11] - 0.03125;
     let chamber = Chamber {
-        blocks: vec![Block {
-            min: [-10000.0, -10000.0, floor - 16.0],
-            max: [10000.0, 10000.0, floor],
-            material: "",
-            surface: Surface::Portalable,
-            surfaceprop: "default".into(),
-        }],
+        blocks: vec![Block::cuboid(
+            [-10000.0, -10000.0, floor - 16.0],
+            [10000.0, 10000.0, floor],
+            "",
+            Surface::Portalable,
+            "default",
+        )],
     };
     let mut walker = Walker::at([initial[9], initial[10], initial[11]]);
     walker.step(&Input::default(), 0.015, &chamber, None);

@@ -294,7 +294,7 @@ impl ParticleWorld {
                 .blocks
                 .iter()
                 .enumerate()
-                .map(|(i, b)| (i, crate::collision::box_planes(b.min, b.max)))
+                .map(|(i, b)| (i, b.planes()))
                 .collect(),
         }
     }

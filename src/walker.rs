@@ -976,8 +976,12 @@ pub fn body_support(at: Vec3, chamber: &Chamber, linked: Option<&[Portal; 2]>) -
         return None;
     }
     let trace = Space::new(chamber, None).trace(None, from, to, [0.0; 3], [0.0; 3]);
-    trace
+    let block = trace
         .block
-        .filter(|_| trace.normal[2] > 0.7 && !trace.start_solid)
-        .map(|i| chamber.blocks[i].max[2])
+        .filter(|_| trace.normal[2] > 0.7 && !trace.start_solid)?;
+    let side = chamber.blocks[block]
+        .planes()
+        .into_iter()
+        .find(|p| p.normal == trace.normal)?;
+    Some((side.distance - side.normal[0] * at[0] - side.normal[1] * at[1]) / side.normal[2])
 }

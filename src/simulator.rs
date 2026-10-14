@@ -4,7 +4,7 @@
 use portal::pair::{through_dir, through_point, Portal, Vec3};
 
 use crate::chamber::Chamber;
-use crate::collision::{box_planes, dot, trace_brushes, Plane, Trace};
+use crate::collision::{dot, trace_brushes, Plane, Trace};
 
 pub type Solid = (usize, Vec<Plane>);
 
@@ -48,7 +48,7 @@ impl Space {
             .blocks
             .iter()
             .enumerate()
-            .map(|(n, b)| (n, box_planes(b.min, b.max)))
+            .map(|(n, b)| (n, b.planes()))
             .collect();
         let sims = linked
             .map(|pair| {
@@ -333,7 +333,7 @@ fn grabbed(
 ) -> impl Iterator<Item = (usize, Vec<Plane>)> + '_ {
     chamber.blocks.iter().enumerate().filter_map(move |(n, b)| {
         let meets = (0..3).all(|i| b.min[i] <= grab.1[i] && b.max[i] >= grab.0[i]);
-        meets.then(|| (n, box_planes(b.min, b.max)))
+        meets.then(|| (n, b.planes()))
     })
 }
 
