@@ -35,6 +35,7 @@ pub enum Effect {
     BadVolume,
     BadSurface,
     Close,
+    Stream,
 }
 impl Effect {
     pub fn name(self, colour: Colour) -> String {
@@ -48,6 +49,7 @@ impl Effect {
             Self::BadVolume => "badvolume",
             Self::BadSurface => "badsurface",
             Self::Close => "close",
+            Self::Stream => "projectile_stream",
         };
         format!("portal_{}_{}", colour.index() + 1, suffix)
     }
@@ -186,6 +188,20 @@ impl ParticleEffects {
         );
         self.next
     }
+    /// Control point 0 follows the effect's entity, as the shot stream does every frame.
+    pub fn move_point(&mut self, id: u64, at: [f32; 3]) {
+        if let Some(live) = self.live.get_mut(&id) {
+            live.system.set_control_point(0, at);
+        }
+    }
+
+    /// Stops emitting and lets the particles already out finish their lives.
+    pub fn stop(&mut self, id: u64) {
+        if let Some(live) = self.live.get_mut(&id) {
+            live.system.stop_emission(false);
+        }
+    }
+
     pub fn sync(&mut self, pair: &Pair) {
         for c in Colour::ALL {
             let i = c.index();

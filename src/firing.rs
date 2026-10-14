@@ -15,17 +15,29 @@ use crate::view::Gun as ViewGun;
 #[derive(Resource, Default, Deref, DerefMut)]
 pub struct Firing(pub Gun);
 
+/// Shot streams in flight, their particle effect and whether the head has landed.
+#[derive(Resource, Default)]
+pub struct Streams(Vec<(u64, crate::gun::Shot, bool)>);
+
 pub struct FiringPlugin;
 
 impl Plugin for FiringPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<crate::impacts::PortalImpact>()
             .init_resource::<Firing>()
+            .init_resource::<Streams>()
             .add_systems(Startup, |mut gun: ResMut<Firing>| gun.deploy(0.0))
             .add_systems(
                 Update,
                 (fizzle.before(crate::objects::ObjectInteraction), fire, land)
                     .chain()
+                    .run_if(crate::menu::playing),
+            )
+            .add_systems(
+                Update,
+                stream
+                    .after(fire)
+                    .before(crate::effects::ParticleSimulation)
                     .run_if(crate::menu::playing),
             );
     }
@@ -47,6 +59,10 @@ pub(crate) fn fire(
     mut audio: ResMut<Assets<AudioSource>>,
     mut rng: Local<crate::random::Xorshift>,
     objects: Option<Res<crate::objects::Objects>>,
+    (mut fx, mut streams): (
+        Option<ResMut<crate::effects::ParticleEffects>>,
+        ResMut<Streams>,
+    ),
 ) {
     let now = time.elapsed_secs();
     let pressed = [
@@ -67,6 +83,16 @@ pub(crate) fn fire(
             shot.landed.map(|v| v.round()),
             shot.arrives
         );
+        if let Some(fx) = fx.as_deref_mut() {
+            let frame = crate::effects::Frame {
+                origin: Vec3::from(shot.from),
+                forward: Vec3::from(player.forward()),
+                right: Vec3::from(player.right()),
+                up: Vec3::from(player.up()),
+            };
+            let id = fx.spawn(colour, crate::effects::Effect::Stream, frame, None);
+            streams.0.push((id, shot.clone(), false));
+        }
         sounds.play(
             &mut commands,
             &files,
@@ -84,6 +110,31 @@ pub(crate) fn fire(
             anim.play(mdl, "ACT_VM_PRIMARYATTACK", now);
         }
     }
+}
+
+/// Moves each stream head along its path, holds it on the end for a frame, then lets it fade.
+/// Translated from 0x560a00 (decompiled, client.so)
+fn stream(
+    time: Res<Time>,
+    mut streams: ResMut<Streams>,
+    fx: Option<ResMut<crate::effects::ParticleEffects>>,
+) {
+    let Some(mut fx) = fx else { return };
+    let now = time.elapsed_secs();
+    streams.0.retain_mut(|(id, shot, landed)| {
+        match shot.stream_step(now, *landed) {
+            crate::gun::StreamStep::Fly(at) => fx.move_point(*id, at),
+            crate::gun::StreamStep::Land(at) => {
+                fx.move_point(*id, at);
+                *landed = true;
+            }
+            crate::gun::StreamStep::Done => {
+                fx.stop(*id);
+                return false;
+            }
+        }
+        true
+    });
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -185,6 +236,7 @@ mod tests {
             .insert_resource(sounds)
             .init_resource::<Controls>()
             .init_resource::<Firing>()
+            .init_resource::<Streams>()
             .init_resource::<Portals>()
             .init_resource::<Assets<AudioSource>>()
             .add_systems(Update, fire);
@@ -216,6 +268,7 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<Controls>()
             .init_resource::<Firing>()
+            .init_resource::<Streams>()
             .init_resource::<Portals>()
             .init_resource::<GunVisualState>()
             .add_systems(Update, fizzle);

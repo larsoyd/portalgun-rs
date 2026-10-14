@@ -191,3 +191,37 @@ fn impact_selection_offsets_and_transients_finish() {
     }
     assert_eq!(fx.instance_count(), 0);
 }
+
+#[test]
+fn a_projectile_stream_follows_its_head_and_finishes_after_it_stops() {
+    use portalgun::effects::Frame;
+    assert_eq!(
+        Effect::Stream.name(Colour::Orange),
+        "portal_2_projectile_stream"
+    );
+    let mut fx = ParticleEffects::read(&install()).unwrap();
+    let frame = Frame {
+        origin: Vec3::ZERO,
+        forward: Vec3::X,
+        right: -Vec3::Y,
+        up: Vec3::Z,
+    };
+    let id = fx.spawn(Colour::Blue, Effect::Stream, frame, None);
+    let head = [300.0, 0.0, 64.0];
+    for step in 1..=10 {
+        let t = step as f32 / 10.0;
+        fx.move_point(id, head.map(|v| v * t));
+        fx.simulate(0.015, &ParticleWorld::default());
+    }
+    let near = fx
+        .snapshot()
+        .iter()
+        .filter(|p| (Vec3::from(p.xyz) - Vec3::from(head)).length() < 40.0)
+        .count();
+    assert!(near > 0, "no stream particles near the head");
+    fx.stop(id);
+    for _ in 0..200 {
+        fx.simulate(0.05, &ParticleWorld::default());
+    }
+    assert_eq!(fx.instance_count(), 0);
+}

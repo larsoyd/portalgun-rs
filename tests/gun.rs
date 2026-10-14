@@ -6,7 +6,7 @@ use std::path::Path;
 use portal::install::{root, Install};
 use portal::placement::Placement;
 use portalgun::chamber::Chamber;
-use portalgun::gun::{flight_time, stream_at, test_shot, tracer_origin, Gun, REFIRE};
+use portalgun::gun::{flight_time, stream_at, test_shot, tracer_origin, Gun, StreamStep, REFIRE};
 use portalgun::portals::{Colour, Pair};
 use portalgun::walker::Walker;
 
@@ -209,4 +209,30 @@ fn fizzling_cancels_pending_shots_and_clears_the_gun_colour() {
     assert_eq!(gun.last_fired, 0);
     assert!(gun.flying().is_empty());
     assert!(gun.land(10.0).is_empty());
+}
+
+#[test]
+fn the_stream_head_flies_the_path_lands_on_the_end_then_finishes() {
+    let c = chamber();
+    let w = Walker::at([-200.0, 0.0, 0.0]);
+    let mut gun = Gun::default();
+    gun.deploy(10.0);
+    let shot = gun
+        .fire(Colour::Blue, 10.0, &w, &c, &Pair::default())
+        .unwrap()
+        .clone();
+    let span = shot.stream_ends - shot.launched;
+    let mid = shot.launched + span * 0.5;
+    match shot.stream_step(mid, false) {
+        StreamStep::Fly(at) => close(at, stream_at(shot.from, shot.aim, shot.ends, 0.5)),
+        other => panic!("{other:?} at the middle of the flight"),
+    }
+    assert_eq!(
+        shot.stream_step(shot.stream_ends, false),
+        StreamStep::Land(shot.ends)
+    );
+    assert_eq!(
+        shot.stream_step(shot.stream_ends + 0.01, true),
+        StreamStep::Done
+    );
 }

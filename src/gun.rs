@@ -18,6 +18,7 @@ const RANGE: f32 = 56755.84;
 /// where the stream leaves the gun, forward right and up of the eye
 const MUZZLE: Vec3 = [30.0, 4.0, -5.0];
 
+#[derive(Clone)]
 pub struct Shot {
     pub colour: Colour,
     pub placement: Placement,
@@ -105,6 +106,26 @@ impl Gun {
         let (landed, flying) = self.flying.drain(..).partition(|s| s.arrives <= now);
         self.flying = flying;
         landed
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum StreamStep {
+    Fly(Vec3),
+    Land(Vec3),
+    Done,
+}
+
+impl Shot {
+    /// The stream head snaps to its end on the first frame past the flight and goes the frame after.
+    /// Translated from 0x560a00 (decompiled, client.so)
+    pub fn stream_step(&self, now: f32, landed: bool) -> StreamStep {
+        let t = (now - self.launched) / (self.stream_ends - self.launched);
+        match (t >= 1.0, landed) {
+            (false, _) => StreamStep::Fly(stream_at(self.from, self.aim, self.ends, t)),
+            (true, false) => StreamStep::Land(self.ends),
+            (true, true) => StreamStep::Done,
+        }
     }
 }
 
