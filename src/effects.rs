@@ -71,14 +71,14 @@ impl Frame {
             up: m.z_axis.truncate(),
         }
     }
-    /// The shot stream's entity only ever gets an origin, so its points keep zero angles.
-    /// Translated from 0x560b80 and 0x260b40 (decompiled, client.so)
+    /// SetAbsOrigin never builds the blast's rotation, so its point gets a zero basis
+    /// Translated from 0x560b80, 0x361d40, 0x361920 and 0x260b40 (decompiled, client.so)
     pub fn stream(at: [f32; 3]) -> Self {
         Self {
             origin: Vec3::from(at),
-            forward: Vec3::X,
-            right: -Vec3::Y,
-            up: Vec3::Z,
+            forward: Vec3::ZERO,
+            right: Vec3::ZERO,
+            up: Vec3::ZERO,
         }
     }
 
@@ -541,6 +541,52 @@ mod tests {
         for node in nodes {
             assert_eq!(node.c.control_points[1].pos, [5.0, 6.0, 7.0]);
         }
+    }
+
+    #[test]
+    fn a_flying_shot_stream_leaves_its_trail_particles_still_and_its_streaks_invisible() {
+        use portal::particles::renderers::Renderer;
+        let home = std::env::var("HOME").unwrap();
+        let install = Install::open(&portal::install::root(
+            None,
+            std::env::var("PORTAL_DIR").ok().as_deref(),
+            std::path::Path::new(&home),
+        ))
+        .unwrap();
+        let mut fx = ParticleEffects::read(&install).unwrap();
+        let from = [-860.0, -128.0, 190.0];
+        let id = fx.spawn(Colour::Orange, Effect::Stream, Frame::stream(from), None);
+        let cam = ParticleCamera {
+            pos: [-960.0, -128.0, 210.0],
+            right: [0.0, -1.0, 0.0],
+            up: [0.0, 0.0, 1.0],
+        };
+        let (mut checked, mut widest) = (0, 0.0f32);
+        for step in 1..=40 {
+            let t = step as f32 / 40.0;
+            fx.move_point(id, [from[0] + 490.0 * t, from[1], from[2] - 60.0 * t]);
+            fx.simulate(1.0 / 60.0, &ParticleWorld::default());
+            let mut nodes = Vec::new();
+            walk(&fx.live[&id].system, &mut nodes);
+            for node in nodes {
+                for renderer in &node.def.renderers {
+                    let Renderer::Trail { .. } = renderer else {
+                        continue;
+                    };
+                    for p in &node.c.particles {
+                        assert_eq!(p.prev, p.xyz, "trail particle moved at step={step}");
+                        checked += 1;
+                    }
+                    let mesh = renderer.build(&node.c, &cam, &Look::default());
+                    for quad in mesh.vertices.chunks(4) {
+                        let span = Vec3::from(quad[0].pos).distance(Vec3::from(quad[2].pos));
+                        widest = widest.max(span);
+                    }
+                }
+            }
+        }
+        assert!(checked > 100, "only {checked} trail particles checked");
+        assert!(widest < 0.01, "trail streak spans {widest} units");
     }
 
     #[test]

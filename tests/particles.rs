@@ -227,11 +227,11 @@ fn a_projectile_stream_follows_its_head_and_finishes_after_it_stops() {
 }
 
 #[test]
-fn a_stream_keeps_world_axes_whatever_the_aim() {
+fn a_stream_point_has_no_orientation_whatever_the_aim() {
     let frame = portalgun::effects::Frame::stream([10.0, 20.0, 30.0]);
     assert_eq!(frame.origin, Vec3::new(10.0, 20.0, 30.0));
     assert_eq!(
         (frame.forward, frame.right, frame.up),
-        (Vec3::X, -Vec3::Y, Vec3::Z)
+        (Vec3::ZERO, Vec3::ZERO, Vec3::ZERO)
     );
 }
