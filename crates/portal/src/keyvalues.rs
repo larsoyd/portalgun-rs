@@ -35,6 +35,20 @@ impl Kv {
             .find(|k| k.key.eq_ignore_ascii_case(key) && matches!(k.value, Value::Block(_)))
     }
 
+    pub fn blocks<'a>(&'a self, key: &'a str) -> impl Iterator<Item = &'a Kv> {
+        self.children()
+            .iter()
+            .filter(move |k| k.key.eq_ignore_ascii_case(key) && matches!(k.value, Value::Block(_)))
+    }
+
+    /// every text pair directly under this block, in file order
+    pub fn texts(&self) -> impl Iterator<Item = (&str, &str)> + '_ {
+        self.children().iter().filter_map(|k| match &k.value {
+            Value::Text(t) => Some((k.key.as_str(), t.as_str())),
+            Value::Block(_) => None,
+        })
+    }
+
     pub fn all<'a>(&'a self, key: &'a str) -> impl Iterator<Item = &'a str> {
         self.children().iter().filter_map(move |k| match &k.value {
             Value::Text(t) if k.key.eq_ignore_ascii_case(key) => Some(t.as_str()),

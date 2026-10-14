@@ -29,6 +29,7 @@ pub mod surfaces;
 pub mod teleport;
 pub mod view;
 pub mod viewbob;
+pub mod vmf;
 pub mod vpk;
 pub mod vtf;
 
