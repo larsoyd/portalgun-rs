@@ -396,16 +396,18 @@ fn vertices(planes: &[Plane]) -> Vec<[f64; 3]> {
                 if det.abs() < 1e-9 {
                     continue;
                 }
-                let v = [0, 1, 2].map(|k| {
-                    (a.distance as f64 * bc[k]
-                        + b.distance as f64 * cross(nc, na)[k]
-                        + c.distance as f64 * cross(na, nb)[k])
-                        / det
-                });
-                if planes
-                    .iter()
-                    .all(|pl| dot64(n(pl), v) <= pl.distance as f64 + 1e-4)
-                {
+                let (ca, ab) = (cross(nc, na), cross(na, nb));
+                let (da, db, dc) = (a.distance as f64, b.distance as f64, c.distance as f64);
+                let v = [
+                    (da * bc[0] + db * ca[0] + dc * ab[0]) / det,
+                    (da * bc[1] + db * ca[1] + dc * ab[1]) / det,
+                    (da * bc[2] + db * ca[2] + dc * ab[2]) / det,
+                ];
+                let gap = |pl: &Plane| {
+                    let [x, y, z] = pl.normal;
+                    x as f64 * v[0] + y as f64 * v[1] + z as f64 * v[2] - pl.distance as f64
+                };
+                if planes.iter().all(|pl| gap(pl) <= 1e-4) {
                     out.push(v);
                 }
             }
@@ -445,8 +447,9 @@ pub fn bevelled(planes: &[Plane]) -> Vec<Plane> {
                 .min(p.distance),
         })
         .collect();
-    expanded_planes(
+    expand(
         &tight,
+        &points,
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         0.0,
     )
@@ -460,6 +463,15 @@ fn bevel_all(solids: Vec<Solid>) -> Vec<Solid> {
 }
 
 fn expanded_planes(planes: &[Plane], basis: portal::carry::Basis, half: f32) -> Vec<Plane> {
+    expand(planes, &vertices(planes), basis, half)
+}
+
+fn expand(
+    planes: &[Plane],
+    points: &[[f64; 3]],
+    basis: portal::carry::Basis,
+    half: f32,
+) -> Vec<Plane> {
     let support = |normal: Vec3| {
         half * basis
             .iter()
@@ -473,10 +485,12 @@ fn expanded_planes(planes: &[Plane], basis: portal::carry::Basis, half: f32) -> 
             distance: p.distance + support(p.normal),
         })
         .collect();
-    let points = vertices(planes);
     if points.is_empty() {
         return result;
     }
+    let on = |p: &Plane, v: &[f64; 3]| {
+        (dot64(p.normal.map(f64::from), *v) - p.distance as f64).abs() < 1e-3
+    };
     let mut add_axis = |axis: Vec3| {
         let length = dot(axis, axis).sqrt();
         if length < 1e-6 {
@@ -501,6 +515,9 @@ fn expanded_planes(planes: &[Plane], basis: portal::carry::Basis, half: f32) -> 
     }
     for (i, a) in planes.iter().enumerate() {
         for b in &planes[i + 1..] {
+            if points.iter().filter(|v| on(a, v) && on(b, v)).count() < 2 {
+                continue;
+            }
             let edge = portal::carry::cross(a.normal, b.normal);
             for axis in basis {
                 add_axis(portal::carry::cross(edge, axis));

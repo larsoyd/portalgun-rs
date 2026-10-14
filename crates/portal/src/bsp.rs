@@ -71,8 +71,10 @@ fn entity(block: &str) -> Result<Entity> {
     let body = block.split('}').next().unwrap_or_default();
     let quoted: Vec<&str> = body.split('"').skip(1).step_by(2).collect();
     let keys: Vec<(String, String)> = quoted
-        .chunks_exact(2)
-        .map(|kv| (kv[0].to_string(), kv[1].to_string()))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|[k, v]| (k.to_string(), v.to_string()))
         .collect();
     let classname = keys
         .iter()
