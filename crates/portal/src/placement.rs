@@ -38,6 +38,22 @@ pub trait World {
     }
 }
 
+/// lower-case name pieces a shot flies straight through
+const PASS_THROUGH: [&str; 1] = ["lights/light_orange001"];
+const CHAR_TEX_GLASS: u8 = b'Y';
+
+/// Translated from 0x8fb7e0 and 0x8fb880 (decompiled, server.so)
+pub fn surface_of(material: &str, noportal: bool, game_material: u8) -> Surface {
+    let name = material.to_ascii_lowercase();
+    if PASS_THROUGH.iter().any(|p| name.contains(p)) {
+        Surface::PassThrough
+    } else if noportal || game_material == CHAR_TEX_GLASS {
+        Surface::Rejects
+    } else {
+        Surface::Portalable
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Failure {
     Missed,

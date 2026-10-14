@@ -360,3 +360,40 @@ fn upright_portals_drop_flush_onto_a_floor_just_below() {
     snap_to_floor(&world, &mut leaning);
     assert_eq!(leaning.origin[2], z);
 }
+
+#[test]
+fn the_orange_light_lets_a_shot_through_and_glass_or_noportal_refuse() {
+    use portal::placement::surface_of;
+    assert_eq!(
+        surface_of("lights/light_orange001", false, b'C'),
+        Surface::PassThrough
+    );
+    assert_eq!(
+        surface_of("Lights/Light_Orange001", true, b'Y'),
+        Surface::PassThrough
+    );
+    assert_eq!(
+        surface_of("x/lights/light_orange001b", false, b'C'),
+        Surface::PassThrough
+    );
+    assert_eq!(
+        surface_of("lights/light_orange002", false, b'C'),
+        Surface::Portalable
+    );
+    assert_eq!(
+        surface_of("metal/metalwall048b", true, b'M'),
+        Surface::Rejects
+    );
+    assert_eq!(
+        surface_of("glass/glasswindow_refract01", false, b'Y'),
+        Surface::Rejects
+    );
+    assert_eq!(
+        surface_of("glass/glasswindow_refract01", false, b'X'),
+        Surface::Portalable
+    );
+    assert_eq!(
+        surface_of("concrete/concrete_modular_wall001a", false, b'C'),
+        Surface::Portalable
+    );
+}
