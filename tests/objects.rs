@@ -28,7 +28,7 @@ fn room() -> Chamber {
 }
 
 #[test]
-fn cube_settles_on_the_floor_without_sinking() {
+fn cube_settles_on_the_floor_inside_the_contact_gap_and_sleeps() {
     let mut objects = Objects::default();
     objects.cube = RigidCube::at([100.0, 0.0, 100.0]);
     let player = Walker::at([300.0, 0.0, 0.0]);
@@ -36,17 +36,13 @@ fn cube_settles_on_the_floor_without_sinking() {
     for i in 0..600 {
         objects.advance(0.015, &player, &chamber, None, None, i as f32 * 0.015);
     }
+    let gap = objects.cube.position[2] - 20.0;
     assert!(
-        objects.cube.position[2] >= 20.0,
-        "{:?}",
+        (0.2499..=0.625).contains(&gap),
+        "rests {gap} above the floor at {:?}",
         objects.cube.position
     );
-    assert!(
-        objects.cube.position[2] < 20.1,
-        "{:?}",
-        objects.cube.position
-    );
-    assert!(objects.cube.velocity[2].abs() < 0.01);
+    assert_eq!(objects.cube.velocity, [0.0; 3], "still moving");
 }
 
 #[test]
@@ -361,5 +357,76 @@ fn releasing_caps_linear_and_angular_speed_without_accelerating_the_cube() {
         objects.cube.angular_velocity = [0.0, 0.0, -speed];
         objects.release(0.0);
         assert!((objects.cube.angular_velocity[2] + speed.min(720.0)).abs() < 0.0001);
+    }
+}
+
+#[test]
+fn a_tilted_cube_teleported_onto_a_wall_portal_rim_does_not_freeze() {
+    let pair = [
+        Portal::new(
+            [0.0, 0.0, 120.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        ),
+        Portal::new(
+            [300.0, 250.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0],
+            (32.0, 54.0),
+        ),
+    ];
+    let player = Walker::at([400.0, -400.0, 0.0]);
+    let mut objects = Objects::default();
+    objects.advance(0.015, &player, &room(), Some(pair), None, 0.0);
+    objects.cube = RigidCube::at([0.21611622, 4.719696, 90.92911]);
+    objects.cube.rotation = [
+        [0.24367645, 0.00083635125, -0.96985507],
+        [-0.50043225, 0.8567059, -0.124995485],
+        [0.830777, 0.51580584, 0.20917593],
+    ];
+    objects.cube.owner = Some(0);
+    let start = objects.cube.position;
+    for i in 1..60 {
+        objects.advance(0.015, &player, &room(), Some(pair), None, i as f32 * 0.015);
+    }
+    let moved = (0..3)
+        .map(|i| (objects.cube.position[i] - start[i]).powi(2))
+        .sum::<f32>()
+        .sqrt();
+    assert!(
+        moved > 10.0 || objects.visual_revision > 0,
+        "cube froze at {:?} moved={moved}",
+        objects.cube.position
+    );
+}
+
+fn xorshift(s: &mut u64) -> f32 {
+    *s ^= *s << 13;
+    *s ^= *s >> 7;
+    *s ^= *s << 17;
+    (*s >> 40) as f32 / (1u64 << 24) as f32
+}
+
+#[test]
+fn random_drops_never_dip_into_the_floor_and_all_come_to_rest() {
+    let mut seed = 0x9e3779b97f4a7c15u64;
+    let player = Walker::at([-400.0, 400.0, 0.0]);
+    for run in 0..200 {
+        let mut objects = Objects::default();
+        objects.cube = RigidCube::at([150.0, 0.0, 60.0 + xorshift(&mut seed) * 200.0]);
+        objects.cube.velocity = [
+            xorshift(&mut seed) * 400.0 - 200.0,
+            xorshift(&mut seed) * 400.0 - 200.0,
+            0.0,
+        ];
+        objects.cube.angular_velocity = [0, 1, 2].map(|_| xorshift(&mut seed) * 720.0 - 360.0);
+        let mut deepest = f32::MAX;
+        for i in 0..400 {
+            objects.advance(0.015, &player, &room(), None, None, i as f32 * 0.015);
+            deepest = deepest.min(objects.cube.position[2] - objects.cube.half()[2]);
+        }
+        assert!(deepest > -0.5, "run {run} dipped to {deepest}");
+        assert_eq!(objects.cube.velocity, [0.0; 3], "run {run} still moving");
     }
 }

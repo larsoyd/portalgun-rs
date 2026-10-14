@@ -89,7 +89,7 @@ fn rng(s: &mut u64) -> f64 {
 #[test]
 fn tumbling_drops_never_sink_and_come_to_sleep() {
     let mut seed = 0x9e3779b97f4a7c15u64;
-    for run_index in 0..24 {
+    for run_index in 0..64 {
         let mut b = cube();
         b.position = [0.0, 0.0, (40.0 + rng(&mut seed) * 150.0) * M];
         b.speed = [
@@ -99,7 +99,7 @@ fn tumbling_drops_never_sink_and_come_to_sleep() {
         ];
         b.spin = [0, 1, 2].map(|_| (rng(&mut seed) - 0.5) * 12.0);
         let (deepest, slept) = run(&mut b, &floor(), 12.0);
-        assert!(deepest > -M, "run {run_index} sank to {deepest}");
+        assert!(deepest > -0.25 * M, "run {run_index} sank to {deepest}");
         assert!(
             slept.is_some(),
             "run {run_index} still moving speed={:?} spin={:?}",
@@ -149,19 +149,56 @@ fn a_flat_landing_barely_bounces() {
 }
 
 #[test]
-fn a_cube_started_inside_a_wall_is_pushed_out_instead_of_freezing() {
+fn a_cube_started_inside_a_wall_is_kicked_out_and_never_pushed_deeper() {
     let mut b = cube();
     let world = vec![
         slab(0, [-512.0, -512.0, -16.0], [512.0, 512.0, 0.0]),
         slab(1, [-16.0, -512.0, 0.0], [0.0, 512.0, 512.0]),
     ];
     b.position = [10.0 * M, 0.0, 20.0 * M + 2.0 * T];
-    let (_, _) = run(&mut b, &world, 3.0);
-    let left = b
-        .world_hull()
-        .points
-        .iter()
-        .map(|p| p[0])
-        .fold(f64::MAX, f64::min);
-    assert!(left > -0.5 * M, "still {left} inside the wall");
+    let mut last = b.position[0];
+    for i in 0..200 {
+        step(&mut b, &world, G, DT, i as f64 * DT);
+        assert!(
+            b.position[0] >= last - 1e-9,
+            "step {i} went back to {}",
+            b.position[0]
+        );
+        last = b.position[0];
+    }
+    assert!(last > 12.0 * M, "only reached {}", last / M);
+}
+
+#[test]
+fn axes_and_quaternions_round_trip_through_a_tilted_basis() {
+    use portal::ivp::body::{axes, from_axes, rotate};
+    let (s, c) = 0.6f64.sin_cos();
+    let basis = [[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]];
+    let q = from_axes(basis);
+    let back = axes(q);
+    for i in 0..3 {
+        for j in 0..3 {
+            assert!((back[i][j] - basis[i][j]).abs() < 1e-9, "{back:?}");
+        }
+        let turned = rotate(q, [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]][i]);
+        assert!((0..3).all(|j| (turned[j] - basis[i][j]).abs() < 1e-9));
+    }
+}
+
+#[test]
+fn a_deep_overlap_separates_at_the_capped_rescue_speed() {
+    let mut b = cube();
+    let world = vec![slab(0, [-512.0, -512.0, -16.0], [0.0, 512.0, 512.0])];
+    b.position = [10.0 * M, 0.0, 100.0 * M];
+    let mut fastest: f64 = 0.0;
+    for i in 0..40 {
+        step(&mut b, &world, [0.0; 3], DT, i as f64 * DT);
+        fastest = fastest.max(b.speed.iter().map(|v| v * v).sum::<f64>().sqrt());
+    }
+    assert!(fastest < 2.0, "pushed out at {fastest} m/s");
+    assert!(
+        b.position[0] > 10.0 * M,
+        "never moved out: {:?}",
+        b.position
+    );
 }

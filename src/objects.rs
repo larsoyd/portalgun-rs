@@ -9,6 +9,9 @@ use portal::pair::{through_dir, through_point, Portal, Vec3 as SourceVec};
 use portal::teleport::{entered, in_front, nearer, touching};
 use portal::viewbob::angle_vectors;
 
+use portal::ivp::body::{axes, from_axes, step, Body, Solid};
+use portal::ivp::hull::Convex;
+
 use crate::faces::Portals;
 use crate::player::{Controls, MovementResult, Player};
 use crate::scene::Level;
@@ -24,6 +27,31 @@ pub struct Objects {
     safe_position: SourceVec,
     safe_rotation: portal::carry::Basis,
     pub blocked_until: f32,
+    pub body: Body,
+    written: Option<RigidCube>,
+    rules: (Option<usize>, bool),
+    /// friction and elasticity of each chamber block
+    pub materials: Vec<(f32, f32)>,
+}
+
+const METRES: f32 = 0.0254;
+/// metal_box.phy rotation_inertia for unit mass, in metres squared
+const UNIT_INERTIA: [f64; 3] = [0.12165254, 0.12122901, 0.12122901];
+/// metal_box.phy upper_limit_radius in metres
+const RADIUS: f32 = 0.87988;
+const DEFAULT_SURFACE: (f32, f32) = (0.8, 0.25);
+
+fn cube_body(cube: &RigidCube) -> Body {
+    let mut body = Body::new(
+        Convex::cube(cube.half_size as f64 * METRES as f64),
+        cube.mass as f64,
+        UNIT_INERTIA,
+    );
+    body.damp = 0.1;
+    body.radius = RADIUS;
+    body.friction = 0.8;
+    body.elasticity = 0.2;
+    body
 }
 
 impl Default for Objects {
@@ -37,6 +65,10 @@ impl Default for Objects {
             safe_position: position,
             safe_rotation: portal::carry::IDENTITY,
             blocked_until: 0.0,
+            body: cube_body(&RigidCube::at(position)),
+            written: None,
+            rules: (None, false),
+            materials: Vec::new(),
         }
     }
 }
@@ -168,125 +200,143 @@ impl Objects {
                 add(player.feet, [16.0, 16.0, player.height()]),
             ));
         }
-        let slices = (dt / (1.0 / 120.0)).ceil().clamp(1.0, 16.0) as usize;
-        let step = dt / slices as f32;
+        self.own(&space);
         let prior_rotation = self.cube.rotation;
-        for _ in 0..slices {
-            self.own(&space);
-            let target = self
+        let target = self
+            .carry
+            .as_ref()
+            .and_then(|carry| hold_target(carry, &self.cube, player, &space));
+        if let Some((position, rotation)) = target {
+            let delta = sub(position, self.cube.position);
+            let distance = dot(delta, delta).sqrt();
+            let desired = delta.map(|v| v / 0.05);
+            let speed = dot(desired, desired).sqrt();
+            self.cube.velocity = desired.map(|v| v * (1000.0 / speed.max(1000.0)));
+            self.cube.angular_velocity =
+                portal::carry::rotation_velocity(prior_rotation, rotation, dt);
+            let looks = self.carry.as_ref().and_then(|c| c.portal).is_none_or(|i| {
+                pair.is_some_and(|p| {
+                    portal_ray(&p[i], player.eye(), player.forward(), 1024.0).is_some()
+                })
+            });
+            if self
                 .carry
-                .as_ref()
-                .and_then(|carry| hold_target(carry, &self.cube, player, &space));
-            if let Some((position, rotation)) = target {
-                let delta = sub(position, self.cube.position);
-                let distance = dot(delta, delta).sqrt();
-                let desired = delta.map(|v| v / 0.05);
-                let speed = dot(desired, desired).sqrt();
-                self.cube.velocity = desired.map(|v| v * (1000.0 / speed.max(1000.0)));
-                let previous = self.cube.rotation;
-                self.cube.rotation = rotation;
-                if space
-                    .trace_oriented(
-                        self.cube.owner,
-                        self.cube.position,
-                        self.cube.position,
-                        rotation,
-                        self.cube.half_size,
-                    )
-                    .start_solid
-                {
-                    self.cube.rotation = previous;
-                }
-                self.cube.angular_velocity =
-                    portal::carry::rotation_velocity(prior_rotation, self.cube.rotation, dt);
-                let looks = self.carry.as_ref().and_then(|c| c.portal).is_none_or(|i| {
-                    pair.is_some_and(|p| {
-                        portal_ray(&p[i], player.eye(), player.forward(), 1024.0).is_some()
-                    })
-                });
-                if self
-                    .carry
-                    .as_mut()
-                    .is_some_and(|c| c.update_error(distance, step, looks))
-                {
-                    self.release(now);
-                }
-            } else if self.holding() {
+                .as_mut()
+                .is_some_and(|c| c.update_error(distance, dt, looks))
+            {
                 self.release(now);
             }
-            if !self.holding() {
-                self.cube.velocity[2] -= 600.0 * step;
-                self.cube.velocity = self.cube.velocity.map(|v| v * (-0.1 * step).exp());
-                let old = self.cube.rotation;
-                self.cube.rotate(step);
-                if space
-                    .trace_oriented(
-                        self.cube.owner,
-                        self.cube.position,
-                        self.cube.position,
-                        self.cube.rotation,
-                        self.cube.half_size,
-                    )
-                    .start_solid
-                {
-                    self.cube.rotation = old;
-                    self.cube.angular_velocity = self.cube.angular_velocity.map(|v| v * 0.5);
+        } else if self.holding() {
+            self.release(now);
+        }
+        self.simulate(&space, pair, dt, now);
+        if let (Some(i), Some(pair)) = (self.cube.owner, pair) {
+            if entered(&pair[i], self.cube.position, self.cube.half()) {
+                self.cube.teleport(&pair[i], &pair[1 - i], 1 - i);
+                self.visual_revision += 1;
+                if let Some(carry) = &mut self.carry {
+                    carry.object_crossed(i);
                 }
-            }
-            let mut remaining = step;
-            for _ in 0..4 {
-                let goal = add(
-                    self.cube.position,
-                    self.cube.velocity.map(|v| v * remaining),
+                info!(
+                    "[object] cross from={i} position={:?} velocity={:?}",
+                    self.cube.position, self.cube.velocity
                 );
-                let tr = space.trace_oriented(
-                    self.cube.owner,
-                    self.cube.position,
-                    goal,
-                    self.cube.rotation,
-                    self.cube.half_size,
-                );
-                if tr.start_solid {
-                    self.cube.velocity = [0.0; 3];
-                    break;
-                }
-                self.cube.position = tr.end;
-                if tr.fraction >= 1.0 {
-                    break;
-                }
-                self.cube.contact(tr.normal, 0.25, 0.8);
-                let normal_speed = dot(self.cube.velocity, tr.normal);
-                if normal_speed.abs() < 600.0 * step {
-                    self.cube.velocity =
-                        sub(self.cube.velocity, tr.normal.map(|v| v * normal_speed));
-                }
-                remaining *= 1.0 - tr.fraction;
-            }
-            if let (Some(i), Some(pair)) = (self.cube.owner, pair) {
-                if entered(&pair[i], self.cube.position, self.cube.half()) {
-                    self.cube.teleport(&pair[i], &pair[1 - i], 1 - i);
-                    self.visual_revision += 1;
-                    if let Some(carry) = &mut self.carry {
-                        carry.object_crossed(i);
-                    }
-                    info!(
-                        "[object] cross from={i} position={:?} velocity={:?}",
-                        self.cube.position, self.cube.velocity
-                    );
-                }
-            }
-            let clear = space.trace_oriented(
-                None,
-                self.cube.position,
-                self.cube.position,
-                self.cube.rotation,
-                self.cube.half_size,
-            );
-            if !clear.start_solid {
-                self.safe_position = self.cube.position;
-                self.safe_rotation = self.cube.rotation;
             }
         }
+        let clear = space.trace_oriented(
+            None,
+            self.cube.position,
+            self.cube.position,
+            self.cube.rotation,
+            self.cube.half_size,
+        );
+        if !clear.start_solid {
+            self.safe_position = self.cube.position;
+            self.safe_rotation = self.cube.rotation;
+        }
+    }
+
+    /// One vphysics step of the cube against what it collides with this tick.
+    fn simulate(&mut self, space: &Space, pair: Option<[Portal; 2]>, dt: f32, now: f32) {
+        self.load_body();
+        let in_hole = match (self.cube.owner, pair) {
+            (Some(i), Some(p)) => {
+                portal::teleport::in_hole(&p[i], self.cube.position, self.cube.half())
+            }
+            _ => false,
+        };
+        if self.rules != (self.cube.owner, in_hole) {
+            self.rules = (self.cube.owner, in_hole);
+            self.body.detach();
+        }
+        let solids: Vec<Solid> = space
+            .object_solids(self.cube.owner, in_hole)
+            .into_iter()
+            .map(|(id, block, planes)| {
+                let (friction, elasticity) = self
+                    .materials
+                    .get(block)
+                    .copied()
+                    .unwrap_or(DEFAULT_SURFACE);
+                let planes: Vec<_> = planes
+                    .iter()
+                    .map(|p| (p.normal.map(f64::from), (p.distance * METRES) as f64))
+                    .collect();
+                Solid {
+                    id,
+                    hull: Convex::from_planes(&planes),
+                    friction,
+                    elasticity,
+                }
+            })
+            .filter(|s| s.hull.points.len() >= 4)
+            .collect();
+        let gravity = if self.holding() {
+            0.0
+        } else {
+            -600.0 * METRES as f64
+        };
+        step(
+            &mut self.body,
+            &solids,
+            [0.0, 0.0, gravity],
+            dt as f64,
+            now as f64,
+        );
+        self.store_body();
+    }
+
+    /// Copies any change made to the cube from outside the simulation into the body.
+    fn load_body(&mut self) {
+        let cube = &self.cube;
+        let same_pose = self
+            .written
+            .as_ref()
+            .is_some_and(|w| w.position == cube.position && w.rotation == cube.rotation);
+        if !same_pose {
+            self.body.position = cube.position.map(|v| (v * METRES) as f64);
+            self.body.rotation = from_axes(cube.rotation.map(|a| a.map(f64::from)));
+            self.body.previous_rotation = self.body.rotation;
+            self.body.detach();
+        }
+        let same_motion = self.written.as_ref().is_some_and(|w| {
+            same_pose && w.velocity == cube.velocity && w.angular_velocity == cube.angular_velocity
+        });
+        if !same_motion {
+            self.body.speed = cube.velocity.map(|v| (v * METRES) as f64);
+            self.body
+                .set_world_spin(cube.angular_velocity.map(|v| v.to_radians() as f64));
+            self.body.wake();
+        }
+    }
+
+    fn store_body(&mut self) {
+        let b = &self.body;
+        self.cube.position = b.position.map(|v| v as f32 / METRES);
+        self.cube.rotation = axes(b.rotation).map(|a| a.map(|v| v as f32));
+        self.cube.velocity = b.speed.map(|v| v as f32 / METRES);
+        self.cube.angular_velocity = b.world_spin().map(|v| (v as f32).to_degrees());
+        self.written = Some(self.cube.clone());
     }
 
     fn own(&mut self, space: &Space) {

@@ -405,6 +405,7 @@ fn read_footing(
     files: Res<Files>,
     level: Res<Level>,
     mut player: ResMut<Player>,
+    mut objects: ResMut<crate::objects::Objects>,
     mut exit: MessageWriter<AppExit>,
 ) {
     match Surfaces::read(&files) {
@@ -419,6 +420,10 @@ fn read_footing(
                 surfaces.len(),
                 surfaces[0].step_left
             );
+            objects.materials = surfaces
+                .iter()
+                .map(|s| (s.friction, s.elasticity))
+                .collect();
             player.set_surfaces(surfaces.clone());
             player.set_object_surface(s.get("metalpanel").clone());
             commands.insert_resource(Footing {

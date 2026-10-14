@@ -140,6 +140,36 @@ impl Space {
         }
     }
 
+    /// An owned object only meets its portal's carved world, and the far side while in the hole.
+    /// Translated from 0x90a9e0 and 0x2dbe90 (decompiled, server.so)
+    pub fn object_solids(
+        &self,
+        owner: Option<usize>,
+        in_hole: bool,
+    ) -> Vec<(usize, usize, &[Plane])> {
+        let Some((i, sim)) = owner.and_then(|i| self.sims.get(i).map(|s| (i, s))) else {
+            return self
+                .world
+                .iter()
+                .enumerate()
+                .map(|(k, (n, planes))| (k, *n, planes.as_slice()))
+                .collect();
+        };
+        let mut groups = vec![&sim.front, &sim.wall, &sim.tube];
+        if in_hole {
+            groups.push(&sim.linked);
+        }
+        groups
+            .into_iter()
+            .enumerate()
+            .flat_map(|(g, solids)| {
+                solids.iter().enumerate().map(move |(k, (n, planes))| {
+                    ((1 + i) << 24 | g << 20 | k, *n, planes.as_slice())
+                })
+            })
+            .collect()
+    }
+
     /// TracePlayerBBox: the real world, or the owning portal's world when it lets the hull further.
     /// Translated from 0x2ce890 and 0x2dc8e0 (decompiled, server.so)
     pub fn trace(

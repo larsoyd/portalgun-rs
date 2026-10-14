@@ -186,8 +186,17 @@ fn along(a: (D3, D3), s: f64) -> D3 {
     add(a.0, scale(sub(a.1, a.0), s))
 }
 
-/// Translated from 0xf7de0, 0xf8190 and 0xf8540 (decompiled, vphysics.so)
+/// The gap never goes below zero, overlapping hulls just touch.
+/// Translated from 0xf8be0 (decompiled, vphysics.so)
 pub fn gap(cube: &Convex, world: &Convex, key: Key) -> Option<Gap> {
+    signed_gap(cube, world, key).map(|g| Gap {
+        distance: g.distance.max(0.0),
+        ..g
+    })
+}
+
+/// Translated from 0xf7de0, 0xf8190 and 0xf8540 (decompiled, vphysics.so)
+fn signed_gap(cube: &Convex, world: &Convex, key: Key) -> Option<Gap> {
     let centre = |h: &Convex| {
         h.points
             .iter()
@@ -290,7 +299,7 @@ pub fn closest(cube: &Convex, world: &Convex) -> Option<(Key, Gap)> {
     }
     let gaps = keys.into_iter().filter_map(|(c, w)| {
         let key = Key { cube: c, world: w };
-        gap(cube, world, key).map(|g| (key, g))
+        signed_gap(cube, world, key).map(|g| (key, g))
     });
     match overlap(cube, world) {
         None => gaps
@@ -349,7 +358,7 @@ fn overlap(cube: &Convex, world: &Convex) -> Option<Key> {
                 cube: Feature::Edge(a),
                 world: Feature::Edge(b),
             };
-            if gap(cube, world, key).is_some_and(|g| g.inside) {
+            if signed_gap(cube, world, key).is_some_and(|g| g.inside) {
                 consider(depth(normalise(axis)), key);
             }
         }

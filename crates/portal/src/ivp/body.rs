@@ -580,7 +580,7 @@ fn next_impact(body: &Body, world: &[Solid], left: f64) -> Option<(f64, usize, K
         })
         .collect();
     let mut time = 0.0;
-    for _ in 0..64 {
+    for _ in 0..128 {
         let mut ghost = body.clone();
         drift(&mut ghost, time);
         let hull = ghost.world_hull();
@@ -591,12 +591,12 @@ fn next_impact(body: &Body, world: &[Solid], left: f64) -> Option<(f64, usize, K
                     .contacts
                     .iter()
                     .any(|c| c.solid == world[s].id && c.key == key);
-                let due = if known {
+                let near = if known {
                     g.distance < T
                 } else {
                     g.distance < 1.1 * T
                 };
-                if due {
+                if near && -dot(ghost.point_velocity(g.on_cube), g.normal) >= 0.0 {
                     return Some((time, s, key));
                 }
                 if nearest.is_none_or(|n| g.distance < n.0) {
@@ -608,7 +608,7 @@ fn next_impact(body: &Body, world: &[Solid], left: f64) -> Option<(f64, usize, K
         if reach <= 0.0 {
             return None;
         }
-        time += (distance - T).max(0.0005) / reach;
+        time += (distance - T).max(0.25 * T) / reach;
         if time >= left {
             return None;
         }
@@ -694,4 +694,36 @@ fn turn(w: D3, h: f64) -> Quat {
 fn normalise_quat(q: Quat) -> Quat {
     let l = (q.iter().map(|v| v * v).sum::<f64>()).sqrt();
     q.map(|v| v / l)
+}
+
+/// The world directions of the body's three axes.
+pub fn axes(q: Quat) -> [D3; 3] {
+    [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]].map(|a| rotate(q, a))
+}
+
+pub fn from_axes(a: [D3; 3]) -> Quat {
+    let m = |r: usize, c: usize| a[c][r];
+    let trace = m(0, 0) + m(1, 1) + m(2, 2);
+    let q = if trace > 0.0 {
+        let s = (trace + 1.0).sqrt() * 2.0;
+        [
+            (m(2, 1) - m(1, 2)) / s,
+            (m(0, 2) - m(2, 0)) / s,
+            (m(1, 0) - m(0, 1)) / s,
+            0.25 * s,
+        ]
+    } else {
+        let i = (0..3)
+            .max_by(|&x, &y| m(x, x).total_cmp(&m(y, y)))
+            .unwrap_or(0);
+        let (j, k) = ((i + 1) % 3, (i + 2) % 3);
+        let s = (1.0 + m(i, i) - m(j, j) - m(k, k)).max(0.0).sqrt() * 2.0;
+        let mut q = [0.0; 4];
+        q[i] = 0.25 * s;
+        q[j] = (m(j, i) + m(i, j)) / s;
+        q[k] = (m(k, i) + m(i, k)) / s;
+        q[3] = (m(k, j) - m(j, k)) / s;
+        q
+    };
+    normalise_quat(q)
 }
