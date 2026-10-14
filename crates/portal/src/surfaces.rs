@@ -22,6 +22,15 @@ pub struct Surface {
     pub max_speed_factor: f32,
     /// vphysics parses a missing value as 0.001
     pub elasticity: f32,
+    pub impact_hard: String,
+    pub impact_soft: String,
+    pub scrape_rough: String,
+    pub scrape_smooth: String,
+    pub hardness: f32,
+    pub roughness: f32,
+    pub scrape_rough_threshold: f32,
+    pub impact_hard_threshold: f32,
+    pub hard_min_velocity: f32,
 }
 
 impl Default for Surface {
@@ -34,6 +43,15 @@ impl Default for Surface {
             jump_factor: 1.0,
             max_speed_factor: 1.0,
             elasticity: 0.001,
+            impact_hard: String::new(),
+            impact_soft: String::new(),
+            scrape_rough: String::new(),
+            scrape_smooth: String::new(),
+            hardness: 0.0,
+            roughness: 0.0,
+            scrape_rough_threshold: 0.0,
+            impact_hard_threshold: 0.0,
+            hard_min_velocity: 0.0,
         }
     }
 }
@@ -88,6 +106,17 @@ impl Surfaces {
                     "jumpfactor" => s.jump_factor = value.parse().unwrap_or(0.0),
                     "maxspeedfactor" => s.max_speed_factor = value.parse().unwrap_or(0.0),
                     "elasticity" => s.elasticity = value.parse().unwrap_or(0.0),
+                    "impacthard" => s.impact_hard = value.clone(),
+                    "impactsoft" => s.impact_soft = value.clone(),
+                    "scraperough" => s.scrape_rough = value.clone(),
+                    "scrapesmooth" => s.scrape_smooth = value.clone(),
+                    "audiohardnessfactor" => s.hardness = value.parse().unwrap_or(0.0),
+                    "audioroughnessfactor" => s.roughness = value.parse().unwrap_or(0.0),
+                    "scraperoughthreshold" => {
+                        s.scrape_rough_threshold = value.parse().unwrap_or(0.0)
+                    }
+                    "impacthardthreshold" => s.impact_hard_threshold = value.parse().unwrap_or(0.0),
+                    "audiohardminvelocity" => s.hard_min_velocity = value.parse().unwrap_or(0.0),
                     _ => {}
                 }
             }
@@ -105,6 +134,15 @@ impl Surfaces {
             jump_factor: 1.0,
             max_speed_factor: 1.0,
             elasticity: 0.001,
+            impact_hard: String::new(),
+            impact_soft: String::new(),
+            scrape_rough: String::new(),
+            scrape_smooth: String::new(),
+            hardness: 0.0,
+            roughness: 0.0,
+            scrape_rough_threshold: 0.0,
+            impact_hard_threshold: 0.0,
+            hard_min_velocity: 0.0,
         };
         let map = &self.0;
         map.get(&name.to_ascii_lowercase())

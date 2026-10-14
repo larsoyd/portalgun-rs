@@ -98,3 +98,19 @@ fn elasticity_inherits_and_falls_back_to_the_physics_parser_default() {
     assert_eq!(s.get("child").elasticity, 2.0);
     assert_eq!(Surfaces::from_files(&[]).get("missing").elasticity, 0.001);
 }
+
+#[test]
+fn metal_panels_inherit_solid_metal_impacts_and_the_default_audio_factors() {
+    let s = Surfaces::read(&install().search).unwrap();
+    let panel = s.get("metalpanel");
+    assert_eq!(panel.impact_hard, "SolidMetal.ImpactHard");
+    assert_eq!(panel.impact_soft, "SolidMetal.ImpactSoft");
+    assert_eq!(panel.scrape_rough, "SolidMetal.ScrapeRough");
+    assert_eq!(panel.scrape_smooth, "SolidMetal.ScrapeSmooth");
+    assert_eq!(panel.hardness, 1.0);
+    assert_eq!(panel.roughness, 0.1);
+    assert_eq!(panel.scrape_rough_threshold, 0.5);
+    assert_eq!(panel.impact_hard_threshold, 0.5);
+    assert_eq!(panel.hard_min_velocity, 0.0);
+    assert_eq!(s.get("concrete").roughness, 1.0);
+}

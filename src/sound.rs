@@ -17,6 +17,7 @@ pub struct Sounds {
     waves: HashMap<String, Handle<AudioSource>>,
     refused: std::collections::HashSet<String>,
     seed: crate::random::Xorshift,
+    scale: f32,
 }
 
 impl Sounds {
@@ -32,6 +33,7 @@ impl Sounds {
             waves: HashMap::new(),
             refused: default(),
             seed: crate::random::Xorshift::default(),
+            scale: 1.0,
         })
     }
 
@@ -69,6 +71,25 @@ impl Sounds {
             pitch,
             PlaybackSettings::DESPAWN,
         )
+    }
+
+    /// Plays at the script's own volume times a factor, as physics impacts do.
+    pub fn play_scaled(
+        &mut self,
+        commands: &mut Commands,
+        files: &Files,
+        audio: &mut Assets<AudioSource>,
+        name: &str,
+        factor: f32,
+    ) -> Option<Entity> {
+        self.scale = factor;
+        let id = self.play(commands, files, audio, name);
+        self.scale = 1.0;
+        id
+    }
+
+    pub fn entry(&self, name: &str) -> Option<&portal::soundscript::Entry> {
+        self.bank.get(name).ok()
     }
 
     /// A sound that runs until despawned, like the controller patches the game fades.
@@ -113,7 +134,7 @@ impl Sounds {
             }
         };
         let mut pick = entry.pick(draws);
-        pick.volume = volume.unwrap_or(pick.volume);
+        pick.volume = volume.unwrap_or(pick.volume) * self.scale;
         pick.pitch = pitch.unwrap_or(pick.pitch);
         let path = &entry.waves[pick.wave];
         let wave = match self.waves.get(path) {

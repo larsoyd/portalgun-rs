@@ -202,3 +202,45 @@ fn a_deep_overlap_separates_at_the_capped_rescue_speed() {
         b.position
     );
 }
+
+#[test]
+fn a_landing_reports_its_closing_speed_against_the_floor() {
+    let mut b = cube();
+    b.position = [0.0, 0.0, (20.0 + 60.0) * M];
+    let mut first = None;
+    for i in 0..60 {
+        step(&mut b, &floor(), G, DT, i as f64 * DT);
+        if first.is_none() {
+            first = b.collisions.first().copied();
+        }
+    }
+    let (solid, speed) = first.expect("no collision reported");
+    assert_eq!(solid, 0);
+    let fall = (2.0 * 600.0 * M * 60.0 * M).sqrt();
+    assert!(
+        (speed - fall).abs() < 0.1 * fall,
+        "speed {speed} want about {fall}"
+    );
+}
+
+#[test]
+fn a_slide_gathers_slip_work_on_its_contacts() {
+    let mut b = cube();
+    b.position = [0.0, 0.0, 20.0 * M + 2.0 * T];
+    let world = floor();
+    for i in 0..30 {
+        step(&mut b, &world, G, DT, i as f64 * DT);
+    }
+    b.wake();
+    b.speed = [2.0, 0.0, 0.0];
+    let mut work = 0.0;
+    for i in 30..40 {
+        step(&mut b, &world, G, DT, i as f64 * DT);
+        work += b
+            .contacts
+            .iter_mut()
+            .map(|c| std::mem::take(&mut c.slip_work))
+            .sum::<f64>();
+    }
+    assert!(work > 0.0, "no slip work while sliding");
+}

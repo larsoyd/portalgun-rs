@@ -5,7 +5,7 @@ use portal::carry::{RigidCube, IDENTITY};
 use portal::pair::Portal;
 use portal::placement::Surface;
 use portalgun::chamber::{Block, Chamber};
-use portalgun::objects::Objects;
+use portalgun::objects::{Cue, Objects};
 use portalgun::simulator::Space;
 use portalgun::walker::Walker;
 
@@ -478,5 +478,68 @@ fn a_cube_pushed_into_a_portal_meets_a_slab_on_the_far_side_before_its_centre_cr
         objects.cube.position[0] > 0.0,
         "centre went behind the portal at {:?}",
         objects.cube.position
+    );
+}
+
+fn metal() -> portal::surfaces::Surface {
+    portal::surfaces::Surface {
+        impact_hard: "SolidMetal.ImpactHard".into(),
+        impact_soft: "SolidMetal.ImpactSoft".into(),
+        scrape_rough: "SolidMetal.ScrapeRough".into(),
+        scrape_smooth: "SolidMetal.ScrapeSmooth".into(),
+        hardness: 1.0,
+        roughness: 0.1,
+        scrape_rough_threshold: 0.5,
+        impact_hard_threshold: 0.5,
+        friction: 0.8,
+        elasticity: 0.2,
+        ..Default::default()
+    }
+}
+
+fn sounding() -> Objects {
+    let mut objects = Objects::default();
+    objects.cube_surface = metal();
+    objects.surfaces = vec![metal(), metal()];
+    objects
+}
+
+#[test]
+fn a_dropped_cube_queues_its_own_hard_impact() {
+    let mut objects = sounding();
+    objects.cube = RigidCube::at([100.0, 0.0, 100.0]);
+    let player = Walker::at([300.0, 0.0, 0.0]);
+    let mut cues = Vec::new();
+    for i in 0..120 {
+        objects.advance(0.015, &player, &room(), None, None, i as f32 * 0.015);
+        cues.append(&mut objects.cues);
+    }
+    let impact = cues.iter().find_map(|c| match c {
+        Cue::Impact { name, volume, .. } => Some((name.clone(), *volume)),
+        _ => None,
+    });
+    let (name, volume) = impact.expect("no impact cue");
+    assert_eq!(name, "SolidMetal.ImpactHard");
+    assert!(volume > 0.5 && volume <= 1.0, "volume {volume}");
+}
+
+#[test]
+fn a_cube_sliding_on_metal_reports_a_smooth_scrape() {
+    let mut objects = sounding();
+    objects.cube = RigidCube::at([100.0, 0.0, 20.5]);
+    let player = Walker::at([400.0, 300.0, 0.0]);
+    for i in 0..60 {
+        objects.advance(0.015, &player, &room(), None, None, i as f32 * 0.015);
+    }
+    objects.cues.clear();
+    objects.cube.velocity = [300.0, 0.0, 0.0];
+    let mut cues = Vec::new();
+    for i in 60..90 {
+        objects.advance(0.015, &player, &room(), None, None, i as f32 * 0.015);
+        cues.append(&mut objects.cues);
+    }
+    assert!(
+        cues.iter().any(|c| matches!(c, Cue::Friction { sound: Some((name, _)), .. } if name == "SolidMetal.ScrapeSmooth")),
+        "{cues:?}"
     );
 }

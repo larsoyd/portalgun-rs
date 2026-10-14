@@ -20,6 +20,7 @@ pub mod movement;
 pub mod pair;
 pub mod particles;
 pub mod pcf;
+pub mod physics_sound;
 pub mod placement;
 pub mod portal_face;
 pub mod soundscript;

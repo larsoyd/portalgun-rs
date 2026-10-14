@@ -11,6 +11,10 @@ use portal::viewbob::angle_vectors;
 
 use portal::ivp::body::{axes, from_axes, step, Body, Solid};
 use portal::ivp::hull::Convex;
+use portal::physics_sound::{
+    collision_volume, impact_sound, scrape_sound, slip_energy, ImpactQueue, ScrapeStep,
+};
+use portal::surfaces::Surface;
 
 use crate::faces::Portals;
 use crate::player::{Controls, MovementResult, Player};
@@ -30,8 +34,27 @@ pub struct Objects {
     pub body: Body,
     written: Option<RigidCube>,
     rules: (Option<usize>, bool),
-    /// friction and elasticity of each chamber block
-    pub materials: Vec<(f32, f32)>,
+    pub surfaces: Vec<Surface>,
+    pub cube_surface: Surface,
+    pub default_surface: Surface,
+    impacts: ImpactQueue,
+    last_collision: std::collections::HashMap<usize, f32>,
+    /// sounds the last ticks asked for, drained by the sound system
+    pub cues: Vec<Cue>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Cue {
+    Impact {
+        name: String,
+        volume: f32,
+        origin: SourceVec,
+    },
+    /// a friction report, with the scrape it would play when it gets past the half second gate
+    Friction {
+        now: f32,
+        sound: Option<(String, f32)>,
+    },
 }
 
 const METRES: f32 = 0.0254;
@@ -39,7 +62,7 @@ const METRES: f32 = 0.0254;
 const UNIT_INERTIA: [f64; 3] = [0.12165254, 0.12122901, 0.12122901];
 /// metal_box.phy upper_limit_radius in metres
 const RADIUS: f32 = 0.87988;
-const DEFAULT_SURFACE: (f32, f32) = (0.8, 0.25);
+const INCHES: f32 = 39.37008;
 
 fn cube_body(cube: &RigidCube) -> Body {
     let mut body = Body::new(
@@ -68,7 +91,16 @@ impl Default for Objects {
             body: cube_body(&RigidCube::at(position)),
             written: None,
             rules: (None, false),
-            materials: Vec::new(),
+            surfaces: Vec::new(),
+            cube_surface: Surface::default(),
+            default_surface: Surface {
+                friction: 0.8,
+                elasticity: 0.25,
+                ..Surface::default()
+            },
+            impacts: ImpactQueue::default(),
+            last_collision: Default::default(),
+            cues: Vec::new(),
         }
     }
 }
@@ -284,15 +316,11 @@ impl Objects {
             self.rules = (self.cube.owner, in_hole);
             self.body.detach();
         }
-        let solids: Vec<Solid> = space
-            .object_solids(self.cube.owner, in_hole)
-            .into_iter()
-            .map(|(id, block, planes)| {
-                let (friction, elasticity) = self
-                    .materials
-                    .get(block)
-                    .copied()
-                    .unwrap_or(DEFAULT_SURFACE);
+        let pieces = space.object_solids(self.cube.owner, in_hole);
+        let solids: Vec<Solid> = pieces
+            .iter()
+            .map(|&(id, block, planes)| {
+                let surface = self.surface(block);
                 let planes: Vec<_> = planes
                     .iter()
                     .map(|p| (p.normal.map(f64::from), (p.distance * METRES) as f64))
@@ -300,8 +328,8 @@ impl Objects {
                 Solid {
                     id,
                     hull: Convex::from_planes(&planes),
-                    friction,
-                    elasticity,
+                    friction: surface.friction,
+                    elasticity: surface.elasticity,
                 }
             })
             .filter(|s| s.hull.points.len() >= 4)
@@ -320,6 +348,9 @@ impl Objects {
             now as f64,
         );
         self.store_body();
+        let blocks: std::collections::HashMap<usize, usize> =
+            pieces.iter().map(|&(id, block, _)| (id, block)).collect();
+        self.cue_sounds(&blocks, dt, now);
         if self.body.asleep != was_asleep {
             info!(
                 "[object] asleep={} position={:?} contacts={} solids={}",
@@ -328,6 +359,57 @@ impl Objects {
                 self.body.contacts.len(),
                 solids.len()
             );
+        }
+    }
+
+    fn surface(&self, block: usize) -> &Surface {
+        self.surfaces.get(block).unwrap_or(&self.default_surface)
+    }
+
+    /// Translated from 0x48e740, 0x870170, 0x8718e0 (server.so) and raw 0x20d70 (vphysics.so)
+    fn cue_sounds(&mut self, blocks: &std::collections::HashMap<usize, usize>, dt: f32, now: f32) {
+        let block = |id: usize| blocks.get(&id).copied().unwrap_or(usize::MAX);
+        for (id, speed) in std::mem::take(&mut self.body.collisions) {
+            let hit = block(id);
+            let object = match (id >> 20, hit) {
+                (0, b) if b == usize::MAX - 1 => 1,
+                (0, _) => 0,
+                (group, _) => group,
+            };
+            let since = self
+                .last_collision
+                .insert(object, now)
+                .map_or(1.0, |last| now - last);
+            let silent = self.cube_surface.material == b'X' || self.surface(hit).material == b'X';
+            let speed = speed as f32 * INCHES;
+            if let Some(volume) = collision_volume(speed, since).filter(|_| !silent) {
+                self.impacts.add(0, hit, volume, speed, self.cube.position);
+            }
+        }
+        for e in self.impacts.flush(dt) {
+            if let Some(name) = impact_sound(&self.cube_surface, self.surface(e.hit), e.speed) {
+                self.cues.push(Cue::Impact {
+                    name: name.to_owned(),
+                    volume: e.volume,
+                    origin: e.origin,
+                });
+            }
+        }
+        let inv_mass = 1.0 / self.body.mass;
+        let mut reports = Vec::new();
+        for c in &mut self.body.contacts {
+            let work = std::mem::take(&mut c.slip_work);
+            if let Some(energy) = (work != 0.0)
+                .then(|| slip_energy(work, inv_mass, dt as f64))
+                .flatten()
+            {
+                reports.push((block(c.solid), energy));
+            }
+        }
+        for (hit, energy) in reports {
+            let sound = scrape_sound(&self.cube_surface, self.surface(hit), energy)
+                .map(|(name, volume)| (name.to_owned(), volume));
+            self.cues.push(Cue::Friction { now, sound });
         }
     }
 
@@ -420,7 +502,118 @@ impl Plugin for ObjectsPlugin {
                     .in_set(ObjectsUpdated)
                     .after(crate::player::simulate)
                     .run_if(crate::menu::playing),
-            );
+            )
+            .add_systems(FixedUpdate, sound.after(ObjectsUpdated));
+    }
+}
+
+#[derive(Default)]
+struct ScrapeLoop {
+    state: portal::physics_sound::Scrape,
+    sound: Option<Entity>,
+    volume: Ramp,
+    pitch: Ramp,
+}
+
+/// A value moving linearly to its target over a tenth of a second.
+#[derive(Default, Clone, Copy)]
+struct Ramp {
+    from: f32,
+    to: f32,
+    t: f32,
+}
+
+impl Ramp {
+    fn now(&self) -> f32 {
+        self.from + (self.to - self.from) * (self.t / 0.1).min(1.0)
+    }
+
+    fn set(&mut self, to: f32) {
+        *self = Ramp {
+            from: self.now(),
+            to,
+            t: 0.0,
+        };
+    }
+}
+
+/// Plays queued impacts and keeps the one scrape loop the cube may have, ramping it over a tenth.
+/// Translated from 0x870590 and 0x86e370 (decompiled, server.so)
+#[allow(clippy::too_many_arguments)]
+fn sound(
+    mut commands: Commands,
+    mut objects: ResMut<Objects>,
+    sounds: Option<ResMut<crate::sound::Sounds>>,
+    files: Option<Res<crate::sound::Files>>,
+    mut audio: ResMut<Assets<AudioSource>>,
+    mut sinks: Query<&mut AudioSink>,
+    time: Res<Time<Fixed>>,
+    mut scrape: Local<ScrapeLoop>,
+) {
+    let (Some(mut sounds), Some(files)) = (sounds, files) else {
+        objects.cues.clear();
+        return;
+    };
+    for cue in std::mem::take(&mut objects.cues) {
+        match cue {
+            Cue::Impact { name, volume, .. } => {
+                sounds.play_scaled(&mut commands, &files, &mut audio, &name, volume);
+            }
+            Cue::Friction { now, sound } => {
+                let entry = sound.as_ref().and_then(|(name, _)| sounds.entry(name));
+                let script = entry.map_or(1.0, |e| e.volume.0);
+                let pitch = match entry.map(|e| e.pitch) {
+                    Some(portal::soundscript::Pitch::Range(lo, hi)) => (lo, hi),
+                    Some(portal::soundscript::Pitch::Fixed(p)) => (p, p),
+                    None => (100.0, 100.0),
+                };
+                let step = scrape
+                    .state
+                    .friction(now, sound.as_ref().map(|s| s.1), script, pitch);
+                match (step, sound) {
+                    (ScrapeStep::Start { volume }, Some((name, _))) => {
+                        scrape.sound =
+                            sounds.looped(&mut commands, &files, &mut audio, &name, volume);
+                        scrape.volume = Ramp {
+                            from: volume,
+                            to: volume,
+                            t: 0.0,
+                        };
+                        scrape.pitch = Ramp::default();
+                        info!("[object] scrape start name={name} volume={volume:.3}");
+                    }
+                    (ScrapeStep::Retarget { volume, pitch }, _) => {
+                        scrape.volume.set(volume);
+                        if scrape.pitch.to == 0.0 {
+                            scrape.pitch = Ramp {
+                                from: pitch,
+                                to: pitch,
+                                t: 0.0,
+                            };
+                        }
+                        scrape.pitch.set(pitch);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    let Some(entity) = scrape.sound else {
+        return;
+    };
+    if scrape.state.expired(time.elapsed_secs()) {
+        commands.entity(entity).despawn();
+        scrape.sound = None;
+        info!("[object] scrape stop");
+        return;
+    }
+    scrape.volume.t += time.delta_secs();
+    scrape.pitch.t += time.delta_secs();
+    if let Ok(mut sink) = sinks.get_mut(entity) {
+        sink.set_volume(bevy::audio::Volume::Linear(scrape.volume.now()));
+        if scrape.pitch.to > 0.0 {
+            sink.set_speed(scrape.pitch.now() / 100.0);
+        }
     }
 }
 

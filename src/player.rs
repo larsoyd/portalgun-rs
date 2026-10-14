@@ -420,10 +420,9 @@ fn read_footing(
                 surfaces.len(),
                 surfaces[0].step_left
             );
-            objects.materials = surfaces
-                .iter()
-                .map(|s| (s.friction, s.elasticity))
-                .collect();
+            objects.surfaces = surfaces.clone();
+            objects.cube_surface = s.get("metalpanel").clone();
+            objects.default_surface = s.get("default").clone();
             player.set_surfaces(surfaces.clone());
             player.set_object_surface(s.get("metalpanel").clone());
             commands.insert_resource(Footing {

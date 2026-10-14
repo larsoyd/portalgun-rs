@@ -30,6 +30,8 @@ pub struct Contact {
     pub key: Key,
     pub gap: Gap,
     pub pressure: f64,
+    /// work done slipping since the game last read it
+    pub slip_work: f64,
     mu: f64,
     span: D3,
     time: f64,
@@ -56,6 +58,8 @@ pub struct Body {
     pub spin: D3,
     pub asleep: bool,
     pub contacts: Vec<Contact>,
+    /// each impact this step, its solid and closing speed
+    pub collisions: Vec<(usize, f64)>,
     pair_energy: f64,
     sleep: Option<SleepCheck>,
     sleep_count: i32,
@@ -80,6 +84,7 @@ impl Body {
             spin: [0.0; 3],
             asleep: false,
             contacts: Vec::new(),
+            collisions: Vec::new(),
             pair_energy: 0.0,
             sleep: None,
             sleep_count: 10,
@@ -181,6 +186,7 @@ impl Body {
 /// One simulation step, the controllers then the motion with any impacts inside it.
 /// Translated from 0xe4920 (decompiled, vphysics.so)
 pub fn step(body: &mut Body, world: &[Solid], gravity: D3, dt: f64, now: f64) {
+    body.collisions.clear();
     if body.asleep {
         return;
     }
@@ -265,9 +271,11 @@ fn friction(body: &mut Body, dt: f64) {
         let max_span = mu * c.pressure * inv_mred * dt * dt;
         let mut span = c.span;
         let mut slipping = c.slipping;
+        let mut slip_work = c.slip_work;
         let len = length(span);
         if len * len > max_span * max_span + 1e-6 {
             slipping = true;
+            slip_work += (len - max_span) * c.pressure * mu;
             span = scale(span, max_span / len);
         }
         let lim = c.pressure * mu * dt;
@@ -304,6 +312,7 @@ fn friction(body: &mut Body, dt: f64) {
         let c = &mut body.contacts[i];
         c.span = span;
         c.slipping = slipping;
+        c.slip_work = slip_work;
         c.energy = energy;
     }
     if body.contacts.len() >= 2 {
@@ -430,6 +439,7 @@ fn advance(body: &mut Body, world: &[Solid], dt: f64, now: f64) {
                     key,
                     gap: g,
                     pressure: 0.0,
+                    slip_work: 0.0,
                     mu: combine(body.friction, solid.friction) as f64,
                     span: [0.0; 3],
                     time: now + dt - left,
@@ -441,6 +451,8 @@ fn advance(body: &mut Body, world: &[Solid], dt: f64, now: f64) {
             }
         };
         body.contacts[index].gap = g;
+        let closing = -dot(body.point_velocity(g.on_cube), g.normal);
+        body.collisions.push((solid.id, closing));
         impact_system(body, world, index, dt);
         if left <= 0.0 {
             break;
