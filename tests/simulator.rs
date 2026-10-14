@@ -393,6 +393,12 @@ fn an_owned_object_meets_every_portal_piece_in_the_surface_behind_that_portal() 
         let want = if linked(*id) { 1 } else { 0 };
         assert_eq!(*surface, want, "piece {id:#x}");
     }
+    let mut raised = pair;
+    raised[0].origin[2] = 100.0;
+    let space = Space::new(&room(), Some(&raised));
+    for (id, surface, _) in space.object_solids(Some(0), false) {
+        assert_eq!(surface, 0, "piece {id:#x} should take the floor 100 units behind");
+    }
     let mut lost = pair;
     lost[0].origin[2] = 900.0;
     let space = Space::new(&room(), Some(&lost));
