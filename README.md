@@ -130,10 +130,32 @@ portal pair; rendering clips it into two halves while crossing. Portal shots
 pass through physics props, as the original gun's trace filter specifies.
 
 Pickup reach, holding targets, mass limits and throw force follow the original
-pickup controller. The oriented cube contact solver is a host adaptation;
-contact ordering, rolling, sleeping and stacking are not a complete IVP port.
-The original contact-dependent velocity clearing on a normal drop is not yet
-reproduced; releases currently use its non-contact speed limits.
+pickup controller.
+
+The cube moves the way vphysics moves it. Its mass, inertia, damping and hull
+come from `metal_box.phy`, its surface from `metalpanel`. Each step follows
+IVP's own order: contacts held a quarter unit apart by a normal spring, static
+friction that holds a contact until it slips, impacts at the moment a corner
+arrives with the game's restitution and friction cone, damping, gravity and
+the sleep test that lets a resting cube settle. Thrown cubes spin through their
+own inertia.
+
+Near a portal the cube only meets that portal's cut out wall and tube, and the
+room on the far side while it is in the hole, as `CPortalSimulator` sets up.
+Those pieces take the material of the surface behind the portal. When a portal
+moves or closes with the cube still in its hole, the passable space search
+pushes it back out. Moving the other portal leaves it alone.
+
+Landings and hits play the cube's own impact sounds, hard or soft by the
+surface it meets, and sliding plays its scrape loop, with the thresholds and
+volumes of the game's collision and friction callbacks.
+
+Two parts are still host versions rather than ports: several contacts are
+solved together by Gauss-Seidel instead of the game's pivoting solver, and the
+moment of impact is found by stepping rather than IVP's own search. A cube
+that lands across a portal's edge can wedge in the opening more often than in
+the original. The original contact-dependent velocity clearing on a normal
+drop is not reproduced; releases use its non-contact speed limits.
 
 **R** clears portals and pending shots and triggers the gun's fizzle response.
 This is a sandbox shortcut for the game's cleanser behavior.
@@ -260,8 +282,8 @@ Read from Portal's binaries and files:
 - Mouse look: `sensitivity` 3 and `m_yaw` and `m_pitch` 0.022 as defaults.
 - The gun's refire, draw, muzzle offset, trace range and shot speed, from
   `CWeaponPortalgun` in `server.so`.
-- The stream's path from `C_PortalBlast` in `client.so`, ready for the stream
-  particles.
+- The shot's projectile stream from `C_PortalBlast` in `client.so`: the
+  game's stream particles follow its curved path and fade after it lands.
 - The view through portals, its recursion, culling, static and depth doubler,
   and the render fix near a portal, from `client.so`.
 - The crosshair from `CHUDQuickInfo` and `CHudCrosshair` in `client.so`, and
@@ -276,12 +298,12 @@ Still stand-ins or estimates:
 - World geometry remains an AABB chamber. Swept collision supports walls,
   corners, ceilings and steps; slopes, moving platforms, water and ladders
   are not represented.
-- Portal collision covers the chamber's own geometry. There are no physics
-  objects to carry or clone through a portal, and the extra trace the game
-  runs through a portal when nothing was hit is not reproduced.
+- Portal collision covers the chamber's own geometry and the cube. The extra
+  trace the game runs through a portal when nothing was hit is not reproduced.
 - Where a portal fits: the fitting rules are ported but not yet checked against
   `VerifyPortalPlacement`.
-- Sound is not positional yet, so the portals' ambient hum is left out.
+- Sound is not positional yet, so the portals' ambient hum is left out and the
+  cube's impacts and scrapes play at the same loudness wherever it is.
 
 Deliberate deviations:
 
