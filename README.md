@@ -231,9 +231,16 @@ Sizes, places, colours and fade speeds are the game's.
 ### The test chamber
 
 A room of 768 by 512 by 384 units built from Portal's own wall, floor and
-ceiling materials, with a non-portalable metal strip, a ledge and a cube. You
-collide with it as boxes, with each portal's opening cut out of its wall, and
-step up onto ledges of up to 18 units.
+ceiling materials, with a non-portalable metal strip, a ledge and a cube.
+
+Chambers are Hammer VMF files in `assets/chambers`, written for this project,
+with every brush side naming one of Portal's materials. Brushes can have any
+convex shape, so ramps and angled panels work: you walk up slopes of up to 45
+degrees, portals open on angled surfaces with their top uphill, and you and the
+cube collide with the exact shape of every brush and of each portal's opening.
+A material decides what a shot does there, the way the server decides it:
+`%noportal` and glass refuse a portal, glass stops the shot, and Portal's orange
+light strips let it fly straight through.
 
 ### The portal crate
 
@@ -247,6 +254,8 @@ dependencies and does not use Bevy.
   the way Source decodes them and come out as bone poses.
 - VTF textures, converted to DDS, sprite sheets included
 - KeyValues text and sound scripts
+- Hammer VMF chambers, brush faces built from their side planes
+- the entity lump of Portal's own maps, for reading timings and wiring
 - binary DMX particle files (`.pcf`)
 
 **It runs the particles the gun and the portals use:** every initializer,
@@ -295,13 +304,15 @@ Read from Portal's binaries and files:
 
 Still stand-ins or estimates:
 
-- World geometry remains an AABB chamber. Swept collision supports walls,
-  corners, ceilings and steps; slopes, moving platforms, water and ladders
-  are not represented.
+- Chambers are brushes from our own VMF files, not compiled maps, so there is
+  no baked lighting, no displacement and no water. Moving platforms and
+  ladders are not represented yet.
+- Observation glass only tints what is behind it. The refraction, blur and
+  reflection of Portal's Refract shader are not drawn yet.
 - Portal collision covers the chamber's own geometry and the cube. The extra
   trace the game runs through a portal when nothing was hit is not reproduced.
-- Where a portal fits: the fitting rules are ported but not yet checked against
-  `VerifyPortalPlacement`.
+- Where a portal fits: the surface checks of `VerifyPortalPlacement` are
+  ported, the fitting rules are not yet checked against it.
 - Sound is not positional yet, so the portals' ambient hum is left out and the
   cube's impacts and scrapes play at the same loudness wherever it is.
 
@@ -484,7 +495,8 @@ cargo run -p portal --example portal_inspect -- "/path/to/Steam/steamapps/common
 | `src/args.rs`, `src/settings.rs`, `src/script.rs` | Flags, the settings file and timed scripts. |
 | `src/options.rs`, `src/menu.rs` | Staged improvement settings and the Escape menu. |
 | `src/units.rs` | Source units to Bevy metres, the only place that converts. |
-| `src/chamber.rs`, `src/scene.rs` | The test chamber and its drawing. |
+| `assets/chambers/` | The chambers, as Hammer VMF files. |
+| `src/chamber.rs`, `src/scene.rs` | Loading a chamber's brushes and drawing them. |
 | `src/body.rs`, `src/bodyanim.rs` | The capsule rig, Portal animation clips and held world gun, visible in portals. |
 | `src/walker.rs`, `src/player.rs` | Moving through the chamber, mouse look and crossing portals. |
 | `src/gun.rs`, `src/firing.rs` | The gun's shots and what happens when they land. |
