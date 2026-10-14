@@ -438,9 +438,45 @@ fn a_throw_spins_the_cube_through_its_own_inertia_in_radians() {
     objects.throw([1.0, 0.0, 0.0], [10.0, 0.0, 0.0]);
     let want = (40.0f32 * std::f32::consts::PI / 180.0 / (0.12165254 * 40.000004)).to_degrees();
     assert!(
-        (objects.cube.angular_velocity[0] - want).abs() < 0.01,
+        (objects.cube.angular_velocity[0] - want).abs() < 0.001,
         "spin {:?} want {want}",
         objects.cube.angular_velocity
     );
     assert!((objects.cube.velocity[0] - 100.0).abs() < 0.001);
+}
+
+#[test]
+fn a_cube_pushed_into_a_portal_meets_a_slab_on_the_far_side_before_its_centre_crosses() {
+    let pair = [
+        Portal::new(
+            [0.0, 0.0, 54.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        ),
+        Portal::new(
+            [300.0, 250.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0],
+            (32.0, 54.0),
+        ),
+    ];
+    let mut chamber = room();
+    chamber
+        .blocks
+        .push(block([240.0, 190.0, 10.0], [360.0, 310.0, 20.0]));
+    let player = Walker::at([400.0, -400.0, 0.0]);
+    let mut objects = Objects::default();
+    objects.advance(0.015, &player, &chamber, Some(pair), None, 0.0);
+    objects.cube = RigidCube::at([24.0, 0.0, 54.0]);
+    for i in 1..200 {
+        objects.cube.velocity[0] = -60.0;
+        objects.advance(0.015, &player, &chamber, Some(pair), None, i as f32 * 0.015);
+    }
+    assert_eq!(objects.visual_revision, 0, "crossed into the slab");
+    assert!(
+        objects.cube.position[0] > 0.0,
+        "centre went behind the portal at {:?}",
+        objects.cube.position
+    );
 }

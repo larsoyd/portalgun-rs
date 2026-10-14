@@ -40,6 +40,8 @@ fn materials_combine_as_a_product_clamped_to_one() {
 fn rotation_splits_into_substeps_past_a_sixth_of_a_radian() {
     assert_eq!(rotation_steps(10.0, 0.0166), 1);
     assert_eq!(rotation_steps(10.0, 0.0167), 3);
+    assert_eq!(rotation_steps(10.0, 0.016666), 1);
+    assert_eq!(rotation_steps(10.0, 0.016667), 3);
     assert_eq!(rotation_steps(100.0, 0.015), 18);
 }
 
@@ -117,7 +119,7 @@ fn sleep_accepts_fast_spin_when_the_last_step_barely_turned() {
 #[test]
 fn sleep_restarts_the_window_after_the_orientation_turns() {
     let mut turned = still();
-    let half = 0.0041f64;
+    let half = 0.00405f64;
     turned.rotation = [half.sin(), 0.0, 0.0, half.cos()];
     turned.previous_rotation = turned.rotation;
     let mut check = SleepCheck::new(&still(), 0.0);
