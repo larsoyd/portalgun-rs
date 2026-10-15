@@ -56,6 +56,8 @@ pub struct Sequence {
     pub param_end: [f32; 2],
     pub weights: Vec<f32>,
     pub layers: Vec<usize>,
+    /// local entry and exit node, both 0 when the model has no transition graph
+    pub nodes: [i32; 2],
 }
 
 #[derive(Debug, Clone, Default)]
@@ -208,6 +210,7 @@ impl Mdl {
                 layers,
                 param_start: r.f32s(o + 84)?,
                 param_end: r.f32s(o + 92)?,
+                nodes: [r.i32(o + 112)?, r.i32(o + 116)?],
             })
         })?;
         m.textures = r.table(204, 64, |o| r.name(o, o))?;
