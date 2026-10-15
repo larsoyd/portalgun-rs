@@ -4,7 +4,9 @@
 mod door;
 pub mod io;
 mod logic;
+mod math;
 mod sound;
+mod spawn;
 mod trigger;
 
 use std::collections::HashMap;
@@ -17,6 +19,7 @@ use door::Door;
 use io::{name_matches, Event, Handle, OutputEvent, Queue, Target};
 use logic::{Auto, Relay};
 use sound::Ambient;
+use spawn::{Maker, Template};
 use trigger::{Filter, Trigger};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,6 +89,8 @@ enum Kind {
     Ambient(Ambient),
     Door(Door),
     Toggle(String),
+    Template(Template),
+    Maker(Maker),
     Relay(Relay),
     Auto(Auto),
     Trigger(Trigger),
@@ -119,6 +124,8 @@ struct Slot {
     gone: bool,
     dissolving: bool,
     frame: u8,
+    entity: Entity,
+    pose: (Vec3, Vec3),
 }
 
 impl Slot {
@@ -139,6 +146,8 @@ pub struct World {
     stamps: HashMap<Handle, u32>,
     checked: Vec<Handle>,
     enabled: Vec<Handle>,
+    spawned: Vec<Handle>,
+    refusals: Vec<String>,
 }
 
 /// atoi, as the datadesc keyvalue parser reads integer and boolean fields
@@ -171,6 +180,10 @@ fn float_key(e: &Entity, key: &str) -> f32 {
     t[..end].parse().unwrap_or(0.0)
 }
 
+const WORLD_EDGE: f32 = 16384.0;
+const SPEED_LIMIT: f32 = 2000.0;
+const USE_OUTPUT: u32 = 0x100;
+
 impl World {
     pub const TICK: f32 = 0.015;
 
@@ -191,14 +204,21 @@ impl World {
         for e in ents {
             world.slots.push(slot(e, bounds(e)));
         }
-        world.activate();
+        for i in 0..world.slots.len() {
+            spawn::build(&mut world, Handle(i as u32));
+        }
+        for i in 0..world.slots.len() {
+            if !world.slots[i].gone {
+                world.activate(Handle(i as u32));
+            }
+        }
         world
     }
 
-    fn activate(&mut self) {
+    fn activate(&mut self, h: Handle) {
         let now = self.now();
-        for i in 0..self.slots.len() {
-            let h = Handle(i as u32);
+        let i = h.0 as usize;
+        {
             match &self.slots[i].kind {
                 Kind::Auto(_) => self.set_think(h, now + logic::AUTO_DELAY, Think::Auto),
                 Kind::Trigger(t) => {
@@ -211,9 +231,74 @@ impl World {
                     a.bind_source(self, h);
                     self.slots[i].kind = Kind::Ambient(a);
                 }
+                Kind::Maker(_) => spawn::check_maker(self, h),
                 _ => {}
             }
         }
+    }
+
+    /// Translated from 0x8450f0 (decompiled, server.so), a template copy spawns and activates at once
+    fn instantiate(&mut self, mut e: Entity, origin: Vec3, angles: Vec3) {
+        let text = |v: Vec3| format!("{} {} {}", v[0], v[1], v[2]);
+        e.keys.retain(|(k, _)| {
+            !k.eq_ignore_ascii_case("origin") && !k.eq_ignore_ascii_case("angles")
+        });
+        e.keys.push(("origin".into(), text(origin)));
+        e.keys.push(("angles".into(), text(angles)));
+        self.slots.push(slot(&e, None));
+        let h = Handle(self.slots.len() as u32 - 1);
+        self.activate(h);
+        self.spawned.push(h);
+    }
+
+    fn refuse(&mut self, reason: String) {
+        self.refusals.push(reason);
+    }
+
+    /// what this world cannot run faithfully, the app refuses to start on any
+    pub fn refusals(&self) -> &[String] {
+        &self.refusals
+    }
+
+    pub fn drain_spawned(&mut self) -> Vec<Handle> {
+        std::mem::take(&mut self.spawned)
+    }
+
+    pub fn entity(&self, h: Handle) -> &Entity {
+        &self.slot(h).entity
+    }
+
+    /// origin and angles, from the keyvalues or the last physics update
+    pub fn pose(&self, h: Handle) -> (Vec3, Vec3) {
+        let (angles, origin) = self.slot(h).pose;
+        (origin, angles)
+    }
+
+    /// Translated from 0x93ca10 and 0x49ba70 (disassembled, server.so)
+    pub fn prop_update(&mut self, h: Handle, origin: Vec3, velocity: Vec3) {
+        self.slot_mut(h).pose.1 = origin;
+        let out = |v: Vec3, edge: f32| v.iter().any(|&c| c >= edge || c <= -edge);
+        if out(origin, WORLD_EDGE) || out(velocity, SPEED_LIMIT) {
+            self.fire(h, "onoutofworld", Some(h), 0.0);
+        }
+    }
+
+    /// Translated from 0x939b50 (decompiled, server.so)
+    pub fn player_use(&mut self, h: Handle, _player: Handle) {
+        if self.slot(h).spawnflags & USE_OUTPUT != 0 {
+            self.fire(h, "onplayeruse", Some(h), 0.0);
+        }
+    }
+
+    /// Translated from 0x8cb140, 0x94cab0 (decompiled, server.so), a +use pickup passes reason 2
+    pub fn picked_up(&mut self, h: Handle, player: Handle) {
+        self.fire(h, "onphysgunpickup", Some(player), 0.0);
+        self.fire(h, "onplayerpickup", Some(player), 0.0);
+    }
+
+    /// Translated from 0x94cfc0 (decompiled, server.so)
+    pub fn dropped(&mut self, h: Handle, player: Handle) {
+        self.fire(h, "onphysgundrop", Some(player), 0.0);
     }
 
     pub fn now(&self) -> f32 {
@@ -511,9 +596,10 @@ impl World {
             Kind::Ambient(_) => sound::input(self, h, &lower),
             Kind::Door(_) => door::input(self, h, &lower),
             Kind::Toggle(_) => self.toggle_input(h, &lower, value),
+            Kind::Maker(_) => spawn::input(self, h, &lower),
             Kind::Relay(_) => logic::relay_input(self, h, &lower, activator),
             Kind::Trigger(_) => trigger::input(self, h, &lower),
-            Kind::Auto(_) | Kind::Filter(_) | Kind::Other => false,
+            Kind::Auto(_) | Kind::Filter(_) | Kind::Template(_) | Kind::Other => false,
         }
     }
 
@@ -679,6 +765,8 @@ fn slot(e: &Entity, bounds: Option<(Vec3, Vec3)>) -> Slot {
     let mut spawnflags = int_key(e, "spawnflags") as u32;
     let kind = match e.classname.as_str() {
         "func_door" => door_of(e, bounds, spawnflags),
+        "point_template" => Kind::Template(Template::new(e)),
+        "env_entity_maker" => Kind::Maker(Maker::new(e.get("EntityTemplate").unwrap_or_default())),
         "env_texturetoggle" => Kind::Toggle(e.get("target").unwrap_or_default().to_string()),
         "ambient_generic" => Kind::Ambient(Ambient::new(
             e.get("message").unwrap_or_default(),
@@ -730,5 +818,7 @@ fn slot(e: &Entity, bounds: Option<(Vec3, Vec3)>) -> Slot {
         gone: false,
         dissolving: false,
         frame: 0,
+        entity: e.clone(),
+        pose: (vec3_key(e, "angles"), vec3_key(e, "origin")),
     }
 }
