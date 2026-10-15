@@ -83,7 +83,8 @@ pub fn apply(
             .transpose()
     };
     material.base.normal_map_texture = image(&p.normal, false)?;
-    material.extension.exponent = image(&p.exponent, false)?;
+    // the game ships materials that name a missing exponent with phong off
+    material.extension.exponent = image(&p.exponent.clone().filter(|_| p.enabled), false)?;
     material.extension.lightwarp = image(&p.warp, false)?;
     material.extension.phong = Vec4::new(p.fresnel[0], p.fresnel[1], p.fresnel[2], p.boost);
     material.extension.model_flags = Vec4::new(
