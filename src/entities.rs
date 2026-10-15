@@ -106,6 +106,38 @@ impl Entities {
     }
 }
 
+/// Translated from 0x861000 and 0x8607e0 (decompiled, server.so), active effects start at activation
+pub fn start_particles(
+    chamber: &Chamber,
+    fx: &mut crate::effects::ParticleEffects,
+) -> Result<usize, String> {
+    let mut started = 0;
+    for e in chamber
+        .entities
+        .iter()
+        .filter(|e| e.classname == "info_particle_system")
+    {
+        if e.get("start_active") != Some("1") {
+            continue;
+        }
+        let name = e.get("effect_name").unwrap_or_default();
+        let origin = e.origin().unwrap_or_default();
+        let mut angles = [0.0; 3];
+        for (a, v) in angles
+            .iter_mut()
+            .zip(e.get("angles").unwrap_or_default().split_whitespace())
+        {
+            *a = v
+                .parse()
+                .map_err(|_| format!("info_particle_system {name} angles unreadable"))?;
+        }
+        fx.spawn_named(name, crate::effects::Frame::entity(origin, angles))?;
+        info!("[entity] particle name={name} at={origin:?} angles={angles:?}");
+        started += 1;
+    }
+    Ok(started)
+}
+
 /// what one tick of the entity world reaches in the game around it
 struct Game<'a> {
     level: &'a mut Chamber,

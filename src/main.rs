@@ -87,7 +87,7 @@ fn run(args: Args, mut app: App) -> ExitCode {
         Ok(i) => i,
         Err(e) => return refuse(&e.to_string()),
     };
-    let particles = match portalgun::effects::ParticleEffects::read(&install) {
+    let mut particles = match portalgun::effects::ParticleEffects::read(&install) {
         Ok(p) => p,
         Err(e) => return refuse(&e),
     };
@@ -103,6 +103,9 @@ fn run(args: Args, mut app: App) -> ExitCode {
         Ok(e) => e,
         Err(e) => return refuse(&e),
     };
+    if let Err(e) = portalgun::entities::start_particles(&chamber, &mut particles) {
+        return refuse(&e);
+    }
     let (mdl, pieces) = match read_gun(&install.search) {
         Ok(g) => g,
         Err(e) => return refuse(&e),

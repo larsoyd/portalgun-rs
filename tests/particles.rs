@@ -235,3 +235,33 @@ fn a_stream_point_has_no_orientation_whatever_the_aim() {
         (Vec3::ZERO, Vec3::ZERO, Vec3::ZERO)
     );
 }
+
+#[test]
+fn the_cleanser_field_fills_a_sheet_across_its_entity_frame() {
+    let mut fx = ParticleEffects::read(&install()).unwrap();
+    let frame = portalgun::effects::Frame::entity([264.0, 0.0, 64.0], [0.0, 270.0, 0.0]);
+    fx.spawn_named("portal_cleanser", frame).unwrap();
+    let world = ParticleWorld::default();
+    for _ in 0..60 {
+        fx.simulate(1.0 / 60.0, &world);
+    }
+    let particles = fx.snapshot();
+    assert!(particles.len() > 100, "{} particles", particles.len());
+    let off = particles
+        .iter()
+        .map(|p| (p.xyz[0] - 264.0).abs())
+        .fold(0.0, f32::max);
+    assert!(off <= 1.001 && off > 0.5, "{off} off the sheet");
+    let (lo, hi) = particles.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
+        (lo.min(p.xyz[2]), hi.max(p.xyz[2]))
+    });
+    assert!(lo >= 0.0 && hi <= 128.0 && hi - lo > 100.0, "z {lo}..{hi}");
+}
+
+#[test]
+fn an_effect_the_port_cannot_run_is_refused_by_name() {
+    let mut fx = ParticleEffects::read(&install()).unwrap();
+    let frame = portalgun::effects::Frame::entity([0.0; 3], [0.0; 3]);
+    let refused = fx.spawn_named("human_cleanser", frame).unwrap_err();
+    assert!(refused.contains("human_cleanser"), "{refused}");
+}

@@ -82,6 +82,21 @@ impl Frame {
         }
     }
 
+    /// Control point 0 of an effect attached to an entity's origin, oriented by its angles, client 0x260b40
+    pub fn entity(origin: [f32; 3], angles: [f32; 3]) -> Self {
+        let (forward, right, up) = portal::viewbob::angle_vectors(portal::viewbob::Angles {
+            pitch: angles[0],
+            yaw: angles[1],
+            roll: angles[2],
+        });
+        Self {
+            origin: Vec3::from(origin),
+            forward: Vec3::from(forward),
+            right: Vec3::from(right),
+            up: Vec3::from(up),
+        }
+    }
+
     pub fn impact(p: &Portal, offset: f32) -> Self {
         Self {
             origin: Vec3::from(p.origin) + Vec3::from(p.forward) * offset,
@@ -106,6 +121,26 @@ struct Instance {
     owner: Option<(Colour, Effect)>,
 }
 
+/// every system of a file, or only the named roots and the children they pull in
+fn kept(systems: &[portal::pcf::SystemDef], roots: Option<&[&str]>) -> Vec<usize> {
+    let Some(roots) = roots else {
+        return (0..systems.len()).collect();
+    };
+    let mut keep: Vec<usize> = (0..systems.len())
+        .filter(|&i| roots.contains(&systems[i].name.as_str()))
+        .collect();
+    let mut next = 0;
+    while next < keep.len() {
+        for c in &systems[keep[next]].children {
+            if !keep.contains(&c.system) {
+                keep.push(c.system);
+            }
+        }
+        next += 1;
+    }
+    keep
+}
+
 #[derive(Resource)]
 pub struct ParticleEffects {
     pub(crate) defs: Vec<Definition>,
@@ -122,17 +157,21 @@ pub struct ParticleEffects {
 impl ParticleEffects {
     pub fn read(install: &Install) -> Result<Self, String> {
         let mut defs = Vec::new();
-        for file in [
-            "particles/portals.pcf",
-            "particles/portalgun.pcf",
-            "particles/portal_projectile.pcf",
+        for (file, roots) in [
+            ("particles/portals.pcf", None),
+            ("particles/portalgun.pcf", None),
+            ("particles/portal_projectile.pcf", None),
+            ("particles/cleansers.pcf", Some(&["portal_cleanser"][..])),
         ] {
             let bytes = install.search.read(file).map_err(|e| e.to_string())?;
             let elements = portal::dmx::parse(&bytes).map_err(|e| e.to_string())?;
+            let systems = portal::pcf::systems(&elements).map_err(|e| e.to_string())?;
+            let keep = kept(&systems, roots);
             let base = defs.len();
-            for mut def in portal::pcf::systems(&elements).map_err(|e| e.to_string())? {
+            for &i in &keep {
+                let mut def = systems[i].clone();
                 for child in &mut def.children {
-                    child.system += base;
+                    child.system = base + keep.iter().position(|&k| k == child.system).unwrap();
                 }
                 defs.push(Definition::new(&def)?);
             }
@@ -181,15 +220,27 @@ impl ParticleEffects {
         frame: Frame,
         cp1: Option<[f32; 3]>,
     ) -> u64 {
-        let name = effect.name(colour);
-        let index = self.names[&name];
+        let id = self
+            .spawn_named(&effect.name(colour), frame)
+            .expect("portal effects are loaded");
+        if let Some(at) = cp1 {
+            self.live
+                .get_mut(&id)
+                .unwrap()
+                .system
+                .set_control_point(1, at);
+        }
+        id
+    }
+    pub fn spawn_named(&mut self, name: &str, frame: Frame) -> Result<u64, String> {
+        let index = *self
+            .names
+            .get(&name.to_ascii_lowercase())
+            .ok_or_else(|| format!("particle system {name} not loaded"))?;
         self.next += 1;
         let seed = (self.next as u32).wrapping_mul(0x9e37_79b9) | 1;
         let mut system = System::new(&self.defs, index, 0.0, seed, &self.table);
         frame.apply(&mut system);
-        if let Some(at) = cp1 {
-            system.set_control_point(1, at);
-        }
         self.live.insert(
             self.next,
             Instance {
@@ -197,8 +248,9 @@ impl ParticleEffects {
                 owner: None,
             },
         );
-        self.next
+        Ok(self.next)
     }
+
     /// Control point 0 follows the effect's entity, as the shot stream does every frame.
     pub fn move_point(&mut self, id: u64, at: [f32; 3]) {
         if let Some(live) = self.live.get_mut(&id) {

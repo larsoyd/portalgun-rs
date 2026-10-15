@@ -148,3 +148,23 @@ fn a_box_meets_a_trigger_only_when_it_reaches_inside() {
         "above the top"
     );
 }
+
+#[test]
+fn an_active_particle_entity_starts_its_effect_at_activation_and_an_unknown_one_refuses() {
+    let dir = root(None, None, Path::new(&std::env::var("HOME").unwrap()));
+    let install = Install::open(&dir).unwrap();
+    let c = Chamber::named(&install.search, "entities").unwrap();
+    let mut fx = portalgun::effects::ParticleEffects::read(&install).unwrap();
+    assert_eq!(portalgun::entities::start_particles(&c, &mut fx), Ok(1));
+    assert_eq!(fx.instance_count(), 1);
+    let mut wrong = Chamber::named(&install.search, "entities").unwrap();
+    let e = wrong
+        .entities
+        .iter_mut()
+        .find(|e| e.classname == "info_particle_system")
+        .unwrap();
+    e.keys.retain(|(k, _)| k != "effect_name");
+    e.keys.push(("effect_name".into(), "human_cleanser".into()));
+    let refused = portalgun::entities::start_particles(&wrong, &mut fx).unwrap_err();
+    assert!(refused.contains("human_cleanser"), "{refused}");
+}
