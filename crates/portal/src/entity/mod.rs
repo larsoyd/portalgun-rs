@@ -4,6 +4,7 @@
 mod door;
 pub mod io;
 mod logic;
+mod sound;
 mod trigger;
 
 use std::collections::HashMap;
@@ -15,6 +16,7 @@ use crate::vmf::Entity;
 use door::Door;
 use io::{name_matches, Event, Handle, OutputEvent, Queue, Target};
 use logic::{Auto, Relay};
+use sound::Ambient;
 use trigger::{Filter, Trigger};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -76,11 +78,14 @@ struct Link {
 pub struct Sound {
     pub source: Handle,
     pub name: String,
+    pub stop: bool,
 }
 
 #[derive(Debug)]
 enum Kind {
+    Ambient(Ambient),
     Door(Door),
+    Toggle(String),
     Relay(Relay),
     Auto(Auto),
     Trigger(Trigger),
@@ -113,6 +118,7 @@ struct Slot {
     body: Body,
     gone: bool,
     dissolving: bool,
+    frame: u8,
 }
 
 impl Slot {
@@ -199,6 +205,11 @@ impl World {
                     let mut t = t.clone();
                     t.bind_filter(self);
                     self.slots[i].kind = Kind::Trigger(t);
+                }
+                Kind::Ambient(a) => {
+                    let mut a = a.clone();
+                    a.bind_source(self, h);
+                    self.slots[i].kind = Kind::Ambient(a);
                 }
                 _ => {}
             }
@@ -302,11 +313,42 @@ impl World {
 
     fn emit(&mut self, source: Handle, name: &str) {
         if !name.is_empty() {
-            self.sounds.push(Sound {
-                source,
-                name: name.to_string(),
-            });
+            self.sound(source, name, false);
         }
+    }
+
+    fn sound(&mut self, source: Handle, name: &str, stop: bool) {
+        self.sounds.push(Sound {
+            source,
+            name: name.to_string(),
+            stop,
+        });
+    }
+
+    /// the texture frame a toggle last gave this entity
+    pub fn frame(&self, h: Handle) -> u8 {
+        self.slot(h).frame
+    }
+
+    pub fn all(&self, name: &str) -> Vec<Handle> {
+        self.lookup(name, None, None)
+    }
+
+    /// Translated from 0x519050 and 0x519280 (decompiled, server.so)
+    fn toggle_input(&mut self, h: Handle, input: &str, value: Option<&str>) -> bool {
+        let Kind::Toggle(target) = &self.slot(h).kind else {
+            return false;
+        };
+        let set = match input {
+            "settextureindex" => Some(value.map_or(0, atoi) as u8),
+            "incrementtextureindex" => None,
+            _ => return false,
+        };
+        for t in self.all(&target.clone()) {
+            let frame = &mut self.slot_mut(t).frame;
+            *frame = set.unwrap_or(frame.wrapping_add(1));
+        }
+        true
     }
 
     pub fn drain_sounds(&mut self) -> Vec<Sound> {
@@ -384,7 +426,7 @@ impl World {
         }
         for h in targets {
             let label = self.slot(h).label().to_string();
-            let handled = self.accept(h, &e.input, e.activator);
+            let handled = self.accept(h, &e.input, e.value.as_deref(), e.activator);
             self.record(&caller, label, &e.input, &param, handled);
         }
     }
@@ -453,14 +495,22 @@ impl World {
         &mut self.slots[h.0 as usize]
     }
 
-    fn accept(&mut self, h: Handle, input: &str, activator: Option<Handle>) -> bool {
+    fn accept(
+        &mut self,
+        h: Handle,
+        input: &str,
+        value: Option<&str>,
+        activator: Option<Handle>,
+    ) -> bool {
         let lower = input.to_ascii_lowercase();
         if lower == "kill" {
             self.remove(h);
             return true;
         }
         match &self.slot(h).kind {
+            Kind::Ambient(_) => sound::input(self, h, &lower),
             Kind::Door(_) => door::input(self, h, &lower),
+            Kind::Toggle(_) => self.toggle_input(h, &lower, value),
             Kind::Relay(_) => logic::relay_input(self, h, &lower, activator),
             Kind::Trigger(_) => trigger::input(self, h, &lower),
             Kind::Auto(_) | Kind::Filter(_) | Kind::Other => false,
@@ -629,6 +679,12 @@ fn slot(e: &Entity, bounds: Option<(Vec3, Vec3)>) -> Slot {
     let mut spawnflags = int_key(e, "spawnflags") as u32;
     let kind = match e.classname.as_str() {
         "func_door" => door_of(e, bounds, spawnflags),
+        "env_texturetoggle" => Kind::Toggle(e.get("target").unwrap_or_default().to_string()),
+        "ambient_generic" => Kind::Ambient(Ambient::new(
+            e.get("message").unwrap_or_default(),
+            e.get("SourceEntityName"),
+            spawnflags,
+        )),
         "logic_relay" => Kind::Relay(Relay::new(int_key(e, "StartDisabled") != 0)),
         "logic_auto" => Kind::Auto(Auto::new(e.get("globalstate"))),
         "trigger_multiple" | "trigger_once" => {
@@ -673,5 +729,6 @@ fn slot(e: &Entity, bounds: Option<(Vec3, Vec3)>) -> Slot {
         body,
         gone: false,
         dissolving: false,
+        frame: 0,
     }
 }
