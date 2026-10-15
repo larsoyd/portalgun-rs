@@ -99,6 +99,10 @@ fn run(args: Args, mut app: App) -> ExitCode {
         Ok(c) => c,
         Err(e) => return refuse(&e.to_string()),
     };
+    let entities = match portalgun::entities::Entities::build(&chamber, &install.search) {
+        Ok(e) => e,
+        Err(e) => return refuse(&e),
+    };
     let (mdl, pieces) = match read_gun(&install.search) {
         Ok(g) => g,
         Err(e) => return refuse(&e),
@@ -136,6 +140,7 @@ fn run(args: Args, mut app: App) -> ExitCode {
         .insert_resource(Files(install.search))
         .insert_resource(sounds)
         .insert_resource(Level(chamber))
+        .insert_resource(entities)
         .add_plugins(ScenePlugin)
         .insert_resource(Config(settings))
         .insert_resource(portalgun::menu::SettingsPath(args.settings.clone()))
@@ -144,6 +149,8 @@ fn run(args: Args, mut app: App) -> ExitCode {
         .add_systems(Update, icon::set_window_icon)
         .add_plugins(PlayerPlugin)
         .add_plugins(portalgun::objects::ObjectsPlugin)
+        .add_plugins(portalgun::entities::EntitiesPlugin)
+        .add_plugins(portalgun::props::PropsPlugin)
         .add_plugins(portalgun::body::BodyPlugin)
         .insert_resource(GunMeshes(mdl, pieces))
         .add_plugins(ViewPlugin)

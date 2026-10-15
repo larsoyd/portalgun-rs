@@ -165,6 +165,14 @@ impl Chamber {
     }
 }
 
+/// a box meets a convex brush when its nearest corner is inside every bevelled plane
+pub fn box_meets(planes: &[Plane], centre: Vec3, half: Vec3) -> bool {
+    planes.iter().all(|p| {
+        let reach: f32 = (0..3).map(|i| p.normal[i].abs() * half[i]).sum();
+        dot(p.normal, centre) - reach < p.distance
+    })
+}
+
 impl Volume {
     fn from_solid(owner: usize, solid: &vmf::Solid) -> Volume {
         let (min, max) = brush::bounds(&brush::faces(&solid.sides));

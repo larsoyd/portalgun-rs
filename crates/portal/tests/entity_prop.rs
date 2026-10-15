@@ -105,7 +105,11 @@ fn the_default_animation_starts_at_spawn_and_comes_back_after_a_one_shot() {
     let mut seen = Vec::new();
     for tick in 2..102 {
         world.tick();
-        seen.extend(outputs(&mut world).into_iter().map(|o| format!("{o}@{tick}")));
+        seen.extend(
+            outputs(&mut world)
+                .into_iter()
+                .map(|o| format!("{o}@{tick}")),
+        );
     }
     assert_eq!(seen, ["begun@2", "done@77", "begun@77"]);
     assert_eq!(world.animation(h).map(|a| a.0), Some(0));

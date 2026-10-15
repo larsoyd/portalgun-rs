@@ -185,19 +185,30 @@ fn fizzle(
     mut portals: ResMut<Portals>,
     mut visual: Option<ResMut<crate::gun_visual::GunVisualState>>,
 ) {
-    if !std::mem::take(&mut controls.fizzle)
-        || (portals.open.iter().all(Option::is_none) && gun.flying().is_empty())
-    {
-        return;
+    if std::mem::take(&mut controls.fizzle) {
+        fizzle_all(&mut gun, &mut portals, visual.as_deref_mut(), "key");
+    }
+}
+
+/// Clears both portals and any shot still flying, true when there was something to clear.
+pub fn fizzle_all(
+    gun: &mut Firing,
+    portals: &mut Portals,
+    visual: Option<&mut crate::gun_visual::GunVisualState>,
+    source: &str,
+) -> bool {
+    if portals.open.iter().all(Option::is_none) && gun.flying().is_empty() {
+        return false;
     }
     for colour in Colour::ALL {
         portals.deactivate(colour);
     }
     gun.fizzle();
-    if let Some(visual) = visual.as_deref_mut() {
+    if let Some(visual) = visual {
         visual.fizzle_revision += 1;
     }
-    info!("[gun] fizzle portals=cleared pending=0");
+    info!("[gun] fizzle portals=cleared pending=0 source={source}");
+    true
 }
 
 #[cfg(test)]

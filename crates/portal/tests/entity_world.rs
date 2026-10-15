@@ -216,6 +216,10 @@ fn a_removed_entity_loses_its_name_at_once() {
     world.input("relay", "Trigger", None);
     assert_eq!(
         run(&mut world, 0.6),
-        ["relay.Trigger()", "relay.Trigger() unhandled", "probe.Enable()"]
+        [
+            "relay.Trigger()",
+            "relay.Trigger() unhandled",
+            "probe.Enable()"
+        ]
     );
 }

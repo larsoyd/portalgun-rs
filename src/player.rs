@@ -58,8 +58,23 @@ pub struct MovementPlugin;
 
 impl Plugin for MovementPlugin {
     fn build(&self, app: &mut App) {
-        let mut walker = Walker::at(SPAWN);
-        walker.yaw = 20.0;
+        let start = app
+            .world()
+            .get_resource::<crate::scene::Level>()
+            .and_then(|level| {
+                level
+                    .0
+                    .entities
+                    .iter()
+                    .find(|e| e.classname == "info_player_start")
+                    .cloned()
+            });
+        let mut walker = Walker::at(start.as_ref().and_then(|e| e.origin()).unwrap_or(SPAWN));
+        walker.yaw = start
+            .as_ref()
+            .and_then(|e| e.get("angles"))
+            .and_then(|a| a.split_whitespace().nth(1)?.parse().ok())
+            .unwrap_or(20.0);
         let history = VisualHistory::new(&walker);
         app.insert_resource(history.sample(&walker, 0.0))
             .insert_resource(history)
@@ -211,7 +226,10 @@ pub(crate) fn simulate(
         jump_pressed: pressed,
         crouch: controls.crouch,
     };
-    let obstacle = objects.as_ref().filter(|o| !o.holding()).map(|o| &o.cube);
+    let obstacle = objects
+        .as_ref()
+        .filter(|o| o.present && !o.holding())
+        .map(|o| &o.cube);
     result.0 = player.step_with_object(
         &input,
         time.delta_secs(),

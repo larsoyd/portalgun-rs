@@ -179,7 +179,7 @@ fn error_texture() -> Image {
     image
 }
 
-fn gun_mesh(data: &MeshData) -> Mesh {
+pub(crate) fn gun_mesh(data: &MeshData) -> Mesh {
     let s = skin(data);
     Mesh::new(
         PrimitiveTopology::TriangleList,

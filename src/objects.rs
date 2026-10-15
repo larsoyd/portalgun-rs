@@ -25,6 +25,10 @@ use crate::walker::Walker;
 #[derive(Resource)]
 pub struct Objects {
     pub cube: RigidCube,
+    /// false once the cleanser takes the cube, until a maker drops the next one
+    pub present: bool,
+    /// the copy the cleanser dissolves, gravity off, for its two seconds
+    pub dissolving: Option<Dissolving>,
     pub visual_revision: u64,
     pub carry: Option<Carry>,
     pair: Option<[Portal; 2]>,
@@ -42,6 +46,23 @@ pub struct Objects {
     /// sounds the last ticks asked for, drained by the sound system
     pub cues: Vec<Cue>,
 }
+
+pub struct Dissolving {
+    pub cube: RigidCube,
+    body: Body,
+    /// seconds since the cleanser made the copy
+    pub age: f32,
+}
+
+/// the dissolver removes its copy two seconds in, 0x4f7670 and 0x4f5fa0 in server.so
+pub const DISSOLVE_SECONDS: f32 = 2.0;
+/// a held cube is dropped at this many units a second along the flattened view, 0xa8478c
+const DROP_PUSH: f32 = 4.0;
+/// and this much lower than the player is moving, 0xa91b70
+const DROP_SINK: f32 = 32.0;
+/// the copy keeps half the speed, 0xa84748, and spins a further 20 about z, 0xa91528
+const COPY_SPEED: f32 = 0.5;
+const COPY_SPIN: f32 = 20.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Cue {
@@ -91,6 +112,8 @@ impl Default for Objects {
         let position = [-220.0, -80.0, 20.1];
         Self {
             cube: RigidCube::at(position),
+            present: true,
+            dissolving: None,
             visual_revision: 0,
             carry: None,
             pair: None,
@@ -115,12 +138,102 @@ impl Default for Objects {
 }
 
 impl Objects {
+    /// puts a fresh cube at rest at an entity's origin and angles
+    pub fn place(&mut self, origin: SourceVec, angles: SourceVec) {
+        let mut cube = RigidCube::at(origin);
+        let (forward, right, up) = angle_vectors(portal::viewbob::Angles {
+            pitch: angles[0],
+            yaw: angles[1],
+            roll: angles[2],
+        });
+        cube.rotation = [forward, right.map(|v| -v), up];
+        self.cube = cube.clone();
+        self.body = cube_body(&cube);
+        self.safe_position = origin;
+        self.safe_rotation = cube.rotation;
+        self.present = true;
+        self.carry = None;
+        self.rules = (None, false);
+        self.visual_revision += 1;
+    }
+
+    /// Translated from 0x932a00 (disassembled, server.so), the cube's side of the cleanser
+    pub fn dissolve(&mut self, player: &Walker) {
+        let mut velocity = self.cube.velocity;
+        if self.holding() {
+            let f = player.forward();
+            let flat = (f[0] * f[0] + f[1] * f[1]).sqrt();
+            let dir = if flat != 0.0 {
+                [f[0] / flat, f[1] / flat]
+            } else {
+                [0.0, 0.0]
+            };
+            let pv = player.velocity;
+            velocity = [
+                DROP_PUSH * dir[0] + pv[0],
+                DROP_PUSH * dir[1] + pv[1],
+                pv[2] - DROP_SINK,
+            ];
+            self.carry = None;
+        }
+        let mut cube = self.cube.clone();
+        cube.velocity = velocity.map(|v| v * COPY_SPEED);
+        cube.angular_velocity[2] += COPY_SPIN;
+        let mut body = cube_body(&cube);
+        body.position = cube.position.map(|v| (v * METRES) as f64);
+        body.rotation = from_axes(cube.rotation.map(|a| a.map(f64::from)));
+        body.previous_rotation = body.rotation;
+        body.speed = cube.velocity.map(|v| (v * METRES) as f64);
+        body.set_world_spin(cube.angular_velocity.map(|v| v.to_radians() as f64));
+        self.dissolving = Some(Dissolving {
+            cube,
+            body,
+            age: 0.0,
+        });
+        self.present = false;
+        self.visual_revision += 1;
+    }
+
+    /// The copy drifts without gravity against the world until the dissolver takes it.
+    fn advance_dissolving(&mut self, space: &Space, dt: f32, now: f32) {
+        let Some(d) = self.dissolving.as_mut() else {
+            return;
+        };
+        d.age += dt;
+        if d.age >= DISSOLVE_SECONDS {
+            self.dissolving = None;
+            info!("[object] dissolved");
+            return;
+        }
+        let solids: Vec<Solid> = space
+            .object_solids(None, false)
+            .iter()
+            .map(|&(id, block, planes)| {
+                let planes: Vec<_> = planes
+                    .iter()
+                    .map(|p| (p.normal.map(f64::from), (p.distance * METRES) as f64))
+                    .collect();
+                Solid {
+                    id,
+                    object: physics_object(id, block),
+                    hull: Convex::from_planes(&planes),
+                    friction: self.default_surface.friction,
+                    elasticity: self.default_surface.elasticity,
+                }
+            })
+            .filter(|s| s.hull.points.len() >= 4)
+            .collect();
+        step(&mut d.body, &solids, [0.0; 3], dt as f64, now as f64);
+        d.cube.position = d.body.position.map(|v| v as f32 / METRES);
+        d.cube.rotation = axes(d.body.rotation).map(|a| a.map(|v| v as f32));
+    }
+
     pub fn holding(&self) -> bool {
         self.carry.is_some()
     }
 
     pub fn push(&mut self, player: &Walker, forward: f32, side: f32) {
-        if self.holding() || player.ground == Some(usize::MAX - 1) {
+        if !self.present || self.holding() || player.ground == Some(usize::MAX - 1) {
             return;
         }
         let mut direction = add(
@@ -172,6 +285,9 @@ impl Objects {
     }
 
     pub fn use_object(&mut self, player: &Walker, space: &Space, now: f32) -> bool {
+        if !self.present {
+            return false;
+        }
         if self.holding() {
             self.release(now);
             return true;
@@ -210,6 +326,12 @@ impl Objects {
         crossed: Option<usize>,
         now: f32,
     ) {
+        if self.dissolving.is_some() {
+            self.advance_dissolving(&Space::new(chamber, None), dt, now);
+        }
+        if !self.present {
+            return;
+        }
         let mut space = Space::new(chamber, pair.as_ref());
         if self.pair != pair {
             if self.carry.as_ref().is_some_and(|c| c.portal.is_some()) {

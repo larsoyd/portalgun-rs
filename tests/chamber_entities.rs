@@ -110,11 +110,41 @@ fn the_entities_chamber_loads_with_doors_triggers_and_a_closed_room() {
         .map(|o| c.entities[o].get("targetname").unwrap())
         .collect();
     assert_eq!(owners, ["button_door", "exit_door_right", "exit_door_left"]);
-    let triggers: Vec<&str> = c.volumes.iter().map(|v| c.entities[v.owner].get("targetname").unwrap()).collect();
-    assert_eq!(triggers, ["button_trigger_box", "button_trigger_player", "fryer"]);
+    let triggers: Vec<&str> = c
+        .volumes
+        .iter()
+        .map(|v| c.entities[v.owner].get("targetname").unwrap())
+        .collect();
+    assert_eq!(
+        triggers,
+        ["button_trigger_box", "button_trigger_player", "fryer"]
+    );
     for b in c.blocks.iter().filter(|b| b.owner.is_none()) {
         assert!(b.sides.iter().all(|s| s.points.len() == 4), "{:?}", b.min);
     }
-    let down = c.cast([-384.0, 0.0, 64.0], [0.0, 0.0, -1.0], 1000.0).unwrap();
+    let down = c
+        .cast([-384.0, 0.0, 64.0], [0.0, 0.0, -1.0], 1000.0)
+        .unwrap();
     assert_eq!(down.distance, 64.0);
+}
+
+#[test]
+fn a_box_meets_a_trigger_only_when_it_reaches_inside() {
+    let c = Chamber::from_vmf(&search(), &map()).unwrap();
+    let pad = &c.volumes[0].planes;
+    let half = [16.0, 16.0, 36.0];
+    assert!(portalgun::chamber::box_meets(pad, [190.0, 0.0, 64.0], half));
+    assert!(
+        !portalgun::chamber::box_meets(pad, [184.0, 0.0, 64.0], half),
+        "flush with the face is outside"
+    );
+    assert!(!portalgun::chamber::box_meets(
+        pad,
+        [150.0, 0.0, 64.0],
+        half
+    ));
+    assert!(
+        !portalgun::chamber::box_meets(pad, [190.0, 0.0, 164.0], half),
+        "above the top"
+    );
 }
