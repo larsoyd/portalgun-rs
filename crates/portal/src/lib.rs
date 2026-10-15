@@ -11,6 +11,7 @@ pub mod bsp;
 pub mod carry;
 pub mod crosshair;
 pub mod dmx;
+pub mod entity;
 mod error;
 pub mod gun_fx;
 pub mod install;
