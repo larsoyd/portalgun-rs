@@ -196,7 +196,7 @@ fn tex_axis(text: &str) -> Result<TexAxis> {
     })
 }
 
-fn vec3(text: &str) -> Result<Vec3> {
+pub(crate) fn vec3(text: &str) -> Result<Vec3> {
     let v = text
         .split_whitespace()
         .map(|x| number(x, text))

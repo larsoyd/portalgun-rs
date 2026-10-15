@@ -29,6 +29,7 @@ pub struct Map {
     pub entities: Vec<Entity>,
     /// mins and maxs of each brush model, *0 is the world
     pub models: Vec<(Vec3, Vec3)>,
+    pub overlays: Vec<crate::overlay::Overlay>,
 }
 
 pub fn open(root: &Path, name: &str) -> Result<Vec<Entity>> {
@@ -51,6 +52,7 @@ pub fn load(root: &Path, name: &str) -> Result<Map> {
     Ok(Map {
         entities: entities(&bytes)?,
         models: models(&bytes)?,
+        overlays: crate::overlay::lump(&bytes)?,
     })
 }
 
