@@ -242,6 +242,26 @@ A material decides what a shot does there, the way the server decides it:
 `%noportal` and glass refuse a portal, glass stops the shot, and Portal's orange
 light strips let it fly straight through.
 
+### The entities chamber
+
+`--chamber entities` loads a second room, wired the way Test Chamber 00 wires
+its puzzle: a floor button, an exit door, a cleanser field, a cube dropper and
+an indicator strip on the floor. The entities run on the original's
+input/output rules, read from `server.so`: outputs queue with their delays,
+triggers fire on touch and on their wait, doors slide with their speed and lip
+and carry the player standing on them, and relays guard against refiring.
+
+- Put the cube or yourself on the button and the doors open, the strip turns
+  from blue to orange and the button's sounds play. Step off and it all reverses.
+- Carry the cube into the field and it is dissolved: it turns black over a
+  second, throws sparks, fades out at two seconds, and the dropper drops a new
+  one.
+- Walking through the field with portals open fizzles them.
+
+Overlays such as the indicator strip are cut to the faces they lie on the way
+`engine.so` builds them. The field's particles are Portal's own
+`portal_cleanser` effect.
+
 ### The portal crate
 
 The `portal` crate holds everything that does not need an engine. It has no
@@ -255,7 +275,8 @@ dependencies and does not use Bevy.
 - VTF textures, converted to DDS, sprite sheets included
 - KeyValues text and sound scripts
 - Hammer VMF chambers, brush faces built from their side planes
-- the entity lump of Portal's own maps, for reading timings and wiring
+- the entity lump and overlays of Portal's own maps, for reading timings and wiring
+- PHY collision models
 - binary DMX particle files (`.pcf`)
 
 **It runs the particles the gun and the portals use:** every initializer,
@@ -490,13 +511,15 @@ cargo run -p portal --example portal_inspect -- "/path/to/Steam/steamapps/common
 
 | Path | What it is |
 |---|---|
-| `crates/portal/` | The engine-free crate: file readers, particles, portal maths, player movement. |
+| `crates/portal/` | The engine-free crate: file readers, particles, portal maths, player movement, the entity world. |
 | `src/main.rs` | Startup. Finds and checks the install, then opens the window. |
 | `src/args.rs`, `src/settings.rs`, `src/script.rs` | Flags, the settings file and timed scripts. |
 | `src/options.rs`, `src/menu.rs` | Staged improvement settings and the Escape menu. |
 | `src/units.rs` | Source units to Bevy metres, the only place that converts. |
 | `assets/chambers/` | The chambers, as Hammer VMF files. |
 | `src/chamber.rs`, `src/scene.rs` | Loading a chamber's brushes and drawing them. |
+| `src/entities.rs`, `src/props.rs`, `src/overlays.rs` | Running a chamber's entities, drawing its props and overlays. |
+| `src/dissolve_fx.rs` | The sparks of a cube dissolving in a cleanser field. |
 | `src/body.rs`, `src/bodyanim.rs` | The capsule rig, Portal animation clips and held world gun, visible in portals. |
 | `src/walker.rs`, `src/player.rs` | Moving through the chamber, mouse look and crossing portals. |
 | `src/gun.rs`, `src/firing.rs` | The gun's shots and what happens when they land. |
