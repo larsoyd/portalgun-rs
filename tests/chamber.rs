@@ -248,7 +248,7 @@ fn panel(x: f32, material: &str) -> String {
     let (a, b) = (x, x + 4.0);
     let side = |p: &str| {
         format!(
-            "side {{ \"plane\" \"{p}\" \"material\" \"{material}\" \
+            "side {{ \"id\" \"1\" \"plane\" \"{p}\" \"material\" \"{material}\" \
              \"uaxis\" \"[0 1 0 0] 0.25\" \"vaxis\" \"[0 0 -1 0] 0.25\" }}"
         )
     };

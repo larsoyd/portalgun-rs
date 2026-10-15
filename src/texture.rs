@@ -67,10 +67,27 @@ pub fn load(search: &SearchPath, name: &str) -> Result<Image, String> {
     load_as(search, name, true)
 }
 
-pub fn load_as(search: &SearchPath, name: &str, srgb: bool) -> Result<Image, String> {
+pub fn frames(search: &SearchPath, name: &str) -> Result<usize, String> {
     let path = format!("materials/{name}.vtf");
     let vtf = search.read(&path).map_err(|e| format!("{path}: {e}"))?;
-    let dds = portal::vtf::to_dds(&vtf).map_err(|e| format!("{path}: {e}"))?;
+    Ok(portal::vtf::Vtf::parse(&vtf)
+        .map_err(|e| format!("{path}: {e}"))?
+        .frames)
+}
+
+/// One frame of an animated colour texture, as a texture toggle shows it.
+pub fn load_frame(search: &SearchPath, name: &str, frame: usize) -> Result<Image, String> {
+    decode(search, name, true, frame)
+}
+
+pub fn load_as(search: &SearchPath, name: &str, srgb: bool) -> Result<Image, String> {
+    decode(search, name, srgb, 0)
+}
+
+fn decode(search: &SearchPath, name: &str, srgb: bool, frame: usize) -> Result<Image, String> {
+    let path = format!("materials/{name}.vtf");
+    let vtf = search.read(&path).map_err(|e| format!("{path}: {e}"))?;
+    let dds = portal::vtf::frame_to_dds(&vtf, frame).map_err(|e| format!("{path}: {e}"))?;
     let format = portal::vtf::Vtf::parse(&vtf)
         .map_err(|e| format!("{path}: {e}"))?
         .format;

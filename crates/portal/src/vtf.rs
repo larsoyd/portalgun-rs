@@ -14,6 +14,7 @@ pub struct Vtf {
     pub height: u32,
     pub format: i32,
     pub mips: usize,
+    pub frames: usize,
     pub flags: u32,
     data: usize,
 }
@@ -103,6 +104,7 @@ impl Vtf {
             height,
             format: r.i32(52)?,
             mips: r.get::<1>(56)?[0].max(1) as usize,
+            frames: u16::from_le_bytes(r.get::<2>(24)?).max(1) as usize,
             flags: r.i32(20)? as u32,
             data,
         })
@@ -129,23 +131,31 @@ pub fn sheet(bytes: &[u8]) -> Result<Option<&[u8]>> {
 
 /// The first frame of a VTF as a DDS file with its full mip chain.
 pub fn to_dds(bytes: &[u8]) -> Result<Vec<u8>> {
+    frame_to_dds(bytes, 0)
+}
+
+/// One frame of a VTF, frames sit side by side within each mip level
+pub fn frame_to_dds(bytes: &[u8], frame: usize) -> Result<Vec<u8>> {
     let v = Vtf::parse(bytes)?;
     if v.flags & ENVMAP != 0 {
         return Err(Error::Unsupported("VTF cube maps".into()));
     }
+    if frame >= v.frames {
+        return Err(malformed("VTF", format!("frame {frame} of {}", v.frames)));
+    }
     let layout = layout(v.format)?;
-    let frames = Reader::new(bytes, "VTF").get::<2>(24)?;
-    let frames = u16::from_le_bytes(frames).max(1) as usize;
+    let frames = v.frames;
     let mut levels = vec![Vec::new(); v.mips];
     let mut at = v.data;
     for level in (0..v.mips).rev() {
         let (w, h) = level_dims(v.width, v.height, level);
         let size = level_size(&layout, w, h);
-        let img = bytes.get(at..at + size).ok_or_else(|| {
+        let start = at + size * frame;
+        let img = bytes.get(start..start + size).ok_or_else(|| {
             malformed(
                 "VTF",
                 format!(
-                    "mip {level} ({w}x{h}) at {at:#x} past the end ({:#x})",
+                    "mip {level} ({w}x{h}) at {start:#x} past the end ({:#x})",
                     bytes.len()
                 ),
             )

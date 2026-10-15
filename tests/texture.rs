@@ -94,3 +94,24 @@ fn world_materials_are_opaque_translucent_or_refracting_glass() {
     let want = [183.0 / 255.0, 204.0 / 255.0, 218.0 / 255.0];
     assert!((0..3).all(|k| (tint[k] - want[k]).abs() < 1e-6), "{tint:?}");
 }
+
+#[test]
+fn the_floor_indicator_has_an_off_and_an_on_frame() {
+    let files = portal::install::Install::open(&portal::install::root(
+        None,
+        None,
+        std::path::Path::new(&std::env::var("HOME").unwrap()),
+    ))
+    .unwrap()
+    .search;
+    let name = "signage/indicator_lights/indicator_lights_floor";
+    assert_eq!(portalgun::texture::frames(&files, name), Ok(2));
+    let off = portalgun::texture::load_frame(&files, name, 0).unwrap();
+    let on = portalgun::texture::load_frame(&files, name, 1).unwrap();
+    assert_eq!(off.size(), on.size());
+    assert_ne!(off.data, on.data);
+    assert_eq!(
+        portalgun::texture::load(&files, name).unwrap().data,
+        off.data
+    );
+}

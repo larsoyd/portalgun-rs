@@ -17,6 +17,7 @@ pub struct TexAxis {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Side {
+    pub id: u32,
     pub plane: Plane,
     pub material: String,
     pub u: TexAxis,
@@ -139,6 +140,10 @@ fn side(kv: &Kv) -> Result<Side> {
             .ok_or_else(|| malformed("vmf", format!("side {id} has no {key}")))
     };
     Ok(Side {
+        id: field("id")?
+            .trim()
+            .parse()
+            .map_err(|_| malformed("vmf", format!("side id {id} unreadable")))?,
         plane: plane(field("plane")?).map_err(|e| malformed("vmf", format!("side {id}: {e}")))?,
         material: field("material")?.to_ascii_lowercase(),
         u: tex_axis(field("uaxis")?)?,

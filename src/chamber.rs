@@ -25,6 +25,8 @@ const CHAMBERS: [(&str, &str); 2] = [
 const NODRAW: &str = "tools/toolsnodraw";
 
 pub struct Side {
+    /// the map's side id, zero for generated boxes
+    pub id: u32,
     pub plane: Plane,
     pub material: String,
     pub surface: Surface,
@@ -244,6 +246,7 @@ impl Block {
             .map(|(i, s)| {
                 let poly = polys.iter().find(|p| p.side == i);
                 Side {
+                    id: s.id,
                     plane: Plane {
                         normal: s.plane.normal,
                         distance: s.plane.dist,
@@ -279,6 +282,7 @@ impl Block {
                 let mut normal = [0.0; 3];
                 normal[i] = sign;
                 sides.push(Side {
+                    id: 0,
                     plane: Plane {
                         normal,
                         distance: sign * at,

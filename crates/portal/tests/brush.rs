@@ -6,7 +6,7 @@ use portal::vmf::parse;
 
 fn side(points: &str, material: &str) -> String {
     format!(
-        "side {{ \"plane\" \"{points}\" \"material\" \"{material}\" \
+        "side {{ \"id\" \"1\" \"plane\" \"{points}\" \"material\" \"{material}\" \
          \"uaxis\" \"[1 0 0 8] 0.25\" \"vaxis\" \"[0 -1 0 0] 0.5\" }}"
     )
 }

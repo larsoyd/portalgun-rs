@@ -87,6 +87,7 @@ fn reads_world_sides_with_outward_planes_and_texture_axes() {
     assert_eq!(vmf.world.len(), 1);
     let sides = &vmf.world[0].sides;
     assert_eq!(sides.len(), 2);
+    assert_eq!((sides[0].id, sides[1].id), (1, 2));
     assert_eq!(sides[0].plane.normal, [0.0, 0.0, 1.0]);
     assert_eq!(sides[0].plane.dist, 64.0);
     assert_eq!(sides[1].plane.normal, [0.0, 0.0, -1.0]);

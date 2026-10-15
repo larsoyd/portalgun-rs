@@ -121,3 +121,37 @@ fn the_sheet_resource_comes_out_by_its_tag() {
     bytes.truncate(bytes.len() - 1);
     assert!(portal::vtf::sheet(&bytes).is_err(), "cut short");
 }
+
+#[test]
+fn each_frame_of_an_animated_texture_comes_out_with_its_own_mips() {
+    let level = |size: usize, frame: u8, mip: u8| vec![frame * 16 + mip; size];
+    let interleaved: Vec<Vec<u8>> = [(32, 1), (8, 2), (8, 3), (8, 4)]
+        .iter()
+        .map(|&(size, mip)| [level(size, 0, mip), level(size, 1, mip)].concat())
+        .collect();
+    let mut bytes = vtf(2, (8, 8), 13, 0, &interleaved);
+    bytes[24] = 2;
+    assert_eq!(Vtf::parse(&bytes).unwrap().frames, 2);
+    for frame in 0..2u8 {
+        let d =
+            dds::Dds::parse(portal::vtf::frame_to_dds(&bytes, frame as usize).unwrap()).unwrap();
+        assert_eq!(
+            d.level_data(0, 0).unwrap(),
+            &[frame * 16 + 1; 32][..],
+            "frame {frame}"
+        );
+        assert_eq!(
+            d.level_data(0, 3).unwrap(),
+            &[frame * 16 + 4; 8][..],
+            "frame {frame}"
+        );
+    }
+    assert_eq!(
+        to_dds(&bytes).unwrap(),
+        portal::vtf::frame_to_dds(&bytes, 0).unwrap()
+    );
+    let refused = portal::vtf::frame_to_dds(&bytes, 2)
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("frame 2"), "{refused}");
+}

@@ -18,7 +18,7 @@ fn panel(x: f32, material: &str) -> String {
     let (a, b) = (x, x + 4.0);
     let side = |p: &str| {
         format!(
-            "side {{ \"plane\" \"{p}\" \"material\" \"{material}\" \
+            "side {{ \"id\" \"1\" \"plane\" \"{p}\" \"material\" \"{material}\" \
              \"uaxis\" \"[0 1 0 0] 0.25\" \"vaxis\" \"[0 0 -1 0] 0.25\" }}"
         )
     };
@@ -167,4 +167,54 @@ fn an_active_particle_entity_starts_its_effect_at_activation_and_an_unknown_one_
     e.keys.push(("effect_name".into(), "human_cleanser".into()));
     let refused = portalgun::entities::start_particles(&wrong, &mut fx).unwrap_err();
     assert!(refused.contains("human_cleanser"), "{refused}");
+}
+
+#[test]
+fn the_indicator_overlay_lies_a_tenth_above_its_floor_side() {
+    let c = Chamber::named(&search(), "entities").unwrap();
+    let built = portalgun::overlays::build(&c).unwrap();
+    assert_eq!(built.len(), 1);
+    let o = &built[0];
+    assert_eq!(c.entities[o.entity].get("targetname"), Some("indicator"));
+    assert_eq!(
+        o.material,
+        "signage/indicator_lights/indicator_lights_floor"
+    );
+    assert!(o.polys.len() >= 2, "{} fragments", o.polys.len());
+    for v in o.polys.iter().flatten() {
+        assert!((v.pos[2] - 0.1).abs() < 1e-5, "{v:?}");
+        assert!(
+            (31.99..=480.01).contains(&v.pos[0]) && (-196.01..=-187.99).contains(&v.pos[1]),
+            "{v:?}"
+        );
+    }
+}
+
+#[test]
+fn an_overlay_on_a_side_the_chamber_lacks_is_refused() {
+    let mut c = Chamber::named(&search(), "entities").unwrap();
+    let e = c
+        .entities
+        .iter_mut()
+        .find(|e| e.classname == "info_overlay")
+        .unwrap();
+    e.keys.retain(|(k, _)| k != "sides");
+    e.keys.push(("sides".into(), "99999".into()));
+    let refused = portalgun::overlays::build(&c).unwrap_err();
+    assert!(refused.contains("99999"), "{refused}");
+}
+
+#[test]
+fn a_toggle_index_past_the_last_frame_wraps() {
+    use portalgun::overlays::frame;
+    assert_eq!(
+        [
+            frame(0, 2),
+            frame(1, 2),
+            frame(2, 2),
+            frame(3, 2),
+            frame(5, 3)
+        ],
+        [0, 1, 0, 1, 2]
+    );
 }

@@ -11,7 +11,7 @@ const FLOOR: &str = "concrete/concrete_modular_floor001a";
 
 fn side(points: &str) -> String {
     format!(
-        "side {{ \"plane\" \"{points}\" \"material\" \"{FLOOR}\" \
+        "side {{ \"id\" \"1\" \"plane\" \"{points}\" \"material\" \"{FLOOR}\" \
          \"uaxis\" \"[1 0 0 0] 0.25\" \"vaxis\" \"[0 -1 0 0] 0.25\" }}"
     )
 }

@@ -213,3 +213,22 @@ fn a_quad_that_is_not_a_parallelogram_is_refused() {
         .to_string();
     assert!(refused.contains("parallelogram"), "{refused}");
 }
+
+#[test]
+fn opposite_edges_must_run_within_a_hundredth_of_parallel_and_a_tenth_of_length() {
+    let (c, s) = (10f32.to_radians().cos(), 10f32.to_radians().sin());
+    let turned = floor([
+        [-16.0, -16.0],
+        [-16.0, 16.0],
+        [-16.0 + 32.0 * c, 16.0 + 32.0 * s],
+        [16.0, -16.0],
+    ]);
+    assert!(
+        turned.fragments(&big_floor(), UP).is_err(),
+        "10 degrees apart"
+    );
+    let longer = floor([[-16.0, -16.0], [-16.0, 16.0], [16.15, 16.0], [16.0, -16.0]]);
+    assert!(longer.fragments(&big_floor(), UP).is_err(), "0.15 longer");
+    let close = floor([[-16.0, -16.0], [-16.0, 16.0], [16.05, 16.0], [16.0, -16.0]]);
+    assert!(close.fragments(&big_floor(), UP).is_ok(), "0.05 longer");
+}

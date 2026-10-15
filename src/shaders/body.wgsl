@@ -82,6 +82,8 @@ fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> FragmentOut
     var color = apply_pbr_lighting(pbr);
 #ifdef VERTEX_UVS_A
     if model_flags.x > 0.0 { color = model_lighting(pbr, in.uv, base_alpha); }
+    // world self illumination lerps to the texture by its alpha
+    else if model_flags.z > 0.0 { color = vec4<f32>(mix(color.rgb, pbr.material.base_color.rgb, base_alpha), color.a); }
 #endif
     out.color = main_pass_post_lighting_processing(pbr, color);
     return out;

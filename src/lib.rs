@@ -42,6 +42,7 @@ pub mod menu;
 pub mod model_material;
 pub mod objects;
 pub mod options;
+pub mod overlays;
 pub mod particle_material;
 
 pub mod object_render;
