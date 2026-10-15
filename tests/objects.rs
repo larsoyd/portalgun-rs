@@ -610,3 +610,70 @@ fn moving_the_far_portal_leaves_a_cube_in_this_portals_hole_alone() {
         objects.cube.position
     );
 }
+
+#[test]
+fn a_dissolving_copy_hangs_in_the_air_darkens_and_is_gone_after_two_seconds() {
+    let mut objects = Objects::default();
+    objects.place([100.0, 0.0, 100.0], [0.0; 3]);
+    let player = Walker::at([300.0, 0.0, 0.0]);
+    let chamber = room();
+    objects.dissolve(&player);
+    let mut now = 0.0;
+    let mut run = |objects: &mut Objects, seconds: f32| {
+        for _ in 0..(seconds / 0.015).round() as usize {
+            objects.advance(0.015, &player, &chamber, None, None, now);
+            now += 0.015;
+        }
+    };
+    run(&mut objects, 0.495);
+    let (cube, colour) = objects.shown().expect("the copy is shown");
+    assert!(
+        (cube.position[2] - 100.0).abs() < 0.01,
+        "fell to {:?}",
+        cube.position
+    );
+    assert_eq!(colour, [128, 128, 128, 255]);
+    run(&mut objects, 1.5);
+    assert!(objects.shown().is_some(), "gone early at {now}");
+    run(&mut objects, 0.015);
+    assert!(objects.shown().is_none(), "still shown at {now}");
+}
+
+#[test]
+fn a_placed_cube_is_shown_untinted() {
+    let mut objects = Objects::default();
+    objects.place([10.0, 20.0, 30.0], [0.0; 3]);
+    let (cube, colour) = objects.shown().unwrap();
+    assert_eq!((cube.position, colour), ([10.0, 20.0, 30.0], [255; 4]));
+}
+
+#[test]
+fn a_held_cube_is_dropped_into_the_field_at_half_the_push_with_extra_spin() {
+    let mut objects = Objects::default();
+    objects.cube = RigidCube::at([100.0, 0.0, 40.0]);
+    let mut player = Walker::at([40.0, 0.0, 0.0]);
+    player.pitch = 20.0;
+    let space = Space::new(&room(), None);
+    assert!(objects.use_object(&player, &space, 0.0));
+    player.yaw = 90.0;
+    player.velocity = [10.0, 20.0, 30.0];
+    let spin = objects.cube.angular_velocity;
+    objects.dissolve(&player);
+    assert!(!objects.holding());
+    let copy = &objects.dissolving.as_ref().unwrap().cube;
+    let v = copy.velocity;
+    let expected = [5.0, 12.0, -1.0];
+    assert!((0..3).all(|i| (v[i] - expected[i]).abs() < 1e-4), "{v:?}");
+    let w = copy.angular_velocity;
+    assert_eq!([w[0], w[1], w[2] - 20.0], spin);
+}
+
+#[test]
+fn a_loose_cube_keeps_half_its_own_speed_in_the_field() {
+    let mut objects = Objects::default();
+    objects.place([100.0, 0.0, 40.0], [0.0; 3]);
+    objects.cube.velocity = [40.0, -8.0, 2.0];
+    objects.dissolve(&Walker::at([300.0, 0.0, 0.0]));
+    let copy = &objects.dissolving.as_ref().unwrap().cube;
+    assert_eq!(copy.velocity, [20.0, -4.0, 1.0]);
+}

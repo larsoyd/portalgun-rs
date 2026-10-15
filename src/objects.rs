@@ -228,6 +228,15 @@ impl Objects {
         d.cube.rotation = axes(d.body.rotation).map(|a| a.map(|v| v as f32));
     }
 
+    /// the live cube, else the copy at its dissolve colour, and nothing once the cleanser is done
+    pub fn shown(&self) -> Option<(&RigidCube, [u8; 4])> {
+        match &self.dissolving {
+            _ if self.present => Some((&self.cube, [255; 4])),
+            Some(d) => Some((&d.cube, portal::entity::dissolve::colour(d.age))),
+            None => None,
+        }
+    }
+
     pub fn holding(&self) -> bool {
         self.carry.is_some()
     }

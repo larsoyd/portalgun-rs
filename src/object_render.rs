@@ -15,6 +15,8 @@ const MODEL: &str = "models/props/metal_box";
 #[derive(Resource)]
 struct CubeVisual {
     halves: Vec<(Entity, Handle<BodyMaterial>, bool)>,
+    /// a blended twin per piece, drawn at zero alpha so its pipeline is ready for a dissolve
+    fades: Vec<(Entity, Handle<BodyMaterial>)>,
     min: Vec3,
     max: Vec3,
 }
@@ -101,6 +103,7 @@ fn spawn(
         let (mdl, pieces) = crate::viewmodel::read_model(&files, MODEL)?;
         let (min, max) = bounds(&mdl)?;
         let mut halves = Vec::new();
+        let mut fades = Vec::new();
         for piece in pieces {
             let index = companion_material(&mdl, piece.material)?;
             let look = crate::viewmodel::look(&files, &mdl, index)?;
@@ -143,12 +146,35 @@ fn spawn(
                     .id();
                 halves.push((entity, surface, ghost));
             }
+            let mut surface = material(StandardMaterial {
+                base_color: Color::linear_rgba(1.0, 1.0, 1.0, 0.0),
+                base_color_texture: Some(texture.clone()),
+                alpha_mode: AlphaMode::Blend,
+                ..default()
+            });
+            surface.extension.player_owned = false;
+            crate::model_material::apply(&look, &files, &mut images, &mut surface)?;
+            let surface = materials.add(surface);
+            let entity = commands
+                .spawn((
+                    Mesh3d(mesh.clone()),
+                    MeshMaterial3d(surface.clone()),
+                    Transform::default(),
+                    Visibility::Hidden,
+                ))
+                .id();
+            fades.push((entity, surface));
         }
         info!(
             "[cube] model={MODEL} skin=1 min={min:?} max={max:?} halves={}",
             halves.len()
         );
-        Ok(CubeVisual { halves, min, max })
+        Ok(CubeVisual {
+            halves,
+            fades,
+            min,
+            max,
+        })
     })();
     match result {
         Ok(visual) => {
@@ -165,10 +191,21 @@ fn update(
     pose: Res<CubePose>,
     visual: Option<Res<CubeVisual>>,
     portals: Option<Res<Portals>>,
+    tint: Option<Res<crate::object_visual::CubeTint>>,
     mut materials: ResMut<Assets<BodyMaterial>>,
     mut halves: Query<(&mut Transform, &mut Visibility)>,
 ) {
     let Some(visual) = visual else { return };
+    let tint = tint.map_or(Some([255; 4]), |t| t.0);
+    let fading = tint.map(|[.., a]| a < 255);
+    let linear = |c: [u8; 4]| {
+        Color::linear_rgba(
+            c[0] as f32 / 255.0,
+            c[1] as f32 / 255.0,
+            c[2] as f32 / 255.0,
+            c[3] as f32 / 255.0,
+        )
+    };
     let transform = pose_transform(&pose);
     let rotation = Mat3::from_cols_array_2d(&pose.rotation);
     let centre = Vec3::from(pose.position) + rotation * ((visual.min + visual.max) * 0.5);
@@ -183,7 +220,7 @@ fn update(
         let Ok((mut at, mut visibility)) = halves.get_mut(*entity) else {
             continue;
         };
-        *visibility = if !ghost || split.is_some() {
+        *visibility = if fading.is_some_and(|f| !f) && (!ghost || split.is_some()) {
             Visibility::Inherited
         } else {
             Visibility::Hidden
@@ -195,12 +232,28 @@ fn update(
         } else {
             transform
         };
-        if let Some(mut surface) = materials.get_mut(handle) {
+        if let (Some(mut surface), Some([r, g, b, _])) = (materials.get_mut(handle), tint) {
+            surface.base.base_color = linear([r, g, b, 255]);
             surface.extension.plane =
                 split.as_ref().map_or(
                     Vec4::ZERO,
                     |split| if *ghost { split.exit } else { split.source },
                 );
+        }
+    }
+    for (entity, handle) in &visual.fades {
+        if let Ok((mut at, mut visibility)) = halves.get_mut(*entity) {
+            *at = transform;
+            *visibility = if tint.is_some() {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            };
+        }
+        if let Some(mut surface) = materials.get_mut(handle) {
+            let [r, g, b, a] = tint.unwrap_or([255; 4]);
+            surface.base.base_color = linear([r, g, b, if fading == Some(true) { a } else { 0 }]);
+            surface.extension.plane = split.as_ref().map_or(Vec4::ZERO, |split| split.source);
         }
     }
 }
@@ -337,6 +390,7 @@ mod tests {
                 (source, original_material.clone(), false),
                 (ghost, ghost_material.clone(), true),
             ],
+            fades: Vec::new(),
             min: Vec3::splat(-20.25),
             max: Vec3::splat(20.25),
         });
@@ -384,6 +438,80 @@ mod tests {
         assert_eq!(
             materials.get(&other_material).unwrap().extension.plane,
             Vec4::W
+        );
+    }
+
+    #[test]
+    fn a_fading_cube_draws_its_blended_twin_and_hides_the_opaque_piece() {
+        let mut app = App::new();
+        app.init_resource::<Assets<BodyMaterial>>()
+            .init_resource::<CubePose>()
+            .insert_resource(crate::object_visual::CubeTint(Some([255; 4])))
+            .add_systems(Update, update);
+        let piece = app
+            .world_mut()
+            .spawn((Transform::default(), Visibility::Hidden))
+            .id();
+        let twin = app
+            .world_mut()
+            .spawn((Transform::default(), Visibility::Hidden))
+            .id();
+        let mut materials = app.world_mut().resource_mut::<Assets<BodyMaterial>>();
+        let solid = materials.add(material(StandardMaterial::default()));
+        let blended = materials.add(material(StandardMaterial::default()));
+        app.insert_resource(CubeVisual {
+            halves: vec![(piece, solid.clone(), false)],
+            fades: vec![(twin, blended.clone())],
+            min: Vec3::splat(-20.25),
+            max: Vec3::splat(20.25),
+        });
+        let seen = |app: &mut App| {
+            app.update();
+            let w = app.world();
+            let colour = |h: &Handle<BodyMaterial>| {
+                w.resource::<Assets<BodyMaterial>>()
+                    .get(h)
+                    .unwrap()
+                    .base
+                    .base_color
+                    .to_linear()
+                    .to_f32_array()
+            };
+            (
+                *w.get::<Visibility>(piece).unwrap(),
+                *w.get::<Visibility>(twin).unwrap(),
+                colour(&solid),
+                colour(&blended),
+            )
+        };
+        assert_eq!(
+            seen(&mut app),
+            (
+                Visibility::Inherited,
+                Visibility::Inherited,
+                [1.0; 4],
+                [1.0, 1.0, 1.0, 0.0]
+            )
+        );
+        app.world_mut()
+            .resource_mut::<crate::object_visual::CubeTint>()
+            .0 = Some([0, 0, 0, 51]);
+        assert_eq!(
+            seen(&mut app),
+            (
+                Visibility::Hidden,
+                Visibility::Inherited,
+                [0.0, 0.0, 0.0, 1.0],
+                [0.0, 0.0, 0.0, 0.2]
+            )
+        );
+        app.world_mut()
+            .resource_mut::<crate::object_visual::CubeTint>()
+            .0 = None;
+        let (piece_seen, twin_seen, _, _) = seen(&mut app);
+        assert_eq!(
+            (piece_seen, twin_seen),
+            (Visibility::Hidden, Visibility::Hidden)
         );
     }
 }

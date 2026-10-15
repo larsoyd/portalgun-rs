@@ -62,11 +62,22 @@ impl CubeHistory {
     }
 }
 
+/// the cube's render colour, none while there is no cube to draw
+#[derive(Resource)]
+pub struct CubeTint(pub Option<[u8; 4]>);
+
+impl Default for CubeTint {
+    fn default() -> Self {
+        Self(Some([255; 4]))
+    }
+}
+
 pub struct ObjectPresentationPlugin;
 
 impl Plugin for ObjectPresentationPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CubePose>()
+            .init_resource::<CubeTint>()
             .insert_resource(CubeHistory::new(&CubePose::default()))
             .add_systems(
                 FixedUpdate,
@@ -89,13 +100,15 @@ fn record(
     mut history: ResMut<CubeHistory>,
     mut revision: Local<u64>,
 ) {
-    history.advance(
-        &CubePose {
-            position: objects.cube.position,
-            rotation: objects.cube.rotation,
-        },
-        *revision != objects.visual_revision,
-    );
+    if let Some((cube, _)) = objects.shown() {
+        history.advance(
+            &CubePose {
+                position: cube.position,
+                rotation: cube.rotation,
+            },
+            *revision != objects.visual_revision,
+        );
+    }
     *revision = objects.visual_revision;
 }
 
@@ -104,9 +117,11 @@ fn present(
     history: Res<CubeHistory>,
     fixed: Res<Time<Fixed>>,
     mut pose: ResMut<CubePose>,
+    mut tint: ResMut<CubeTint>,
     mut gun: ResMut<crate::gun_visual::GunVisualState>,
 ) {
     *pose = history.sample(fixed.overstep_fraction());
+    tint.0 = objects.shown().map(|(_, colour)| colour);
     gun.holding = objects.holding();
 }
 

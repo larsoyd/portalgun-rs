@@ -67,7 +67,9 @@ fn model_lighting(pbr: PbrInput, uv: vec2<f32>, base_alpha: f32) -> vec4<f32> {
         color = mix(color, pbr.material.base_color.rgb, base_alpha);
     }
     color += specular * mask * fresnel * phong.w * view_bindings::view.exposure * mix(vec3<f32>(1.0), pbr.material.base_color.rgb, exponent_sample.g);
-    return vec4<f32>(color, pbr.material.base_color.a);
+    // an opaque material blends only by its render alpha, its texture alpha is a mask
+    let alpha = select(pbr_bindings::material.base_color.a, pbr.material.base_color.a, model_flags.w > 0.0);
+    return vec4<f32>(color, alpha);
 }
 
 @fragment

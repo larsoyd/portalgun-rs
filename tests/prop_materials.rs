@@ -23,3 +23,19 @@ fn a_phong_texture_named_while_phong_is_off_is_never_loaded() {
     portalgun::model_material::apply(&l, &files, &mut images, &mut material).unwrap();
     assert!(material.extension.exponent.is_none());
 }
+
+#[test]
+fn only_a_translucent_material_blends_by_its_texture_alpha() {
+    let dir = root(None, None, Path::new(&std::env::var("HOME").unwrap()));
+    let files = Install::open(&dir).unwrap().search;
+    let mut images = Assets::<Image>::default();
+    let mut flag = |model: &str, slot: usize| {
+        let (mdl, _) = read_model(&files, model).unwrap();
+        let l = look(&files, &mdl, slot).unwrap();
+        let mut material = portalgun::bodyportal::material(StandardMaterial::default());
+        portalgun::model_material::apply(&l, &files, &mut images, &mut material).unwrap();
+        (format!("{:?}", l.blend), material.extension.model_flags.w)
+    };
+    assert_eq!(flag("models/props/metal_box", 0), ("Opaque".into(), 0.0));
+    assert_eq!(flag("models/weapons/v_portalgun", 2), ("Add".into(), 1.0));
+}

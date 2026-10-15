@@ -91,7 +91,7 @@ pub fn apply(
         p.enabled as u8 as f32,
         p.warp.is_some() as u8 as f32,
         p.self_illum as u8 as f32,
-        0.0,
+        (look.blend != crate::viewmodel::Blend::Opaque) as u8 as f32,
     );
     Ok(())
 }
