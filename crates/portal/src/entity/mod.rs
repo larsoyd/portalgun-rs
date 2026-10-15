@@ -43,6 +43,8 @@ pub trait Env {
     fn push(&mut self, pusher: Handle, delta: Vec3) -> Option<Handle>;
     /// movers whose boxes are inside a trigger that was just switched on
     fn overlapping(&mut self, trigger: Handle) -> Vec<Handle>;
+    /// movers that ran their trigger check this tick, each with the triggers its box is in
+    fn movers(&mut self) -> Vec<(Handle, Vec<Handle>)>;
 }
 
 pub struct Still;
@@ -55,6 +57,17 @@ impl Env for Still {
     fn overlapping(&mut self, _trigger: Handle) -> Vec<Handle> {
         Vec::new()
     }
+
+    fn movers(&mut self) -> Vec<(Handle, Vec<Handle>)> {
+        Vec::new()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Link {
+    mover: Handle,
+    trigger: Handle,
+    stamp: u32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,6 +126,10 @@ pub struct World {
     doomed: Vec<Handle>,
     fired: Vec<Fired>,
     sounds: Vec<Sound>,
+    links: Vec<Link>,
+    stamps: HashMap<Handle, u32>,
+    checked: Vec<Handle>,
+    enabled: Vec<Handle>,
 }
 
 /// atoi, as the datadesc keyvalue parser reads integer and boolean fields
@@ -197,9 +214,79 @@ impl World {
         self.tick += 1;
         self.think();
         self.each_door(|w, h| door::push(w, h, env));
+        for (mover, triggers) in env.movers() {
+            self.check(mover, &triggers);
+        }
         self.each_door(door::arrive);
-        self.service();
+        self.untouch();
+        self.service(env);
         self.cleanup();
+    }
+
+    /// Translated from 0x4962c0, 0x5847d0 and 0x2b3450 (decompiled, server.so)
+    fn check(&mut self, mover: Handle, triggers: &[Handle]) {
+        if self.slot(mover).gone {
+            return;
+        }
+        let stamp = self.stamps.entry(mover).or_default();
+        *stamp += 1;
+        let stamp = *stamp;
+        if !self.checked.contains(&mover) {
+            self.checked.push(mover);
+        }
+        for &t in triggers {
+            if !self.slot(t).gone && self.trigger_enabled(t) {
+                self.link(mover, t, stamp);
+            }
+        }
+    }
+
+    fn link(&mut self, mover: Handle, trigger: Handle, stamp: u32) {
+        match self
+            .links
+            .iter_mut()
+            .find(|l| l.mover == mover && l.trigger == trigger)
+        {
+            Some(l) => l.stamp = stamp,
+            None => {
+                self.links.push(Link {
+                    mover,
+                    trigger,
+                    stamp,
+                });
+                trigger::start_touch(self, trigger, mover);
+            }
+        }
+        trigger::touch(self, trigger, mover);
+    }
+
+    /// Translated from 0x4fda30 and 0x2b2aa0 (decompiled, server.so)
+    fn untouch(&mut self) {
+        for mover in std::mem::take(&mut self.checked) {
+            let stamp = self.stamps.get(&mover).copied().unwrap_or_default();
+            let stale: Vec<Link> = self
+                .links
+                .iter()
+                .filter(|l| l.mover == mover && l.stamp != stamp)
+                .copied()
+                .collect();
+            self.links.retain(|l| l.mover != mover || l.stamp == stamp);
+            for l in stale {
+                if !self.slot(l.trigger).gone {
+                    trigger::end_touch(self, l.trigger, mover);
+                }
+            }
+        }
+    }
+
+    /// Translated from 0x9c73b0 (decompiled, server.so), the engine links what is already inside
+    fn link_inside(&mut self, env: &mut impl Env) {
+        for t in std::mem::take(&mut self.enabled) {
+            for mover in env.overlapping(t) {
+                let stamp = self.stamps.get(&mover).copied().unwrap_or_default();
+                self.link(mover, t, stamp);
+            }
+        }
     }
 
     fn each_door(&mut self, mut f: impl FnMut(&mut World, Handle)) {
@@ -260,10 +347,11 @@ impl World {
             .map_or(-1.0, |(t, _)| t as f32 * Self::TICK)
     }
 
-    fn service(&mut self) {
+    fn service(&mut self, env: &mut impl Env) {
         let now = self.now();
         while let Some(event) = self.queue.pop_due(now) {
             self.deliver(event);
+            self.link_inside(env);
         }
     }
 

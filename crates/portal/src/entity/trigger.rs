@@ -177,7 +177,12 @@ pub(super) fn touch(world: &mut World, h: Handle, other: Handle) {
 pub(super) fn input(world: &mut World, h: Handle, input: &str) -> bool {
     let t = trigger(world, h);
     match input {
-        "enable" => t.disabled = false,
+        "enable" => {
+            if t.disabled {
+                world.enabled.push(h);
+            }
+            trigger(world, h).disabled = false;
+        }
         "disable" => t.disabled = true,
         "toggle" => t.disabled ^= true,
         _ => return false,
