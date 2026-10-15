@@ -83,3 +83,133 @@ fn an_overlay_whose_v_runs_against_normal_cross_u_is_refused() {
     e.keys.push(("BasisV".into(), "0 1 0".into()));
     assert_eq!(Overlay::from_keys(&e).unwrap().basis[1], [0.0, 1.0, 0.0]);
 }
+
+fn floor(points: [[f32; 2]; 4]) -> Overlay {
+    Overlay {
+        faces: vec![1],
+        order: 0,
+        u: [0.0, 2.0],
+        v: [1.0, 0.0],
+        points,
+        origin: [0.0, 0.0, 0.0],
+        basis: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        fade: [-1.0, 0.0],
+    }
+}
+
+const SQUARE: [[f32; 2]; 4] = [[-16.0, -16.0], [-16.0, 16.0], [16.0, 16.0], [16.0, -16.0]];
+const UP: ([f32; 3], f32) = ([0.0, 0.0, 1.0], 0.0);
+
+fn big_floor() -> Vec<[f32; 3]> {
+    vec![
+        [-64.0, -64.0, 0.0],
+        [-64.0, 64.0, 0.0],
+        [64.0, 64.0, 0.0],
+        [64.0, -64.0, 0.0],
+    ]
+}
+
+#[test]
+fn a_floor_overlay_lies_a_tenth_above_the_face_inside_its_quad() {
+    let polys = floor(SQUARE).fragments(&big_floor(), UP).unwrap();
+    assert_eq!(polys.len(), 2, "one fragment per face triangle");
+    for v in polys.iter().flatten() {
+        assert!((v.pos[2] - 0.1).abs() < 1e-6, "{v:?}");
+        assert!(
+            v.pos[0].abs() <= 16.001 && v.pos[1].abs() <= 16.001,
+            "{v:?}"
+        );
+        assert_eq!(v.normal, [0.0, 0.0, 1.0]);
+    }
+    let corner = |x: f32, y: f32| {
+        polys
+            .iter()
+            .flatten()
+            .find(|v| (v.pos[0] - x).abs() < 1e-3 && (v.pos[1] - y).abs() < 1e-3)
+            .map(|v| (v.uv, v.st))
+    };
+    assert_eq!(corner(-16.0, -16.0), Some(([0.0, 1.0], [0.0, 0.0])));
+    assert_eq!(corner(-16.0, 16.0), Some(([0.0, 0.0], [0.0, 1.0])));
+    assert_eq!(corner(16.0, 16.0), Some(([2.0, 0.0], [1.0, 1.0])));
+    assert_eq!(corner(16.0, -16.0), Some(([2.0, 1.0], [1.0, 0.0])));
+}
+
+#[test]
+fn a_face_smaller_than_the_quad_cuts_the_overlay_to_its_own_outline() {
+    let face = vec![
+        [0.0, 0.0, 0.0],
+        [0.0, 8.0, 0.0],
+        [8.0, 8.0, 0.0],
+        [8.0, 0.0, 0.0],
+    ];
+    let polys = floor(SQUARE).fragments(&face, UP).unwrap();
+    let area: f32 = polys
+        .iter()
+        .map(|p| {
+            (1..p.len() - 1)
+                .map(|i| {
+                    let (a, b, c) = (p[0].pos, p[i].pos, p[i + 1].pos);
+                    ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])).abs() / 2.0
+                })
+                .sum::<f32>()
+        })
+        .sum();
+    assert!((area - 64.0).abs() < 1e-3, "area {area}");
+    let mid = polys
+        .iter()
+        .flatten()
+        .find(|v| (v.pos[0] - 8.0).abs() < 1e-4 && (v.pos[1] - 8.0).abs() < 1e-4)
+        .unwrap();
+    assert!(
+        (mid.uv[0] - 1.5).abs() < 1e-5 && (mid.uv[1] - 0.25).abs() < 1e-5,
+        "{mid:?}"
+    );
+}
+
+#[test]
+fn face_triangles_at_four_squared_area_or_less_are_skipped() {
+    let tiny = |leg: f32| vec![[0.0, 0.0, 0.0], [0.0, 2.0, 0.0], [leg, 0.0, 0.0]];
+    assert!(floor(SQUARE).fragments(&tiny(1.0), UP).unwrap().is_empty());
+    assert_eq!(floor(SQUARE).fragments(&tiny(1.0001), UP).unwrap().len(), 1);
+}
+
+#[test]
+fn on_a_slope_the_overlay_drops_along_its_normal_onto_the_face() {
+    let n = [0.0, -0.6, 0.8];
+    let face = vec![
+        [-64.0, -64.0, -48.0],
+        [-64.0, 64.0, 48.0],
+        [64.0, 64.0, 48.0],
+        [64.0, -64.0, -48.0],
+    ];
+    let polys = floor(SQUARE).fragments(&face, (n, 0.0)).unwrap();
+    let corner = polys.iter().flatten().find(|v| v.uv == [0.0, 1.0]).unwrap();
+    let expected = [-16.0, -16.0 - 0.06, -12.0 + 0.08];
+    assert!(
+        (0..3).all(|i| (corner.pos[i] - expected[i]).abs() < 1e-4),
+        "{corner:?}"
+    );
+    assert_eq!(corner.normal, n);
+}
+
+#[test]
+fn a_skewed_parallelogram_keeps_its_corner_coordinates() {
+    let polys = floor([[-16.0, -8.0], [-8.0, 8.0], [24.0, 8.0], [16.0, -8.0]])
+        .fragments(&big_floor(), UP)
+        .unwrap();
+    let at = polys
+        .iter()
+        .flatten()
+        .find(|v| (v.pos[0] + 8.0).abs() < 1e-3 && (v.pos[1] - 8.0).abs() < 1e-3);
+    assert_eq!(at.map(|v| v.uv), Some([0.0, 0.0]));
+}
+
+#[test]
+fn a_quad_that_is_not_a_parallelogram_is_refused() {
+    let trapezoid = floor([[-16.0, -16.0], [-8.0, 16.0], [8.0, 16.0], [16.0, -16.0]]);
+    let refused = trapezoid
+        .fragments(&big_floor(), UP)
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("parallelogram"), "{refused}");
+}
