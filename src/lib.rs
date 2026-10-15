@@ -9,6 +9,7 @@ pub mod chamber;
 pub mod collision;
 pub mod diagnostics;
 pub mod display;
+pub mod dissolve_fx;
 pub mod entities;
 pub mod faces;
 pub mod feet;

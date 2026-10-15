@@ -415,7 +415,7 @@ type DrawMesh = (Entity, Handle<Mesh>);
 #[derive(Resource, Default)]
 struct Draws(HashMap<DrawKey, DrawMesh>);
 
-fn particle_mesh(built: portal::particles::renderers::Mesh) -> Mesh {
+pub(crate) fn particle_mesh(built: portal::particles::renderers::Mesh) -> Mesh {
     let mut mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::default(),

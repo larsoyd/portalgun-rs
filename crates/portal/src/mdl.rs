@@ -83,6 +83,13 @@ pub struct Attachment {
     pub local: [[f32; 4]; 3],
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct Hitbox {
+    pub bone: usize,
+    pub min: [f32; 3],
+    pub max: [f32; 3],
+}
+
 #[derive(Default)]
 pub struct Mdl {
     pub bytes: Vec<u8>,
@@ -97,6 +104,8 @@ pub struct Mdl {
     pub skins: Vec<Vec<u16>>,
     pub body_parts: Vec<Vec<Model>>,
     pub attachments: Vec<Attachment>,
+    /// the boxes of hitbox set 0
+    pub hitboxes: Vec<Hitbox>,
 }
 
 impl Mdl {
@@ -244,6 +253,21 @@ impl Mdl {
                 local: [row(0)?, row(1)?, row(2)?],
             })
         })?;
+        if r.i32(0xac)? > 0 {
+            let set = r.offset(0, r.i32(0xb0)?)?;
+            m.hitboxes = r.counted(
+                r.i32(set + 4)?,
+                r.offset(set, r.i32(set + 8)?)?,
+                0x44,
+                |h| {
+                    Ok(Hitbox {
+                        bone: r.i32(h)? as usize,
+                        min: r.f32s(h + 8)?,
+                        max: r.f32s(h + 0x14)?,
+                    })
+                },
+            )?;
+        }
         m.bytes = bytes;
         Ok(m)
     }
