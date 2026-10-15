@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 larsoyd
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
+mod door;
 pub mod io;
 mod logic;
 mod trigger;
@@ -8,7 +9,10 @@ mod trigger;
 use std::collections::HashMap;
 use std::fmt;
 
+use crate::brush;
+use crate::pair::Vec3;
 use crate::vmf::Entity;
+use door::Door;
 use io::{name_matches, Event, Handle, OutputEvent, Queue, Target};
 use logic::{Auto, Relay};
 use trigger::{Filter, Trigger};
@@ -33,8 +37,35 @@ impl fmt::Display for Fired {
     }
 }
 
+/// what the entity world asks of the game around it
+pub trait Env {
+    /// moves a pusher's hierarchy and riders by delta, or names what stopped it
+    fn push(&mut self, pusher: Handle, delta: Vec3) -> Option<Handle>;
+    /// movers whose boxes are inside a trigger that was just switched on
+    fn overlapping(&mut self, trigger: Handle) -> Vec<Handle>;
+}
+
+pub struct Still;
+
+impl Env for Still {
+    fn push(&mut self, _pusher: Handle, _delta: Vec3) -> Option<Handle> {
+        None
+    }
+
+    fn overlapping(&mut self, _trigger: Handle) -> Vec<Handle> {
+        Vec::new()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Sound {
+    pub source: Handle,
+    pub name: String,
+}
+
 #[derive(Debug)]
 enum Kind {
+    Door(Door),
     Relay(Relay),
     Auto(Auto),
     Trigger(Trigger),
@@ -81,6 +112,7 @@ pub struct World {
     tick: u32,
     doomed: Vec<Handle>,
     fired: Vec<Fired>,
+    sounds: Vec<Sound>,
 }
 
 /// atoi, as the datadesc keyvalue parser reads integer and boolean fields
@@ -117,9 +149,21 @@ impl World {
     pub const TICK: f32 = 0.015;
 
     pub fn spawn(ents: &[Entity]) -> World {
+        World::spawn_with(ents, |e| {
+            let polys: Vec<_> = e
+                .solids
+                .iter()
+                .flat_map(|s| brush::faces(&s.sides))
+                .collect();
+            (!polys.is_empty()).then(|| brush::bounds(&polys))
+        })
+    }
+
+    /// bounds gives a brush entity's model mins and maxs
+    pub fn spawn_with(ents: &[Entity], bounds: impl Fn(&Entity) -> Option<(Vec3, Vec3)>) -> World {
         let mut world = World::default();
         for e in ents {
-            world.slots.push(slot(e));
+            world.slots.push(slot(e, bounds(e)));
         }
         world.activate();
         world
@@ -146,10 +190,45 @@ impl World {
     }
 
     pub fn tick(&mut self) {
+        self.step(&mut Still);
+    }
+
+    pub fn step(&mut self, env: &mut impl Env) {
         self.tick += 1;
         self.think();
+        self.each_door(|w, h| door::push(w, h, env));
+        self.each_door(door::arrive);
         self.service();
         self.cleanup();
+    }
+
+    fn each_door(&mut self, mut f: impl FnMut(&mut World, Handle)) {
+        for i in 0..self.slots.len() {
+            if matches!(self.slots[i].kind, Kind::Door(_)) && !self.slots[i].gone {
+                f(self, Handle(i as u32));
+            }
+        }
+    }
+
+    fn emit(&mut self, source: Handle, name: &str) {
+        if !name.is_empty() {
+            self.sounds.push(Sound {
+                source,
+                name: name.to_string(),
+            });
+        }
+    }
+
+    pub fn drain_sounds(&mut self) -> Vec<Sound> {
+        std::mem::take(&mut self.sounds)
+    }
+
+    /// where a moving brush entity is now
+    pub fn origin(&self, h: Handle) -> Vec3 {
+        match &self.slot(h).kind {
+            Kind::Door(d) => d.origin,
+            _ => [0.0; 3],
+        }
     }
 
     fn think(&mut self) {
@@ -290,6 +369,7 @@ impl World {
             return true;
         }
         match &self.slot(h).kind {
+            Kind::Door(_) => door::input(self, h, &lower),
             Kind::Relay(_) => logic::relay_input(self, h, &lower, activator),
             Kind::Trigger(_) => trigger::input(self, h, &lower),
             Kind::Auto(_) | Kind::Filter(_) | Kind::Other => false,
@@ -381,7 +461,7 @@ impl World {
             outputs: Vec::new(),
             solids: Vec::new(),
         };
-        self.slots.push(slot(&player));
+        self.slots.push(slot(&player, None));
         Handle(self.slots.len() as u32 - 1)
     }
 
@@ -422,7 +502,30 @@ fn trigger_of(e: &Entity, once: bool, multi: bool) -> Kind {
     ))
 }
 
-fn slot(e: &Entity) -> Slot {
+fn vec3_key(e: &Entity, key: &str) -> Vec3 {
+    let mut parts = e.get(key).unwrap_or_default().split_whitespace();
+    [0; 3].map(|_| parts.next().and_then(|p| p.parse().ok()).unwrap_or(0.0))
+}
+
+fn door_of(e: &Entity, bounds: Option<(Vec3, Vec3)>, spawnflags: u32) -> Kind {
+    let (lo, hi) = bounds.unwrap_or_default();
+    let movedir = vec3_key(e, "movedir");
+    Kind::Door(Door::new(
+        vec3_key(e, "origin"),
+        [movedir[0], movedir[1]],
+        [0, 1, 2].map(|i| hi[i] - lo[i]),
+        float_key(e, "lip"),
+        float_key(e, "speed"),
+        float_key(e, "wait"),
+        spawnflags,
+        (
+            e.get("noise2").unwrap_or_default(),
+            e.get("closesound").unwrap_or_default(),
+        ),
+    ))
+}
+
+fn slot(e: &Entity, bounds: Option<(Vec3, Vec3)>) -> Slot {
     let mut outputs: HashMap<String, Vec<&crate::vmf::Output>> = HashMap::new();
     for o in &e.outputs {
         outputs
@@ -432,6 +535,7 @@ fn slot(e: &Entity) -> Slot {
     }
     let mut spawnflags = int_key(e, "spawnflags") as u32;
     let kind = match e.classname.as_str() {
+        "func_door" => door_of(e, bounds, spawnflags),
         "logic_relay" => Kind::Relay(Relay::new(int_key(e, "StartDisabled") != 0)),
         "logic_auto" => Kind::Auto(Auto::new(e.get("globalstate"))),
         "trigger_multiple" | "trigger_once" => {
