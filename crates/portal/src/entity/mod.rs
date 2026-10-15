@@ -42,9 +42,19 @@ pub trait Env {
     /// moves a pusher's hierarchy and riders by delta, or names what stopped it
     fn push(&mut self, pusher: Handle, delta: Vec3) -> Option<Handle>;
     /// movers whose boxes are inside a trigger that was just switched on
-    fn overlapping(&mut self, trigger: Handle) -> Vec<Handle>;
+    fn overlapping(&mut self, _trigger: Handle) -> Vec<Handle> {
+        Vec::new()
+    }
     /// movers that ran their trigger check this tick, each with the triggers its box is in
-    fn movers(&mut self) -> Vec<(Handle, Vec<Handle>)>;
+    fn movers(&mut self) -> Vec<(Handle, Vec<Handle>)> {
+        Vec::new()
+    }
+    /// fizzles the player's portals and pending shots, true when there was something to fizzle
+    fn fizzle(&mut self, _player: Handle) -> bool {
+        false
+    }
+    /// drops the prop if held and dissolves a copy of it in its place
+    fn dissolve(&mut self, _entity: Handle) {}
 }
 
 pub struct Still;
@@ -52,14 +62,6 @@ pub struct Still;
 impl Env for Still {
     fn push(&mut self, _pusher: Handle, _delta: Vec3) -> Option<Handle> {
         None
-    }
-
-    fn overlapping(&mut self, _trigger: Handle) -> Vec<Handle> {
-        Vec::new()
-    }
-
-    fn movers(&mut self) -> Vec<(Handle, Vec<Handle>)> {
-        Vec::new()
     }
 }
 
@@ -110,6 +112,7 @@ struct Slot {
     kind: Kind,
     body: Body,
     gone: bool,
+    dissolving: bool,
 }
 
 impl Slot {
@@ -215,7 +218,7 @@ impl World {
         self.think();
         self.each_door(|w, h| door::push(w, h, env));
         for (mover, triggers) in env.movers() {
-            self.check(mover, &triggers);
+            self.check(env, mover, &triggers);
         }
         self.each_door(door::arrive);
         self.untouch();
@@ -224,7 +227,7 @@ impl World {
     }
 
     /// Translated from 0x4962c0, 0x5847d0 and 0x2b3450 (decompiled, server.so)
-    fn check(&mut self, mover: Handle, triggers: &[Handle]) {
+    fn check(&mut self, env: &mut impl Env, mover: Handle, triggers: &[Handle]) {
         if self.slot(mover).gone {
             return;
         }
@@ -236,12 +239,12 @@ impl World {
         }
         for &t in triggers {
             if !self.slot(t).gone && self.trigger_enabled(t) {
-                self.link(mover, t, stamp);
+                self.link(env, mover, t, stamp);
             }
         }
     }
 
-    fn link(&mut self, mover: Handle, trigger: Handle, stamp: u32) {
+    fn link(&mut self, env: &mut impl Env, mover: Handle, trigger: Handle, stamp: u32) {
         match self
             .links
             .iter_mut()
@@ -257,7 +260,7 @@ impl World {
                 trigger::start_touch(self, trigger, mover);
             }
         }
-        trigger::touch(self, trigger, mover);
+        trigger::touch(self, trigger, mover, env);
     }
 
     /// Translated from 0x4fda30 and 0x2b2aa0 (decompiled, server.so)
@@ -284,7 +287,7 @@ impl World {
         for t in std::mem::take(&mut self.enabled) {
             for mover in env.overlapping(t) {
                 let stamp = self.stamps.get(&mover).copied().unwrap_or_default();
-                self.link(mover, t, stamp);
+                self.link(env, mover, t, stamp);
             }
         }
     }
@@ -558,7 +561,7 @@ impl World {
     }
 
     pub fn touch(&mut self, trigger: Handle, other: Handle) {
-        trigger::touch(self, trigger, other);
+        trigger::touch(self, trigger, other, &mut Still);
     }
 
     pub fn end_touch(&mut self, trigger: Handle, other: Handle) {
@@ -630,6 +633,10 @@ fn slot(e: &Entity, bounds: Option<(Vec3, Vec3)>) -> Slot {
             spawnflags = trigger::spawnflags(spawnflags);
             trigger_of(e, e.classname == "trigger_once", true)
         }
+        "trigger_portal_cleanser" => {
+            spawnflags = trigger::spawnflags(spawnflags);
+            trigger_of(e, false, false)
+        }
         "filter_activator_name" | "filter_activator_class" => {
             let by_class = e.classname == "filter_activator_class";
             let name = e
@@ -663,5 +670,6 @@ fn slot(e: &Entity, bounds: Option<(Vec3, Vec3)>) -> Slot {
         kind,
         body,
         gone: false,
+        dissolving: false,
     }
 }

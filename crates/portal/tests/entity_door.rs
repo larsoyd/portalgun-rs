@@ -75,14 +75,6 @@ impl Env for Wall {
         self.pushes.push(delta);
         self.blocking
     }
-
-    fn overlapping(&mut self, _trigger: Handle) -> Vec<Handle> {
-        Vec::new()
-    }
-
-    fn movers(&mut self) -> Vec<(Handle, Vec<Handle>)> {
-        Vec::new()
-    }
 }
 
 fn outputs(world: &mut World) -> Vec<String> {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 use super::io::{name_matches, Handle};
-use super::{Body, Kind, Think, World};
+use super::{Body, Env, Kind, Think, World};
 
 const CLIENTS: u32 = 0x1;
 const NPCS: u32 = 0x2;
@@ -154,8 +154,56 @@ pub(super) fn end_touch(world: &mut World, h: Handle, other: Handle) {
     }
 }
 
+pub(super) fn touch(world: &mut World, h: Handle, other: Handle, env: &mut impl Env) {
+    if world.slot(h).classname == "trigger_portal_cleanser" {
+        cleanse(world, h, other, env);
+    } else {
+        multi_touch(world, h, other);
+    }
+}
+
+const UNCLEANSED: [&str; 7] = [
+    "func_door",
+    "func_door_rotating",
+    "prop_door_rotating",
+    "func_tracktrain",
+    "env_ghostanimating",
+    "physicsshadowclone",
+    "prop_energy_ball",
+];
+
+/// Translated from 0x932a00 (disassembled, server.so)
+fn cleanse(world: &mut World, h: Handle, other: Handle, env: &mut impl Env) {
+    if !passes(world, h, other) {
+        return;
+    }
+    if world.slot(other).body == Body::Player {
+        if env.fizzle(other) {
+            world.fire(h, "onfizzle", Some(other), 0.0);
+        }
+        return;
+    }
+    let o = world.slot(other);
+    let animating = o.body == Body::Physics || o.classname.starts_with("prop_");
+    if !animating
+        || o.dissolving
+        || UNCLEANSED
+            .iter()
+            .any(|c| name_matches(Some(&o.classname), c))
+    {
+        return;
+    }
+    if name_matches(o.name.as_deref(), "box") {
+        world.fire(h, "ondissolvebox", Some(other), 0.0);
+    }
+    env.dissolve(other);
+    world.slot_mut(other).dissolving = true;
+    world.remove(other);
+    world.fire(h, "ondissolve", Some(other), 0.0);
+}
+
 /// Translated from 0x9c8e90 and 0x9c8cf0 (decompiled, server.so)
-pub(super) fn touch(world: &mut World, h: Handle, other: Handle) {
+fn multi_touch(world: &mut World, h: Handle, other: Handle) {
     if !trigger(world, h).multi || !passes(world, h, other) {
         return;
     }
