@@ -191,7 +191,8 @@ fn a_maker_pointing_straight_up_keeps_its_yaw_and_drops_the_roll() {
     let mut world = spawner("3", "-90 30 0");
     world.input("maker", "ForceSpawn", None);
     world.tick();
-    let (origin, angles) = world.pose(world.drain_spawned()[0]);
+    let h = world.drain_spawned()[0];
+    let (origin, angles) = world.pose(h);
     assert!(near(origin, [100.0, 0.0, 60.0]), "{origin:?}");
     assert!(near(angles, [-90.0, 30.0, 0.0]), "{angles:?}");
 }
