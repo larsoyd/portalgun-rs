@@ -44,7 +44,7 @@ particle graphs. Attachment glow sprites, pickup beams, holding animations and
 the holding sound follow the gun's state, including portal removal. Model lighting
 reads the installed normal, Phong exponent and lightwarp textures. The chamber
 uses Bevy point lights and uniform ambient lighting in place of Source's per-entity
-lights and baked ambient cube. Refraction children remain unsupported.
+lights and baked ambient cube. Failure effects draw their refraction warp too.
 
 ### The player model
 
@@ -106,11 +106,11 @@ notice. No Elden Ring installation or data is needed.
 - Persistent particles and edge trails come from the installed PCFs and each
   portal model's own attachments. They follow replacement and deactivation and
   render with separate geometry for each recursive camera. Closing and failure
-  graphs run too, with their refraction children explicitly omitted.
+  graphs run too, including the refraction warp that bends the scene behind them.
 
 See [particle integration and limits](docs/particles/README.md) for the effect
-matrix, evidence and tests. TODO: opening/particle refraction and the cheaper
-culling the game uses for nested views.
+matrix, evidence and tests. TODO: the cheaper culling the game uses for nested
+views.
 
 ### Going through
 

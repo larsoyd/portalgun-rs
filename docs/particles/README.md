@@ -17,12 +17,12 @@ rendering and impact dispatch to be tested independently.
 | `portal_1/2_particles` | Placed portals; `particles_2` attachment | SpriteCard / UnlitGeneric, including vacuum children |
 | `portal_1/2_edge` | Placed portals; `particlespin` attachment | Additive trails |
 | `portal_1/2_success` | Successful shot arrival | Complete UnlitGeneric particle material path |
-| `portal_1/2_nofit` | `CantFit` arrival | Parent supported; refraction child omitted |
-| `portal_1/2_badsurface` | `BadSurface` arrival | Parent supported; refraction child omitted |
-| `portal_1/2_overlap` | `Overlap` arrival; CP1 at the other portal | Parent supported; refraction child omitted |
-| `portal_1/2_close` | Replacement, relocation and deactivation | Parent supported; refraction child omitted |
-| `portal_1/2_near` | Explicit `PortalImpact` API, with target portal frame | Parent/ordinary children supported; refraction child omitted |
-| `portal_1/2_badvolume` | Explicit `PortalImpact` API | Parent supported; refraction child omitted |
+| `portal_1/2_nofit` | `CantFit` arrival | Parent and refraction child supported |
+| `portal_1/2_badsurface` | `BadSurface` arrival | Parent and refraction child supported |
+| `portal_1/2_overlap` | `Overlap` arrival; CP1 at the other portal | Parent and refraction child supported |
+| `portal_1/2_close` | Replacement, relocation and deactivation | Parent and refraction child supported |
+| `portal_1/2_near` | Explicit `PortalImpact` API, with target portal frame | Parent, children and refraction child supported |
+| `portal_1/2_badvolume` | Explicit `PortalImpact` API | Parent and refraction child supported |
 
 Misses and sky/pass-through hits emit no impact. A bumped successful placement is
 still success; its quality score is not interpreted as a near failure. This
@@ -30,9 +30,14 @@ chamber has no near-portal rejection or forbidden-volume placement outcomes, so
 those two effects are not automatically selected. Cleanser volumes, gun charging,
 and projectile stream dispatch remain outside this integration.
 
-`particle/warp2_warp.vmt` uses `Refract`; it is explicitly reported as unsupported
-once at startup. The graph still simulates these children and cleans them up.
-There is no replacement glow or generic sprite for a missing material path.
+`particle/warp2_warp.vmt` uses `Refract`. It draws `refract_ps20b` static combo 66:
+the frame behind the sprite, offset by the `warp1_normal` normal map scaled by
+`$refractamount` and vertex alpha, blurred over the shader's four taps, blended
+over the sparks of its own effect. As in `client.so` (0x5ccbd0), the frame is
+copied once before a refracting effect draws, so the warp bends the scene without
+its own sparks. The port takes Bevy's transmission snapshot after the opaque pass
+at full resolution; the game copies into a power-of-two buffer after earlier
+translucent draws.
 
 ## Binary and asset evidence
 
@@ -162,7 +167,9 @@ frames and are not reference evidence. Original binaries/assets were not changed
 
 Remaining fidelity limits:
 
-- Refraction children need the original framebuffer distortion/blur material.
+- The refraction warp samples a full resolution snapshot taken after opaque
+  geometry, not the game's power-of-two copy taken after earlier translucents.
+  A new refraction pipeline can miss its first frames while Bevy compiles it.
 - Soft-particle depth uses Bevy's opaque depth prepass, reconstructed in Source
   units. It is not the original dest-alpha depth snapshot. Intersections with
   translucent portal faces and the original HDR/depth-snapshot behavior are not
