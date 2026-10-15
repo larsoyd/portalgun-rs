@@ -4,6 +4,7 @@
 use std::path::Path;
 
 use crate::error::malformed;
+use crate::pair::Vec3;
 use crate::particles::random::sha256;
 use crate::vmf::{output, Entity};
 use crate::{Error, Result};
@@ -21,8 +22,20 @@ pub const MAPS: [(&str, &str); 2] = [
 ];
 
 const VERSION: i32 = 20;
+const MODELS: usize = 14;
+const MODEL_SIZE: usize = 48;
+
+pub struct Map {
+    pub entities: Vec<Entity>,
+    /// mins and maxs of each brush model, *0 is the world
+    pub models: Vec<(Vec3, Vec3)>,
+}
 
 pub fn open(root: &Path, name: &str) -> Result<Vec<Entity>> {
+    Ok(load(root, name)?.entities)
+}
+
+pub fn load(root: &Path, name: &str) -> Result<Map> {
     let Some(&(_, want)) = MAPS.iter().find(|(map, _)| *map == name) else {
         return Err(Error::Refused(format!("no pinned hash for map {name}")));
     };
@@ -35,7 +48,32 @@ pub fn open(root: &Path, name: &str) -> Result<Vec<Entity>> {
             "{name}.bsp sha256={got} expected={want}"
         )));
     }
-    entities(&bytes)
+    Ok(Map {
+        entities: entities(&bytes)?,
+        models: models(&bytes)?,
+    })
+}
+
+/// Lump 14, dmodel_t: mins, maxs, origin, headnode, first face, face count
+pub fn models(bytes: &[u8]) -> Result<Vec<(Vec3, Vec3)>> {
+    let int = |at: usize| {
+        bytes
+            .get(at..at + 4)
+            .map(|b| i32::from_le_bytes(b.try_into().unwrap()))
+            .ok_or_else(|| malformed("bsp", format!("truncated at {at}")))
+    };
+    let lump = 8 + MODELS * 16;
+    let (offset, length) = (int(lump)? as usize, int(lump + 4)? as usize);
+    let float = |at: usize| int(at).map(|i| f32::from_bits(i as u32));
+    (0..length / MODEL_SIZE)
+        .map(|i| {
+            let at = offset + i * MODEL_SIZE;
+            let v = |o: usize| -> Result<Vec3> {
+                Ok([float(at + o)?, float(at + o + 4)?, float(at + o + 8)?])
+            };
+            Ok((v(0)?, v(12)?))
+        })
+        .collect()
 }
 
 /// Lump 0, the entity text vbsp writes from the map's entities.
