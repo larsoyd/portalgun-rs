@@ -67,3 +67,9 @@ fn settings_default_to_a_file_beside_where_it_runs() {
         PathBuf::from("mine.toml")
     );
 }
+
+#[test]
+fn the_chamber_defaults_to_the_sandbox_and_takes_a_name() {
+    assert_eq!(parse("").unwrap().chamber, "sandbox");
+    assert_eq!(parse("--chamber entities").unwrap().chamber, "entities");
+}

@@ -12,6 +12,7 @@ pub struct Args {
     pub quit_after: Option<f32>,
     pub settings: PathBuf,
     pub log_file: Option<PathBuf>,
+    pub chamber: String,
 }
 
 impl Default for Args {
@@ -24,6 +25,7 @@ impl Default for Args {
             quit_after: None,
             settings: PathBuf::from("settings.toml"),
             log_file: None,
+            chamber: "sandbox".into(),
         }
     }
 }
@@ -39,6 +41,7 @@ impl Args {
                 "--shot-dir" => a.shot_dir = value()?.into(),
                 "--shot-at" => a.shots.push(seconds(&flag, &value()?)?),
                 "--log-file" => a.log_file = Some(value()?.into()),
+                "--chamber" => a.chamber = value()?,
                 "--settings" => a.settings = value()?.into(),
                 "--quit-after" => a.quit_after = Some(seconds(&flag, &value()?)?),
                 _ => return Err(format!("unknown flag {flag}")),

@@ -16,7 +16,10 @@ use portal::Error;
 use crate::collision::{dot, Plane};
 use crate::simulator::bevelled;
 
-const SANDBOX: &str = include_str!("../assets/chambers/sandbox.vmf");
+const CHAMBERS: [(&str, &str); 2] = [
+    ("sandbox", include_str!("../assets/chambers/sandbox.vmf")),
+    ("entities", include_str!("../assets/chambers/entities.vmf")),
+];
 
 /// nodraw still collides, vbsp just never emits its faces
 const NODRAW: &str = "tools/toolsnodraw";
@@ -37,11 +40,25 @@ pub struct Block {
     pub sides: Vec<Side>,
     /// one per brush, footsteps and impacts look it up by block
     pub surfaceprop: String,
+    /// the brush entity that moves this block, by entity index
+    pub owner: Option<usize>,
     planes: Vec<Plane>,
 }
 
+/// a trigger brush, it neither blocks nor draws
+pub struct Volume {
+    pub owner: usize,
+    pub min: Vec3,
+    pub max: Vec3,
+    pub planes: Vec<Plane>,
+}
+
+#[derive(Default)]
 pub struct Chamber {
     pub blocks: Vec<Block>,
+    pub volumes: Vec<Volume>,
+    /// worldspawn first, then the map's entities in file order, as the server lists them
+    pub entities: Vec<vmf::Entity>,
 }
 
 /// vbsp turns %noportal into the surface flag the gun checks
@@ -80,15 +97,21 @@ fn look(search: &SearchPath, surfaces: &Surfaces, material: &str) -> portal::Res
 
 impl Chamber {
     pub fn test_chamber(search: &SearchPath) -> portal::Result<Chamber> {
-        Chamber::from_vmf(search, SANDBOX)
+        Chamber::named(search, "sandbox")
+    }
+
+    pub fn named(search: &SearchPath, name: &str) -> portal::Result<Chamber> {
+        let Some((_, text)) = CHAMBERS.iter().find(|(n, _)| *n == name) else {
+            return Err(Error::Refused(format!("no chamber named {name}")));
+        };
+        Chamber::from_vmf(search, text)
     }
 
     pub fn from_vmf(search: &SearchPath, text: &str) -> portal::Result<Chamber> {
         let map = vmf::parse(text)?;
         let surfaces = Surfaces::read(search)?;
         let mut looks: HashMap<String, Look> = HashMap::new();
-        let mut blocks = Vec::new();
-        for solid in &map.world {
+        let mut look_up = |solid: &vmf::Solid| -> portal::Result<()> {
             for side in &solid.sides {
                 if !looks.contains_key(&side.material) {
                     looks.insert(
@@ -97,9 +120,68 @@ impl Chamber {
                     );
                 }
             }
-            blocks.push(Block::from_solid(solid, &looks)?);
+            Ok(())
+        };
+        let world = vmf::Entity {
+            classname: "worldspawn".into(),
+            keys: vec![("classname".into(), "worldspawn".into())],
+            outputs: Vec::new(),
+            solids: map.world.clone(),
+        };
+        let entities: Vec<vmf::Entity> = std::iter::once(world).chain(map.entities).collect();
+        for e in &entities {
+            e.solids.iter().try_for_each(&mut look_up)?;
         }
-        Ok(Chamber { blocks })
+        let (mut blocks, mut volumes) = (Vec::new(), Vec::new());
+        for (i, e) in entities.iter().enumerate() {
+            let owner = match e.classname.as_str() {
+                _ if e.solids.is_empty() => continue,
+                "worldspawn" | "func_detail" => None,
+                "func_door" | "func_brush" => Some(i),
+                c if c.starts_with("trigger_") => {
+                    volumes.extend(e.solids.iter().map(|s| Volume::from_solid(i, s)));
+                    continue;
+                }
+                c => return Err(Error::Refused(format!("brush entity {c} is not ported"))),
+            };
+            for solid in &e.solids {
+                let mut block = Block::from_solid(solid, &looks)?;
+                block.owner = owner;
+                blocks.push(block);
+            }
+        }
+        Ok(Chamber {
+            blocks,
+            volumes,
+            entities,
+        })
+    }
+
+    /// shifts every block a brush entity owns, as its pusher moves
+    pub fn move_owner(&mut self, owner: usize, delta: Vec3) {
+        for b in self.blocks.iter_mut().filter(|b| b.owner == Some(owner)) {
+            b.translate(delta);
+        }
+    }
+}
+
+impl Volume {
+    fn from_solid(owner: usize, solid: &vmf::Solid) -> Volume {
+        let (min, max) = brush::bounds(&brush::faces(&solid.sides));
+        let own: Vec<Plane> = solid
+            .sides
+            .iter()
+            .map(|s| Plane {
+                normal: s.plane.normal,
+                distance: s.plane.dist,
+            })
+            .collect();
+        Volume {
+            owner,
+            min,
+            max,
+            planes: bevelled(&own),
+        }
     }
 }
 
@@ -112,6 +194,23 @@ impl Block {
             planes: bevelled(&own),
             sides,
             surfaceprop,
+            owner: None,
+        }
+    }
+
+    fn translate(&mut self, delta: Vec3) {
+        let shift = |p: &mut Vec3| *p = [0, 1, 2].map(|i| p[i] + delta[i]);
+        shift(&mut self.min);
+        shift(&mut self.max);
+        for plane in self
+            .planes
+            .iter_mut()
+            .chain(self.sides.iter_mut().map(|s| &mut s.plane))
+        {
+            plane.distance += dot(plane.normal, delta);
+        }
+        for side in &mut self.sides {
+            side.points.iter_mut().for_each(shift);
         }
     }
 

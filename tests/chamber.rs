@@ -223,6 +223,7 @@ fn portal_clearance_checks_thin_obstructions_between_the_ray_samples() {
             Surface::Rejects,
             "default",
         )],
+        ..Default::default()
     };
     assert!(!c.clear_portal(&p));
     c.blocks[0] = Block::cuboid(

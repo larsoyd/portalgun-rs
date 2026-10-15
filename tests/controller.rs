@@ -11,12 +11,14 @@ fn block(min: [f32; 3], max: [f32; 3]) -> Block {
 fn floor() -> Chamber {
     Chamber {
         blocks: vec![block([-1000.0, -1000.0, -16.0], [1000.0, 1000.0, 0.0])],
+        ..Default::default()
     }
 }
 #[test]
 fn a_fast_hull_hits_a_thin_wall_before_its_endpoint() {
     let c = Chamber {
         blocks: vec![block([0.0, -100.0, 0.0], [1.0, 100.0, 300.0])],
+        ..Default::default()
     };
     let mut w = Walker::at([-20.0, 0.0, 100.0]);
     w.velocity = [3500.0, 100.0, 0.0];
@@ -87,7 +89,10 @@ fn vertical_sequence_matches_the_binary_half_steps_at_fifteen_ms() {
 }
 #[test]
 fn falling_in_free_space_matches_constant_acceleration() {
-    let c = Chamber { blocks: vec![] };
+    let c = Chamber {
+        blocks: vec![],
+        ..Default::default()
+    };
     let mut w = Walker::at([0.0, 0.0, 500.0]);
     for _ in 0..20 {
         w.step(&Input::default(), DT, &c, None);
@@ -185,7 +190,10 @@ fn releasing_ctrl_under_a_ceiling_waits_for_standing_clearance() {
 }
 #[test]
 fn airborne_duck_raises_feet_by_the_full_hull_difference() {
-    let c = Chamber { blocks: vec![] };
+    let c = Chamber {
+        blocks: vec![],
+        ..Default::default()
+    };
     let mut w = Walker::at([0.0, 0.0, 100.0]);
     w.step(&duck_input(), DT, &c, None);
     assert_eq!(w.height(), 36.0);
@@ -304,6 +312,7 @@ fn two_walls_stop_both_horizontal_components_without_stopping_fall() {
             block([0.0, -100.0, 0.0], [1.0, 100.0, 300.0]),
             block([-100.0, 0.0, 0.0], [100.0, 1.0, 300.0]),
         ],
+        ..Default::default()
     };
     let mut w = Walker::at([-20.0, -20.0, 100.0]);
     w.velocity = [1000.0, 1000.0, -100.0];

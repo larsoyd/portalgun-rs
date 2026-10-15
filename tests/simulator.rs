@@ -20,6 +20,7 @@ fn room() -> Chamber {
             block([-1000.0, -1000.0, -64.0], [1000.0, 1000.0, 0.0]),
             block([500.0, -1000.0, 0.0], [564.0, 1000.0, 400.0]),
         ],
+        ..Default::default()
     }
 }
 
@@ -257,6 +258,7 @@ fn far_pair() -> (Chamber, [Portal; 2]) {
             block([-170.0, -100.0, -20.0], [-130.0, -60.0, 20.0]),
             block([1130.0, 60.0, -20.0], [1170.0, 100.0, 20.0]),
         ],
+        ..Default::default()
     };
     (c, [entry, exit])
 }
@@ -283,6 +285,7 @@ fn a_tie_between_the_real_and_carried_world_keeps_the_real_hit() {
             block([-170.0, -100.0, -20.0], [-130.0, -61.0, 80.0]),
             block([1130.0, 20.0, 31.0], [1170.0, 40.0, 60.0]),
         ],
+        ..Default::default()
     };
     let space = Space::new(&c, Some(&pair));
     let half = ([-16.0; 3], [16.0; 3]);

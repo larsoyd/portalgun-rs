@@ -1,0 +1,1442 @@
+versioninfo
+{
+	"editorversion" "400"
+}
+world
+{
+	"id" "1"
+	"classname" "worldspawn"
+	solid
+	{
+		"id" "7"
+		side
+		{
+			"id" "1"
+			"plane" "(-528 400 0) (528 400 0) (528 -400 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_FLOOR001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "2"
+			"plane" "(-528 -400 -16) (528 -400 -16) (528 400 -16)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "3"
+			"plane" "(-528 400 0) (-528 -400 0) (-528 -400 -16)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "4"
+			"plane" "(528 400 -16) (528 -400 -16) (528 -400 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "5"
+			"plane" "(528 400 0) (-528 400 0) (-528 400 -16)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "6"
+			"plane" "(528 -400 -16) (-528 -400 -16) (-528 -400 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "14"
+		side
+		{
+			"id" "8"
+			"plane" "(-528 400 272) (528 400 272) (528 -400 272)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "9"
+			"plane" "(-528 -400 256) (528 -400 256) (528 400 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_CEILING001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "10"
+			"plane" "(-528 400 272) (-528 -400 272) (-528 -400 256)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "11"
+			"plane" "(528 400 256) (528 -400 256) (528 -400 272)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "12"
+			"plane" "(528 400 272) (-528 400 272) (-528 400 256)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "13"
+			"plane" "(528 -400 256) (-528 -400 256) (-528 -400 272)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "21"
+		side
+		{
+			"id" "15"
+			"plane" "(-528 400 256) (-512 400 256) (-512 -400 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "16"
+			"plane" "(-528 -400 0) (-512 -400 0) (-512 400 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "17"
+			"plane" "(-528 400 256) (-528 -400 256) (-528 -400 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "18"
+			"plane" "(-512 400 0) (-512 -400 0) (-512 -400 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "19"
+			"plane" "(-512 400 256) (-528 400 256) (-528 400 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "20"
+			"plane" "(-512 -400 0) (-528 -400 0) (-528 -400 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "28"
+		side
+		{
+			"id" "22"
+			"plane" "(-512 -384 256) (512 -384 256) (512 -400 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "23"
+			"plane" "(-512 -400 0) (512 -400 0) (512 -384 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "24"
+			"plane" "(-512 -384 256) (-512 -400 256) (-512 -400 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "25"
+			"plane" "(512 -384 0) (512 -400 0) (512 -400 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "26"
+			"plane" "(512 -384 256) (-512 -384 256) (-512 -384 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "27"
+			"plane" "(512 -400 0) (-512 -400 0) (-512 -400 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "35"
+		side
+		{
+			"id" "29"
+			"plane" "(-512 400 256) (512 400 256) (512 384 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "30"
+			"plane" "(-512 384 0) (512 384 0) (512 400 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "31"
+			"plane" "(-512 400 256) (-512 384 256) (-512 384 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "32"
+			"plane" "(512 400 0) (512 384 0) (512 384 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "33"
+			"plane" "(512 400 256) (-512 400 256) (-512 400 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "34"
+			"plane" "(512 384 0) (-512 384 0) (-512 384 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "42"
+		side
+		{
+			"id" "36"
+			"plane" "(512 -56 256) (528 -56 256) (528 -400 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "37"
+			"plane" "(512 -400 0) (528 -400 0) (528 -56 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "38"
+			"plane" "(512 -56 256) (512 -400 256) (512 -400 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "39"
+			"plane" "(528 -56 0) (528 -400 0) (528 -400 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "40"
+			"plane" "(528 -56 256) (512 -56 256) (512 -56 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "41"
+			"plane" "(528 -400 0) (512 -400 0) (512 -400 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "49"
+		side
+		{
+			"id" "43"
+			"plane" "(512 400 256) (528 400 256) (528 56 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "44"
+			"plane" "(512 56 0) (528 56 0) (528 400 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "45"
+			"plane" "(512 400 256) (512 56 256) (512 56 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "46"
+			"plane" "(528 400 0) (528 56 0) (528 56 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "47"
+			"plane" "(528 400 256) (512 400 256) (512 400 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "48"
+			"plane" "(528 56 0) (512 56 0) (512 56 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "56"
+		side
+		{
+			"id" "50"
+			"plane" "(512 56 256) (528 56 256) (528 -56 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "51"
+			"plane" "(512 -56 104) (528 -56 104) (528 56 104)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "52"
+			"plane" "(512 56 256) (512 -56 256) (512 -56 104)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "53"
+			"plane" "(528 56 104) (528 -56 104) (528 -56 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "54"
+			"plane" "(528 56 256) (512 56 256) (512 56 104)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "55"
+			"plane" "(528 -56 104) (512 -56 104) (512 -56 256)"
+			"material" "CONCRETE/CONCRETE_MODULAR_WALL001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "63"
+		side
+		{
+			"id" "57"
+			"plane" "(528 72 0) (656 72 0) (656 -72 0)"
+			"material" "CONCRETE/CONCRETE_MODULAR_FLOOR001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "58"
+			"plane" "(528 -72 -16) (656 -72 -16) (656 72 -16)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "59"
+			"plane" "(528 72 0) (528 -72 0) (528 -72 -16)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "60"
+			"plane" "(656 72 -16) (656 -72 -16) (656 -72 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "61"
+			"plane" "(656 72 0) (528 72 0) (528 72 -16)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "62"
+			"plane" "(656 -72 -16) (528 -72 -16) (528 -72 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "70"
+		side
+		{
+			"id" "64"
+			"plane" "(528 72 136) (656 72 136) (656 -72 136)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "65"
+			"plane" "(528 -72 120) (656 -72 120) (656 72 120)"
+			"material" "CONCRETE/CONCRETE_MODULAR_CEILING001A"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "66"
+			"plane" "(528 72 136) (528 -72 136) (528 -72 120)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "67"
+			"plane" "(656 72 120) (656 -72 120) (656 -72 136)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "68"
+			"plane" "(656 72 136) (528 72 136) (528 72 120)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "69"
+			"plane" "(656 -72 120) (528 -72 120) (528 -72 136)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "77"
+		side
+		{
+			"id" "71"
+			"plane" "(528 -56 120) (656 -56 120) (656 -72 120)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "72"
+			"plane" "(528 -72 0) (656 -72 0) (656 -56 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "73"
+			"plane" "(528 -56 120) (528 -72 120) (528 -72 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "74"
+			"plane" "(656 -56 0) (656 -72 0) (656 -72 120)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "75"
+			"plane" "(656 -56 120) (528 -56 120) (528 -56 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "76"
+			"plane" "(656 -72 0) (528 -72 0) (528 -72 120)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "84"
+		side
+		{
+			"id" "78"
+			"plane" "(528 72 120) (656 72 120) (656 56 120)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "79"
+			"plane" "(528 56 0) (656 56 0) (656 72 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "80"
+			"plane" "(528 72 120) (528 56 120) (528 56 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "81"
+			"plane" "(656 72 0) (656 56 0) (656 56 120)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "82"
+			"plane" "(656 72 120) (528 72 120) (528 72 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "83"
+			"plane" "(656 56 0) (528 56 0) (528 56 120)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "91"
+		side
+		{
+			"id" "85"
+			"plane" "(656 72 120) (672 72 120) (672 -72 120)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "86"
+			"plane" "(656 -72 0) (672 -72 0) (672 72 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "87"
+			"plane" "(656 72 120) (656 -72 120) (656 -72 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "88"
+			"plane" "(672 72 0) (672 -72 0) (672 -72 120)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "89"
+			"plane" "(672 72 120) (656 72 120) (656 72 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "90"
+			"plane" "(672 -72 0) (656 -72 0) (656 -72 120)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "98"
+		side
+		{
+			"id" "92"
+			"plane" "(256 -64 256) (272 -64 256) (272 -384 256)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "93"
+			"plane" "(256 -384 0) (272 -384 0) (272 -64 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "94"
+			"plane" "(256 -64 256) (256 -384 256) (256 -384 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "95"
+			"plane" "(272 -64 0) (272 -384 0) (272 -384 256)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "96"
+			"plane" "(272 -64 256) (256 -64 256) (256 -64 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "97"
+			"plane" "(272 -384 0) (256 -384 0) (256 -384 256)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "105"
+		side
+		{
+			"id" "99"
+			"plane" "(256 384 256) (272 384 256) (272 64 256)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "100"
+			"plane" "(256 64 0) (272 64 0) (272 384 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "101"
+			"plane" "(256 384 256) (256 64 256) (256 64 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "102"
+			"plane" "(272 384 0) (272 64 0) (272 64 256)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "103"
+			"plane" "(272 384 256) (256 384 256) (256 384 0)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "104"
+			"plane" "(272 64 0) (256 64 0) (256 64 256)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+	solid
+	{
+		"id" "112"
+		side
+		{
+			"id" "106"
+			"plane" "(256 64 256) (272 64 256) (272 -64 256)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "107"
+			"plane" "(256 -64 128) (272 -64 128) (272 64 128)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "108"
+			"plane" "(256 64 256) (256 -64 256) (256 -64 128)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "109"
+			"plane" "(272 64 128) (272 -64 128) (272 -64 256)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "110"
+			"plane" "(272 64 256) (256 64 256) (256 64 128)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "111"
+			"plane" "(272 -64 128) (256 -64 128) (256 -64 256)"
+			"material" "METAL/METALWALL048B"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+}
+entity
+{
+	"id" "113"
+	"classname" "info_player_start"
+	"origin" "-384 0 0"
+	"angles" "0 0 0"
+}
+entity
+{
+	"id" "114"
+	"classname" "filter_activator_name"
+	"targetname" "filter_boxes"
+	"filtername" "box"
+	"Negated" "Allow"
+	"origin" "-448 -320 16"
+}
+entity
+{
+	"id" "122"
+	"classname" "func_door"
+	"targetname" "button_door"
+	"origin" "0 -192 4"
+	"speed" "25"
+	"movedir" "90 0 0"
+	"lip" "0"
+	"wait" "-1"
+	"spawnflags" "0"
+	connections
+	{
+		"OnOpen" "indicator_toggle,SetTextureIndex,1,0,-1"
+		"OnOpen" "button_down,PlaySound,,0,-1"
+		"OnClose" "indicator_toggle,SetTextureIndex,0,0,-1"
+		"OnClose" "button_up,PlaySound,,0,-1"
+	}
+	solid
+	{
+		"id" "121"
+		side
+		{
+			"id" "115"
+			"plane" "(-29.5 -163 8) (29.5 -163 8) (29.5 -221 8)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "116"
+			"plane" "(-29.5 -221 0) (29.5 -221 0) (29.5 -163 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "117"
+			"plane" "(-29.5 -163 8) (-29.5 -221 8) (-29.5 -221 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "118"
+			"plane" "(29.5 -163 0) (29.5 -221 0) (29.5 -221 8)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "119"
+			"plane" "(29.5 -163 8) (-29.5 -163 8) (-29.5 -163 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "120"
+			"plane" "(29.5 -221 0) (-29.5 -221 0) (-29.5 -221 8)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+}
+entity
+{
+	"id" "123"
+	"classname" "prop_dynamic"
+	"targetname" "button_top"
+	"model" "models/props/button_top_reference.mdl"
+	"origin" "0.434 -192.293 1.556"
+	"angles" "0 270 0"
+	"parentname" "button_door"
+	"solid" "6"
+}
+entity
+{
+	"id" "124"
+	"classname" "prop_static"
+	"model" "models/props/button_base_reference.mdl"
+	"origin" "0 -192 0"
+	"angles" "0 270 0"
+}
+entity
+{
+	"id" "132"
+	"classname" "trigger_multiple"
+	"targetname" "button_trigger_box"
+	"spawnflags" "8"
+	"filtername" "filter_boxes"
+	"wait" "1"
+	"origin" "0 -192 16"
+	connections
+	{
+		"OnTrigger" "exit_door_right,Open,,0,-1"
+		"OnTrigger" "button_door,Open,,0,-1"
+		"OnTrigger" "button_trigger_player,Disable,,0,-1"
+		"OnTrigger" "exit_door_left,Open,,0,-1"
+		"OnEndTouchAll" "exit_door_right,Close,,0,-1"
+		"OnEndTouchAll" "button_door,Close,,0,-1"
+		"OnEndTouchAll" "button_trigger_player,Enable,,0,-1"
+		"OnEndTouchAll" "exit_door_left,Close,,0,-1"
+	}
+	solid
+	{
+		"id" "131"
+		side
+		{
+			"id" "125"
+			"plane" "(-4 -188 17) (4 -188 17) (4 -196 17)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "126"
+			"plane" "(-4 -196 15.3) (4 -196 15.3) (4 -188 15.3)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "127"
+			"plane" "(-4 -188 17) (-4 -196 17) (-4 -196 15.3)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "128"
+			"plane" "(4 -188 15.3) (4 -196 15.3) (4 -196 17)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "129"
+			"plane" "(4 -188 17) (-4 -188 17) (-4 -188 15.3)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "130"
+			"plane" "(4 -196 15.3) (-4 -196 15.3) (-4 -196 17)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+}
+entity
+{
+	"id" "140"
+	"classname" "trigger_multiple"
+	"targetname" "button_trigger_player"
+	"spawnflags" "1"
+	"wait" "1"
+	"origin" "0 -192 15"
+	connections
+	{
+		"OnTrigger" "exit_door_right,Open,,0,-1"
+		"OnTrigger" "button_door,Open,,0,-1"
+		"OnTrigger" "button_trigger_box,Disable,,0,-1"
+		"OnTrigger" "exit_door_left,Open,,0,-1"
+		"OnEndTouchAll" "exit_door_right,Close,,0,-1"
+		"OnEndTouchAll" "button_door,Close,,0,-1"
+		"OnEndTouchAll" "button_trigger_box,Enable,,0,-1"
+		"OnEndTouchAll" "exit_door_left,Close,,0,-1"
+	}
+	solid
+	{
+		"id" "139"
+		side
+		{
+			"id" "133"
+			"plane" "(-24 -168 16.2) (24 -168 16.2) (24 -216 16.2)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "134"
+			"plane" "(-24 -216 14.7) (24 -216 14.7) (24 -168 14.7)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "135"
+			"plane" "(-24 -168 16.2) (-24 -216 16.2) (-24 -216 14.7)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "136"
+			"plane" "(24 -168 14.7) (24 -216 14.7) (24 -216 16.2)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "137"
+			"plane" "(24 -168 16.2) (-24 -168 16.2) (-24 -168 14.7)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "138"
+			"plane" "(24 -216 14.7) (-24 -216 14.7) (-24 -216 16.2)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+}
+entity
+{
+	"id" "141"
+	"classname" "ambient_generic"
+	"targetname" "button_down"
+	"message" "Portal.button_down"
+	"spawnflags" "48"
+	"radius" "1250"
+	"SourceEntityName" "button_door"
+	"health" "10"
+	"origin" "0 -192 32"
+}
+entity
+{
+	"id" "142"
+	"classname" "ambient_generic"
+	"targetname" "button_up"
+	"message" "Portal.button_up"
+	"spawnflags" "48"
+	"radius" "1250"
+	"SourceEntityName" "button_door"
+	"health" "10"
+	"origin" "0 -192 32"
+}
+entity
+{
+	"id" "150"
+	"classname" "func_door"
+	"targetname" "exit_door_right"
+	"origin" "520 28 52"
+	"speed" "250"
+	"movedir" "0 90 0"
+	"lip" "12"
+	"wait" "-1"
+	"noise2" "Doors.FullClose8"
+	"spawnflags" "0"
+	solid
+	{
+		"id" "149"
+		side
+		{
+			"id" "143"
+			"plane" "(516 56 104) (524 56 104) (524 0 104)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "144"
+			"plane" "(516 0 0) (524 0 0) (524 56 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "145"
+			"plane" "(516 56 104) (516 0 104) (516 0 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "146"
+			"plane" "(524 56 0) (524 0 0) (524 0 104)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "147"
+			"plane" "(524 56 104) (516 56 104) (516 56 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "148"
+			"plane" "(524 0 0) (516 0 0) (516 0 104)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+}
+entity
+{
+	"id" "158"
+	"classname" "func_door"
+	"targetname" "exit_door_left"
+	"origin" "520 -28 52"
+	"speed" "250"
+	"movedir" "0 270 0"
+	"lip" "12"
+	"wait" "-1"
+	"noise2" "Doors.FullClose8"
+	"spawnflags" "0"
+	solid
+	{
+		"id" "157"
+		side
+		{
+			"id" "151"
+			"plane" "(516 0 104) (524 0 104) (524 -56 104)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "152"
+			"plane" "(516 -56 0) (524 -56 0) (524 0 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "153"
+			"plane" "(516 0 104) (516 -56 104) (516 -56 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "154"
+			"plane" "(524 0 0) (524 -56 0) (524 -56 104)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "155"
+			"plane" "(524 0 104) (516 0 104) (516 0 0)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "156"
+			"plane" "(524 -56 0) (516 -56 0) (516 -56 104)"
+			"material" "tools/toolsnodraw"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+}
+entity
+{
+	"id" "159"
+	"classname" "prop_dynamic"
+	"targetname" "exit_door_left_model"
+	"model" "models/props/door_01_lftdoor_reference.mdl"
+	"origin" "520 0 0"
+	"angles" "0 0 0"
+	"parentname" "exit_door_right"
+	"solid" "6"
+}
+entity
+{
+	"id" "160"
+	"classname" "prop_dynamic"
+	"targetname" "exit_door_right_model"
+	"model" "models/props/door_01_rtdoor_reference.mdl"
+	"origin" "520 0 0"
+	"angles" "0 0 0"
+	"parentname" "exit_door_left"
+	"solid" "6"
+}
+entity
+{
+	"id" "161"
+	"classname" "prop_static"
+	"model" "models/props/door_01_frame_reference.mdl"
+	"origin" "520 0 0"
+	"angles" "0 0 0"
+}
+entity
+{
+	"id" "162"
+	"classname" "env_texturetoggle"
+	"targetname" "indicator_toggle"
+	"target" "indicator"
+	"origin" "32 -160 16"
+}
+entity
+{
+	"id" "163"
+	"classname" "info_overlay"
+	"targetname" "indicator"
+	"material" "signage/indicator_lights/indicator_lights_floor"
+	"origin" "256 -192 0.1"
+	"BasisOrigin" "256 -192 0.1"
+	"BasisNormal" "0 0 1"
+	"BasisU" "1 0 0"
+	"BasisV" "0 1 0"
+	"StartU" "0"
+	"EndU" "8"
+	"StartV" "0"
+	"EndV" "1"
+	"uv0" "-208 -8 0"
+	"uv1" "-208 8 0"
+	"uv2" "240 8 0"
+	"uv3" "240 -8 0"
+}
+entity
+{
+	"id" "171"
+	"classname" "trigger_portal_cleanser"
+	"targetname" "fryer"
+	"spawnflags" "65"
+	"origin" "264 0 64"
+	connections
+	{
+		"OnDissolveBox" "drop_box,Trigger,,2,-1"
+	}
+	solid
+	{
+		"id" "170"
+		side
+		{
+			"id" "164"
+			"plane" "(260 64 128) (268 64 128) (268 -64 128)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "165"
+			"plane" "(260 -64 0) (268 -64 0) (268 64 0)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 -1 0 0] 0.25"
+		}
+		side
+		{
+			"id" "166"
+			"plane" "(260 64 128) (260 -64 128) (260 -64 0)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "167"
+			"plane" "(268 64 0) (268 -64 0) (268 -64 128)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[0 1 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "168"
+			"plane" "(268 64 128) (260 64 128) (260 64 0)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+		side
+		{
+			"id" "169"
+			"plane" "(268 -64 0) (260 -64 0) (260 -64 128)"
+			"material" "tools/toolstrigger"
+			"uaxis" "[1 0 0 0] 0.25"
+			"vaxis" "[0 0 -1 0] 0.25"
+		}
+	}
+}
+entity
+{
+	"id" "172"
+	"classname" "info_particle_system"
+	"effect_name" "portal_cleanser"
+	"start_active" "1"
+	"origin" "264 0 64"
+	"angles" "0 0 0"
+}
+entity
+{
+	"id" "173"
+	"classname" "prop_physics"
+	"targetname" "box"
+	"model" "models/props/metal_box.mdl"
+	"spawnflags" "256"
+	"origin" "-256 192 20"
+	"angles" "0 0 0"
+	connections
+	{
+		"OnOutOfWorld" "!activator,Kill,,0,-1"
+		"OnOutOfWorld" "drop_box,Trigger,,0,-1"
+	}
+}
+entity
+{
+	"id" "174"
+	"classname" "point_template"
+	"targetname" "box_template"
+	"Template01" "box"
+	"spawnflags" "3"
+	"origin" "-256 192 20"
+}
+entity
+{
+	"id" "175"
+	"classname" "env_entity_maker"
+	"targetname" "box_maker"
+	"EntityTemplate" "box_template"
+	"origin" "-256 192 200"
+	"angles" "0 0 0"
+	"spawnflags" "0"
+}
+entity
+{
+	"id" "176"
+	"classname" "prop_dynamic"
+	"targetname" "box_dropper"
+	"model" "models/props/box_dropper.mdl"
+	"origin" "-256 192 256"
+	"angles" "0 0 0"
+}
+entity
+{
+	"id" "177"
+	"classname" "prop_dynamic"
+	"targetname" "box_dropper_cover"
+	"model" "models/props/box_dropper_cover.mdl"
+	"origin" "-256 192 256"
+	"angles" "0 0 0"
+}
+entity
+{
+	"id" "178"
+	"classname" "logic_relay"
+	"targetname" "drop_box"
+	"origin" "-448 -320 32"
+	connections
+	{
+		"OnTrigger" "box_dropper_cover,SetAnimation,open,0,-1"
+		"OnTrigger" "box_maker,ForceSpawn,,0.5,-1"
+		"OnTrigger" "box_dropper_cover,SetAnimation,close,2,-1"
+	}
+}

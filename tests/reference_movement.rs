@@ -21,6 +21,7 @@ fn compare(csv: &str) {
             Surface::Portalable,
             "default",
         )],
+        ..Default::default()
     };
     let mut walker = Walker::at([initial[9], initial[10], initial[11]]);
     walker.step(&Input::default(), 0.015, &chamber, None);

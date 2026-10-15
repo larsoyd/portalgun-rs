@@ -18,6 +18,7 @@ fn room() -> Chamber {
             block([-512.0, -512.0, -16.0], [512.0, 512.0, 0.0]),
             block([-16.0, -512.0, 0.0], [0.0, 512.0, 512.0]),
         ],
+        ..Default::default()
     }
 }
 
@@ -233,6 +234,7 @@ fn walking_pushes_a_cube_but_not_the_one_supporting_the_player() {
 fn rotated_cube_clears_a_brush_corner_without_a_phantom_overlap() {
     let chamber = Chamber {
         blocks: vec![block([-100.0, -100.0, -100.0], [0.0, 0.0, 100.0])],
+        ..Default::default()
     };
     let space = Space::new(&chamber, None);
     let basis = IDENTITY.map(|v| portal::carry::yaw_rotate(v, 45.0));
@@ -317,6 +319,7 @@ fn object_overlap_waits_when_every_separation_path_crosses_static_solids() {
             block([-64.0, -32.0, 0.0], [64.0, -16.0, 73.0]),
             block([-64.0, 16.0, 0.0], [64.0, 32.0, 73.0]),
         ],
+        ..Default::default()
     };
     let mut player = Walker::at([0.0, 0.0, 0.03125]);
     let cube = RigidCube::at([0.0, 0.0, 40.0]);

@@ -26,6 +26,7 @@ fn app() -> App {
                 portal::placement::Surface::Portalable,
                 "default",
             )],
+            ..Default::default()
         }))
         .add_plugins(MovementPlugin);
     app.world_mut().resource_mut::<Player>().0 = Walker::at([0.0; 3]);

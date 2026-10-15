@@ -95,7 +95,7 @@ fn run(args: Args, mut app: App) -> ExitCode {
         Ok(s) => s,
         Err(e) => return refuse(&e.to_string()),
     };
-    let chamber = match Chamber::test_chamber(&install.search) {
+    let chamber = match Chamber::named(&install.search, &args.chamber) {
         Ok(c) => c,
         Err(e) => return refuse(&e.to_string()),
     };
