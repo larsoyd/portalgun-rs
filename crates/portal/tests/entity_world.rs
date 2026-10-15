@@ -208,3 +208,14 @@ fn logic_auto_fires_new_game_then_map_spawn_two_tenths_after_spawn_and_removes_i
     );
     assert_eq!(world.count("logic_auto"), 0);
 }
+
+#[test]
+fn a_removed_entity_loses_its_name_at_once() {
+    let mut world = relay_world("1");
+    world.input("relay", "Trigger", None);
+    world.input("relay", "Trigger", None);
+    assert_eq!(
+        run(&mut world, 0.6),
+        ["relay.Trigger()", "relay.Trigger() unhandled", "probe.Enable()"]
+    );
+}

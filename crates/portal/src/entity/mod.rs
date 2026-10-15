@@ -383,8 +383,8 @@ impl World {
             return;
         }
         for h in targets {
-            let handled = self.accept(h, &e.input, e.activator);
             let label = self.slot(h).label().to_string();
+            let handled = self.accept(h, &e.input, e.activator);
             self.record(&caller, label, &e.input, &param, handled);
         }
     }
@@ -493,8 +493,10 @@ impl World {
         self.queue.cancel(h);
     }
 
+    /// Translated from 0x9d7a50 (decompiled, server.so)
     fn remove(&mut self, h: Handle) {
         if !self.doomed.contains(&h) {
+            self.slot_mut(h).name = None;
             self.doomed.push(h);
         }
     }
