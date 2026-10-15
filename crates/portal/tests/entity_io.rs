@@ -194,5 +194,6 @@ fn names_match_without_case_and_with_a_trailing_star() {
 #[test]
 fn name_case_folding_is_a_plain_32_offset_as_in_the_original() {
     assert!(name_matches(Some("door_0"), "door_P"));
+    assert!(name_matches(Some("BOX_Z"), "box_z"));
     assert!(!name_matches(Some("door_{"), "door_["));
 }

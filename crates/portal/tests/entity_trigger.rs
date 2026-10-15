@@ -269,3 +269,18 @@ fn a_box_on_the_first_chambers_button_opens_both_exit_doors_and_the_button() {
         ]
     );
 }
+
+#[test]
+fn vehicle_flags_turn_on_clients_and_only_the_out_of_vehicle_one_lets_a_walker_in() {
+    for (flags, expect) in [("512", true), ("32", false)] {
+        let mut world = World::spawn(&watched("trigger_multiple", &[("spawnflags", flags)]));
+        let player = world.add_player();
+        let t = world.find("t").unwrap();
+        world.start_touch(t, player);
+        assert_eq!(
+            !ticks(&mut world, 0.015).is_empty(),
+            expect,
+            "spawnflags {flags}"
+        );
+    }
+}

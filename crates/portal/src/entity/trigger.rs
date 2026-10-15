@@ -7,6 +7,7 @@ use super::{Body, Kind, Think, World};
 const CLIENTS: u32 = 0x1;
 const NPCS: u32 = 0x2;
 const PHYSICS: u32 = 0x8;
+const ONLY_IN_VEHICLES: u32 = 0x20;
 const EVERYTHING: u32 = 0x40;
 const DEFAULT_WAIT: f32 = 0.2;
 const REMOVE_DELAY: f32 = 0.1;
@@ -56,7 +57,7 @@ pub(super) fn spawnflags(flags: u32) -> u32 {
     if flags & 0x810 != 0 {
         flags |= NPCS;
     }
-    if flags & 0x20 != 0 || flags & 0x200 != 0 {
+    if flags & ONLY_IN_VEHICLES != 0 || flags & 0x200 != 0 {
         flags |= CLIENTS;
     }
     flags
@@ -106,7 +107,7 @@ fn passes(world: &World, h: Handle, other: Handle) -> bool {
     let class = flags & EVERYTHING != 0
         || (flags & CLIENTS != 0 && body == Body::Player)
         || (flags & PHYSICS != 0 && body == Body::Physics);
-    if !class {
+    if !class || (body == Body::Player && flags & ONLY_IN_VEHICLES != 0) {
         return false;
     }
     let Kind::Trigger(t) = &world.slot(h).kind else {
