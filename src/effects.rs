@@ -19,7 +19,7 @@ use portal::particles::renderers::{Camera as ParticleCamera, Look};
 use portal::particles::system::{Definition, System};
 
 use crate::faces::Portals;
-use crate::particle_material::{ParticleMaterial, ParticleMaterials, FRAME_BLEND};
+use crate::particle_material::{FrameCopy, ParticleMaterial, ParticleMaterials, FRAME_BLEND};
 use crate::portals::{Colour, Pair};
 use crate::scene::Level;
 use crate::units::{from_bevy, from_bevy_dir, to_bevy};
@@ -332,7 +332,9 @@ pub struct EffectsPlugin;
 impl Plugin for EffectsPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "shaders/particle.wgsl");
+        embedded_asset!(app, "shaders/frame_copy.wgsl");
         app.add_plugins(MaterialPlugin::<ParticleMaterial>::default())
+            .add_plugins(MaterialPlugin::<FrameCopy>::default())
             .init_resource::<Draws>()
             .add_systems(Startup, crate::particle_material::load)
             .add_systems(
@@ -469,6 +471,17 @@ fn draw(
                                 NoFrustumCulling,
                             ))
                             .id();
+                        if let Some(copy) = &material.frame_copy {
+                            commands.spawn((
+                                Mesh3d(handle.clone()),
+                                MeshMaterial3d(copy.clone()),
+                                Transform::IDENTITY,
+                                Visibility::Inherited,
+                                RenderLayers::layer(layer.0),
+                                NoFrustumCulling,
+                                ChildOf(entity),
+                            ));
+                        }
                         draws.0.insert(key, (entity, handle));
                     }
                 }
@@ -590,6 +603,90 @@ mod tests {
     }
 
     #[test]
+    fn a_fizzle_warp_draws_after_a_frame_copy_and_its_sparks_take_none() {
+        let home = std::env::var("HOME").unwrap();
+        let install = Install::open(&portal::install::root(
+            None,
+            std::env::var("PORTAL_DIR").ok().as_deref(),
+            std::path::Path::new(&home),
+        ))
+        .unwrap();
+        let mut fx = ParticleEffects::read(&install).unwrap();
+        let wall = Portal::new(
+            [100.0, 0.0, 64.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            (32.0, 54.0),
+        );
+        fx.spawn(
+            Colour::Orange,
+            Effect::BadSurface,
+            Frame::impact(&wall, 1.0),
+            None,
+        );
+        for _ in 0..5 {
+            fx.simulate(0.02, &ParticleWorld::default());
+        }
+        let mut app = App::new();
+        app.insert_resource(fx)
+            .insert_resource(Files(install.search))
+            .insert_resource(Assets::<Image>::default())
+            .insert_resource(Assets::<Mesh>::default())
+            .insert_resource(Assets::<ParticleMaterial>::default())
+            .insert_resource(Assets::<FrameCopy>::default())
+            .init_resource::<Draws>()
+            .add_systems(Startup, crate::particle_material::load)
+            .add_systems(Update, draw);
+        app.world_mut().spawn((
+            Camera::default(),
+            Transform::from_xyz(0.0, 1.0, 0.0),
+            ParticleView(32),
+        ));
+        app.update();
+        let world = app.world();
+        let warp = &world.resource::<ParticleMaterials>().0["particle\\warp2_warp.vmt"];
+        let copy = warp
+            .frame_copy
+            .clone()
+            .expect("the warp asks for a frame copy");
+        let copy_material = world.resource::<Assets<FrameCopy>>().get(&copy).unwrap();
+        assert!(copy_material.reads_view_transmission_texture());
+        assert_eq!(copy_material.alpha_mode(), AlphaMode::Opaque);
+        let (mut warps, mut sparks) = (0, 0);
+        for (entity, mesh) in world.resource::<Draws>().0.values() {
+            let material = world
+                .get::<MeshMaterial3d<ParticleMaterial>>(*entity)
+                .unwrap();
+            let anchors: Vec<_> = world
+                .get::<Children>(*entity)
+                .map(|c| c.iter().collect())
+                .unwrap_or_default();
+            if material.0 == warp.handle {
+                warps += 1;
+                assert_eq!(anchors.len(), 1);
+                let anchor = anchors[0];
+                assert_eq!(
+                    world.get::<MeshMaterial3d<FrameCopy>>(anchor).unwrap().0,
+                    copy
+                );
+                assert_eq!(world.get::<Mesh3d>(anchor).unwrap().0, *mesh);
+                assert_eq!(
+                    world.get::<RenderLayers>(anchor),
+                    world.get::<RenderLayers>(*entity)
+                );
+            } else {
+                sparks += 1;
+                assert!(anchors.is_empty());
+            }
+        }
+        assert_eq!(
+            (warps > 0, sparks > 0),
+            (true, true),
+            "warps={warps} sparks={sparks}"
+        );
+    }
+
+    #[test]
     fn camera_geometry_and_assets_are_reused_and_removed() {
         let home = std::env::var("HOME").unwrap();
         let install = Install::open(&portal::install::root(
@@ -617,6 +714,7 @@ mod tests {
             .insert_resource(Assets::<Image>::default())
             .insert_resource(Assets::<Mesh>::default())
             .insert_resource(Assets::<ParticleMaterial>::default())
+            .insert_resource(Assets::<FrameCopy>::default())
             .init_resource::<Draws>()
             .add_systems(Startup, crate::particle_material::load)
             .add_systems(Update, draw);

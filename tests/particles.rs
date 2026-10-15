@@ -133,11 +133,11 @@ fn installed_materials_preserve_blends_and_sheets() {
         .unwrap()
         .unwrap();
     assert_eq!(energy.blend, Blend::Add);
-    assert!(
-        MaterialSource::read(&install.search, "particle/warp2_warp.vmt")
-            .unwrap()
-            .is_none()
-    );
+    let warp = MaterialSource::read(&install.search, "particle/warp2_warp.vmt")
+        .unwrap()
+        .unwrap();
+    assert_eq!(warp.blend, Blend::Refract);
+    assert!(warp.card.is_none());
 }
 
 #[test]

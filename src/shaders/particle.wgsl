@@ -3,6 +3,9 @@
 
 #import bevy_pbr::mesh_functions
 #import bevy_pbr::mesh_view_bindings::view
+#ifdef REFRACT
+#import bevy_pbr::mesh_view_bindings::{view_transmission_texture, view_transmission_sampler}
+#endif
 #ifdef DEPTH_PREPASS
 #import bevy_pbr::prepass_utils::prepass_depth
 #endif
@@ -43,8 +46,27 @@ fn vertex(v: Vertex) -> Output {
     out.depth = -(view.view_from_world * world).z / 0.0254;
     return out;
 }
+#ifdef REFRACT
+fn frame(uv: vec2<f32>) -> vec3<f32> {
+    return textureSample(view_transmission_texture, view_transmission_sampler, uv).rgb;
+}
+#endif
 @fragment
 fn fragment(in: Output) -> @location(0) vec4<f32> {
+#ifdef REFRACT
+    // refract_ps20b static 66, the frame copy bent by the normal map then blurred over four taps
+    let n = textureSample(base, base_sampler, in.uv);
+    let screen = (in.position.xy - view.viewport.xy) / view.viewport.zw;
+    let uv = screen + (2.0 * n.xy - 1.0) * (n.a * params.card.x * in.color.a);
+    var fb = frame(uv);
+    if params.card.y > 0.5 {
+        let a = 1.0 / 512.0;
+        let b = 1.0 / 1024.0;
+        fb = frame(uv + vec2(a, -b)) * 0.222222194 + frame(uv + vec2(-b, -b)) * 0.444444388
+            + frame(uv + vec2(-b, a)) * 0.222222194 + frame(uv + vec2(a, a)) * 0.111111097;
+    }
+    return vec4(fb * in.color.rgb * params.depth.rgb, n.a * in.color.a);
+#else
     let a = textureSample(base, base_sampler, in.uv);
     let b = textureSample(base, base_sampler, in.uv_next);
     let t = mix(a, b, in.blend * params.card.w);
@@ -69,4 +91,5 @@ fn fragment(in: Output) -> @location(0) vec4<f32> {
     rgb = tone_mapping(vec4(rgb, alpha), view.color_grading).rgb;
 #endif
     return vec4(rgb, alpha);
+#endif
 }

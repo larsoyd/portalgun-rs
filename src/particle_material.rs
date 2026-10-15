@@ -28,6 +28,7 @@ pub enum Blend {
     AddAlpha,
     Over,
     Premultiplied,
+    Refract,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -63,10 +64,13 @@ impl Material for ParticleMaterial {
     fn fragment_shader() -> ShaderRef {
         Self::vertex_shader()
     }
+    fn reads_view_transmission_texture(&self) -> bool {
+        self.key.blend == Blend::Refract
+    }
     fn alpha_mode(&self) -> AlphaMode {
         match self.key.blend {
             Blend::Add | Blend::AddAlpha => AlphaMode::Add,
-            Blend::Over => AlphaMode::Blend,
+            Blend::Over | Blend::Refract => AlphaMode::Blend,
             Blend::Premultiplied => AlphaMode::Premultiplied,
         }
     }
@@ -90,6 +94,12 @@ impl Material for ParticleMaterial {
             FRAME_BLEND.at_shader_location(4),
         ])?];
         descriptor.primitive.cull_mode = None;
+        if key.bind_group_data.blend == Blend::Refract {
+            descriptor.vertex.shader_defs.push("REFRACT".into());
+            if let Some(fragment) = descriptor.fragment.as_mut() {
+                fragment.shader_defs.push("REFRACT".into());
+            }
+        }
         if let Some(depth) = descriptor.depth_stencil.as_mut() {
             depth.depth_write_enabled = Some(false);
             if key.bind_group_data.ignore_z {
@@ -99,7 +109,7 @@ impl Material for ParticleMaterial {
         let (src, dst) = match key.bind_group_data.blend {
             Blend::Add => (BlendFactor::One, BlendFactor::One),
             Blend::AddAlpha => (BlendFactor::SrcAlpha, BlendFactor::One),
-            Blend::Over => (BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha),
+            Blend::Over | Blend::Refract => (BlendFactor::SrcAlpha, BlendFactor::OneMinusSrcAlpha),
             Blend::Premultiplied => (BlendFactor::One, BlendFactor::OneMinusSrcAlpha),
         };
         if let Some(fragment) = &mut descriptor.fragment {
@@ -118,8 +128,45 @@ impl Material for ParticleMaterial {
     }
 }
 
+/// Draws nothing in the transmissive pass, so the frame is copied before a refracting effect draws
+/// Translated from 0x5ccbd0 (decompiled, client.so)
+#[derive(Asset, TypePath, AsBindGroup, Clone, Debug, Default)]
+pub struct FrameCopy {}
+impl Material for FrameCopy {
+    fn vertex_shader() -> ShaderRef {
+        "embedded://portalgun/shaders/frame_copy.wgsl".into()
+    }
+    fn fragment_shader() -> ShaderRef {
+        Self::vertex_shader()
+    }
+    fn reads_view_transmission_texture(&self) -> bool {
+        true
+    }
+    fn enable_prepass() -> bool {
+        false
+    }
+    fn enable_shadows() -> bool {
+        false
+    }
+    fn specialize(
+        _: &MaterialPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        layout: &MeshVertexBufferLayoutRef,
+        _: MaterialPipelineKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        descriptor.vertex.buffers = vec![layout
+            .0
+            .get_layout(&[Mesh::ATTRIBUTE_POSITION.at_shader_location(0)])?];
+        if let Some(depth) = descriptor.depth_stencil.as_mut() {
+            depth.depth_write_enabled = Some(false);
+        }
+        Ok(())
+    }
+}
+
 pub struct LoadedMaterial {
     pub handle: Handle<ParticleMaterial>,
+    pub frame_copy: Option<Handle<FrameCopy>>,
     pub height: f32,
     pub sheet: Option<Sheet>,
     pub card: Option<Card>,
@@ -172,10 +219,6 @@ impl MaterialSource {
             .map_err(|e| e.to_string())?;
         let shader = roots.first().ok_or_else(|| format!("{path}: empty"))?;
         let kind = shader.key.to_ascii_lowercase();
-        if kind == "refract" {
-            warn!("[particles] material={name} unsupported=Refract");
-            return Ok(None);
-        }
         let float = |key: &str, default: f32| {
             shader
                 .get(key)
@@ -183,6 +226,44 @@ impl MaterialSource {
                 .unwrap_or(default)
         };
         let on = |key: &str| float(key, 0.0) != 0.0;
+        // Translated from 0x61fb0 (decompiled, stdshader_dx9.so)
+        if kind == "refract" {
+            let textures = ["$basetexture", "$refracttinttexture", "$envmap"];
+            if textures.iter().any(|k| shader.get(k).is_some())
+                || on("$masked")
+                || on("$fadeoutonsilhouette")
+                || !on("$vertexcolormodulate")
+            {
+                return Err(format!("{path}: unsupported Refract combo"));
+            }
+            let normal = shader
+                .get("$normalmap")
+                .ok_or_else(|| format!("{path}: Refract without $normalmap"))?
+                .trim()
+                .replace('\\', "/");
+            let tint = shader.get("$refracttint").unwrap_or("[1 1 1]");
+            let [r, g, b] = crate::texture::colour(tint)
+                .ok_or_else(|| format!("{path}: $refracttint {tint:?}"))?
+                .map(|c| c.powf(2.2));
+            return Ok(Some(Self {
+                image: crate::texture::load_as(search, &normal, false)?,
+                height: 1.0,
+                sheet: None,
+                card: None,
+                blend: Blend::Refract,
+                params: Params {
+                    flags: Vec4::ZERO,
+                    card: Vec4::new(
+                        float("$refractamount", 0.0),
+                        float("$bluramount", 0.0).clamp(0.0, 1.0).trunc(),
+                        0.0,
+                        0.0,
+                    ),
+                    depth: Vec4::new(r, g, b, 0.0),
+                },
+                ignore_z: on("$ignorez"),
+            }));
+        }
         let (mut image, height, sheet, alpha_bits) = if let Some(base) = shader.get("$basetexture")
         {
             let base = base.trim().replace('\\', "/");
@@ -302,6 +383,7 @@ pub(crate) fn load(
     files: Res<Files>,
     mut images: ResMut<Assets<Image>>,
     mut assets: ResMut<Assets<ParticleMaterial>>,
+    mut copies: ResMut<Assets<FrameCopy>>,
 ) {
     let mut names: Vec<_> = fx.defs.iter().map(|d| d.material.as_str()).collect();
     names.sort();
@@ -322,6 +404,7 @@ pub(crate) fn load(
                     name.into(),
                     LoadedMaterial {
                         handle,
+                        frame_copy: (m.blend == Blend::Refract).then(|| copies.add(FrameCopy {})),
                         height: m.height,
                         sheet: m.sheet,
                         card: m.card,
@@ -338,4 +421,48 @@ pub(crate) fn load(
         materials.0.len()
     );
     commands.insert_resource(materials);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use portal::install::Install;
+
+    fn search() -> SearchPath {
+        let home = std::env::var("HOME").unwrap();
+        let root = portal::install::root(None, None, std::path::Path::new(&home));
+        Install::open(&root).unwrap().search
+    }
+
+    fn material(m: &MaterialSource) -> ParticleMaterial {
+        ParticleMaterial {
+            params: m.params,
+            texture: Handle::default(),
+            key: MaterialKey {
+                blend: m.blend,
+                ignore_z: m.ignore_z,
+            },
+        }
+    }
+
+    #[test]
+    fn the_fizzle_warp_refracts_a_blurred_copy_of_the_frame_through_its_normal_map() {
+        let search = search();
+        let warp = MaterialSource::read(&search, "particle/warp2_warp.vmt")
+            .unwrap()
+            .expect("warp2_warp loads");
+        assert_eq!(warp.blend, Blend::Refract);
+        assert_eq!(warp.params.card, Vec4::new(0.5, 1.0, 0.0, 0.0));
+        assert_eq!(warp.params.depth, Vec4::new(1.0, 1.0, 1.0, 0.0));
+        assert_eq!(warp.params.flags.z, 0.0, "vertex colour stays raw");
+        assert!(!warp.image.texture_descriptor.format.is_srgb());
+        assert!(warp.card.is_none());
+        let m = material(&warp);
+        assert_eq!(m.alpha_mode(), AlphaMode::Blend);
+        assert!(m.reads_view_transmission_texture());
+        let energy = MaterialSource::read(&search, "effects/energyball.vmt")
+            .unwrap()
+            .unwrap();
+        assert!(!material(&energy).reads_view_transmission_texture());
+    }
 }

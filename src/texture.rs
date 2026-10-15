@@ -51,7 +51,7 @@ pub fn world_look(search: &SearchPath, material: &str) -> Result<WorldLook, Stri
 }
 
 /// a VMT colour, braces hold 0 to 255 and brackets 0 to 1
-fn colour(text: &str) -> Option<[f32; 3]> {
+pub(crate) fn colour(text: &str) -> Option<[f32; 3]> {
     let t = text.trim();
     let scale = if t.starts_with('{') { 255.0 } else { 1.0 };
     let v: Vec<f32> = t
