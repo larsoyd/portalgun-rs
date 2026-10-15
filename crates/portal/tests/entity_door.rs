@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 use portal::entity::io::Handle;
-use portal::entity::{Env, World};
+use portal::entity::{Env, Shape, World};
 use portal::pair::Vec3;
 use portal::vmf::{Entity, Output};
 
@@ -46,8 +46,9 @@ fn door(keys: &[(&str, &str)], size: Vec3) -> World {
             .iter()
             .map(|(_, n)| ent("logic_relay", &[("targetname", n)], &[])),
     );
-    World::spawn_with(&ents, |e| {
-        (e.classname == "func_door").then_some(([0.0; 3], size))
+    World::spawn_with(&ents, |e| Shape {
+        bounds: (e.classname == "func_door").then_some(([0.0; 3], size)),
+        ..Shape::default()
     })
 }
 

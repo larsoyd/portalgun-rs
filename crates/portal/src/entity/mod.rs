@@ -5,6 +5,7 @@ mod door;
 pub mod io;
 mod logic;
 mod math;
+mod prop;
 mod sound;
 mod spawn;
 mod trigger;
@@ -18,6 +19,7 @@ use crate::vmf::Entity;
 use door::Door;
 use io::{name_matches, Event, Handle, OutputEvent, Queue, Target};
 use logic::{Auto, Relay};
+use prop::Dynamic;
 use sound::Ambient;
 use spawn::{Maker, Template};
 use trigger::{Filter, Trigger};
@@ -78,6 +80,20 @@ struct Link {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Sequence {
+    pub name: String,
+    pub duration: f32,
+    pub looping: bool,
+}
+
+/// what the app knows of an entity's model
+#[derive(Debug, Clone, Default)]
+pub struct Shape {
+    pub bounds: Option<(Vec3, Vec3)>,
+    pub sequences: Vec<Sequence>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Sound {
     pub source: Handle,
     pub name: String,
@@ -88,6 +104,7 @@ pub struct Sound {
 enum Kind {
     Ambient(Ambient),
     Door(Door),
+    Dynamic(Dynamic),
     Toggle(String),
     Template(Template),
     Maker(Maker),
@@ -110,6 +127,7 @@ enum Think {
     Auto,
     WaitOver,
     Remove,
+    Anim,
 }
 
 #[derive(Debug)]
@@ -194,15 +212,17 @@ impl World {
                 .iter()
                 .flat_map(|s| brush::faces(&s.sides))
                 .collect();
-            (!polys.is_empty()).then(|| brush::bounds(&polys))
+            Shape {
+                bounds: (!polys.is_empty()).then(|| brush::bounds(&polys)),
+                ..Shape::default()
+            }
         })
     }
 
-    /// bounds gives a brush entity's model mins and maxs
-    pub fn spawn_with(ents: &[Entity], bounds: impl Fn(&Entity) -> Option<(Vec3, Vec3)>) -> World {
+    pub fn spawn_with(ents: &[Entity], shape: impl Fn(&Entity) -> Shape) -> World {
         let mut world = World::default();
         for e in ents {
-            world.slots.push(slot(e, bounds(e)));
+            world.slots.push(slot(e, shape(e)));
         }
         for i in 0..world.slots.len() {
             spawn::build(&mut world, Handle(i as u32));
@@ -232,6 +252,12 @@ impl World {
                     self.slots[i].kind = Kind::Ambient(a);
                 }
                 Kind::Maker(_) => spawn::check_maker(self, h),
+                Kind::Dynamic(_) => {
+                    let default = self.slots[i].entity.get("DefaultAnim").map(str::to_string);
+                    if let Some(default) = default.filter(|d| !d.is_empty()) {
+                        prop::set_animation(self, h, &default);
+                    }
+                }
                 _ => {}
             }
         }
@@ -245,7 +271,7 @@ impl World {
         });
         e.keys.push(("origin".into(), text(origin)));
         e.keys.push(("angles".into(), text(angles)));
-        self.slots.push(slot(&e, None));
+        self.slots.push(slot(&e, Shape::default()));
         let h = Handle(self.slots.len() as u32 - 1);
         self.activate(h);
         self.spawned.push(h);
@@ -410,6 +436,29 @@ impl World {
         });
     }
 
+    /// sequence index and cycle of a prop_dynamic
+    pub fn animation(&self, h: Handle) -> Option<(usize, f32)> {
+        match &self.slot(h).kind {
+            Kind::Dynamic(d) => Some(d.animation()),
+            _ => None,
+        }
+    }
+
+    pub fn skin(&self, h: Handle) -> i32 {
+        match &self.slot(h).kind {
+            Kind::Dynamic(d) => d.skin,
+            _ => int_key(&self.slot(h).entity, "skin"),
+        }
+    }
+
+    pub fn visible(&self, h: Handle) -> bool {
+        !matches!(&self.slot(h).kind, Kind::Dynamic(d) if d.hidden)
+    }
+
+    pub fn solid(&self, h: Handle) -> bool {
+        !matches!(&self.slot(h).kind, Kind::Dynamic(d) if !d.solid)
+    }
+
     /// the texture frame a toggle last gave this entity
     pub fn frame(&self, h: Handle) -> u8 {
         self.slot(h).frame
@@ -461,6 +510,7 @@ impl World {
             match (think, &self.slots[i].kind) {
                 (Think::Auto, Kind::Auto(auto)) => auto.clone().think(self, h),
                 (Think::Remove, _) => self.remove(h),
+                (Think::Anim, Kind::Dynamic(_)) => prop::think(self, h),
                 _ => {}
             }
         }
@@ -597,6 +647,7 @@ impl World {
             Kind::Door(_) => door::input(self, h, &lower),
             Kind::Toggle(_) => self.toggle_input(h, &lower, value),
             Kind::Maker(_) => spawn::input(self, h, &lower),
+            Kind::Dynamic(_) => prop::input(self, h, &lower, value),
             Kind::Relay(_) => logic::relay_input(self, h, &lower, activator),
             Kind::Trigger(_) => trigger::input(self, h, &lower),
             Kind::Auto(_) | Kind::Filter(_) | Kind::Template(_) | Kind::Other => false,
@@ -690,7 +741,7 @@ impl World {
             outputs: Vec::new(),
             solids: Vec::new(),
         };
-        self.slots.push(slot(&player, None));
+        self.slots.push(slot(&player, Shape::default()));
         Handle(self.slots.len() as u32 - 1)
     }
 
@@ -754,7 +805,8 @@ fn door_of(e: &Entity, bounds: Option<(Vec3, Vec3)>, spawnflags: u32) -> Kind {
     ))
 }
 
-fn slot(e: &Entity, bounds: Option<(Vec3, Vec3)>) -> Slot {
+fn slot(e: &Entity, shape: Shape) -> Slot {
+    let bounds = shape.bounds;
     let mut outputs: HashMap<String, Vec<&crate::vmf::Output>> = HashMap::new();
     for o in &e.outputs {
         outputs
@@ -766,6 +818,12 @@ fn slot(e: &Entity, bounds: Option<(Vec3, Vec3)>) -> Slot {
     let kind = match e.classname.as_str() {
         "func_door" => door_of(e, bounds, spawnflags),
         "point_template" => Kind::Template(Template::new(e)),
+        "prop_dynamic" | "prop_dynamic_override" => Kind::Dynamic(Dynamic::new(
+            shape.sequences,
+            e.get("DefaultAnim"),
+            int_key(e, "StartDisabled") != 0,
+            spawnflags,
+        )),
         "env_entity_maker" => Kind::Maker(Maker::new(e.get("EntityTemplate").unwrap_or_default())),
         "env_texturetoggle" => Kind::Toggle(e.get("target").unwrap_or_default().to_string()),
         "ambient_generic" => Kind::Ambient(Ambient::new(
